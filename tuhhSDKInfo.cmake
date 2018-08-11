@@ -55,7 +55,7 @@ set(TUHHSDK_HEADERS
   ${TUHHSDK_HOME}/Data/BallState.hpp
   ${TUHHSDK_HOME}/Data/BatteryData.hpp
   ${TUHHSDK_HOME}/Data/BishopPosition.hpp
-  ${TUHHSDK_HOME}/Data/BodyLeaningOutput.hpp
+  #${TUHHSDK_HOME}/Data/BodyLeaningOutput.hpp
   ${TUHHSDK_HOME}/Data/BodyPose.hpp
   ${TUHHSDK_HOME}/Data/BodyRotationData.hpp
   ${TUHHSDK_HOME}/Data/BallSearchPosition.hpp
@@ -84,7 +84,6 @@ set(TUHHSDK_HEADERS
   ${TUHHSDK_HOME}/Data/JointSensorData.hpp
   ${TUHHSDK_HOME}/Data/KeeperAction.hpp
   ${TUHHSDK_HOME}/Data/KeeperOutput.hpp
-  ${TUHHSDK_HOME}/Data/KickConfigurationData.hpp
   ${TUHHSDK_HOME}/Data/KickOutput.hpp
   ${TUHHSDK_HOME}/Data/LandmarkModel.hpp
   ${TUHHSDK_HOME}/Data/LineData.hpp

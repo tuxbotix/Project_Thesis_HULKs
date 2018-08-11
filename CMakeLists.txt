@@ -1,9 +1,22 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 14)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 set(NAO_PATH "${CMAKE_CURRENT_LIST_DIR}/../nao")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${NAO_PATH}/CMake")
+
+#set(Boost_USE_STATIC_LIBS   ON)
+#SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+#SET(BUILD_SHARED_LIBS OFF)
+#SET(CMAKE_EXE_LINKER_FLAGS "-static")
 
 # generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -32,7 +45,12 @@ include(tuhhSDKInfo.cmake)
 # Execs
 
 set(target1 test1)
-add_executable(${target1} test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+add_executable(${target1} test1.cpp NaoStability.hpp  NaoTorsoPose.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_include_directories(${target1} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
 
 target_link_libraries(${target1} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
+
+set(target2 poseGen)
+add_executable(${target2} poseGenerator.cpp NaoStability.hpp  NaoTorsoPose.hpp NaoPoseInfo.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_include_directories(${target2} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
+target_link_libraries(${target2} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
