@@ -14,9 +14,10 @@ enum SUPPORT_FOOT
 };
 enum PARAMS
 {
-    P_SUPPORT_FOOT,
+
     P_HEAD_YAW,
     P_HEAD_PITCH,
+    P_SUPPORT_FOOT,
     P_TORSO_POS_X,
     P_TORSO_POS_Y,
     P_TORSO_POS_Z,

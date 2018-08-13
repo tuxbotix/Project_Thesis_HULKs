@@ -73,27 +73,28 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = 0;
         maxLim = 0;
         increment = 0;
+        std::cout << "param index out of bounds" << std::endl;
         return;
     }
     if (paramIndex == PARAMS::P_HEAD_YAW)
     {
-        minLim = resume ? pose[PARAMS::P_HEAD_YAW] : NaoProvider::minRange(JOINTS::HEAD_YAW);
-        maxLim = NaoProvider::maxRange(JOINTS::HEAD_YAW);
-        increment = 5;
+        minLim = resume ? pose[PARAMS::P_HEAD_YAW] : -119.5;
+        maxLim = 119.5;
+        increment = 10;
         return;
     }
     else if (paramIndex == PARAMS::P_HEAD_PITCH)
     {
         // feed the current head yaw to get corresponding head pitch limits
-        minLim = resume ? pose[PARAMS::P_HEAD_PITCH] : NaoProvider::minRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]);
-        maxLim = std::min(NaoProvider::maxRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]), 0.0f);
+        minLim = std::max((resume ? pose[PARAMS::P_HEAD_PITCH] : NaoProvider::minRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]) / TO_RAD), 0.0f);
+        maxLim = NaoProvider::maxRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]) / TO_RAD;
         increment = 2;
         return;
     }
     else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
     {
-        minLim = resume ? pose[PARAMS::P_SUPPORT_FOOT] : static_cast<float>(SUPPORT_FOOT::SF_RIGHT);
-        maxLim = static_cast<float>(1);
+        minLim = resume ? pose[PARAMS::P_SUPPORT_FOOT] : static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
+        maxLim = static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
         increment = 1;
         return;
     }
@@ -110,53 +111,77 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         {
             minLim = 0.2;
             maxLim = 0.45;
+            increment = 0.025; // 2cm increment - 11
         }
         else
         {
             minLim = -0.1;
             maxLim = 0.1;
+            increment = 0.02; // 2cm increment - 11
         }
-        increment = 0.02; // 2cm increment
         break;
     // torsoRotVec
     case 1:
-        minLim = -10;
-        maxLim = 10;
-        increment = 5; // 2 deg increment
+        // minLim = -10;
+        // maxLim = 10;
+        minLim = 0;
+        maxLim = 0;
+        increment = 5; // 2 deg increment - 5
         break;
     // otherFootPosVec
     case 2:
         // keep origin of other foot always equal or upper than support foot.
         if (paramIndex == PARAMS::P_O_FOOT_POS_Z)
         {
-            minLim = 0.0;
-            maxLim = 0.1;
+            if (supFoot == SUPPORT_FOOT::SF_DOUBLE) // 1
+            {
+                minLim = 0.0;
+                maxLim = 0.0;
+            }
+            else // 5
+            {
+                minLim = 0.0;
+                maxLim = 0.1;
+            }
         }
         else if (paramIndex == PARAMS::P_O_FOOT_POS_Y)
         {
-            if (supFoot == SUPPORT_FOOT::SF_RIGHT)
+            if (supFoot == SUPPORT_FOOT::SF_RIGHT) // 5
             {
                 minLim = 0.0;
-                maxLim = 0.15;
+                maxLim = 0.10;
             }
-            else
+            else // 5
             {
-                minLim = -0.15;
+                minLim = -0.10;
                 maxLim = 0.0;
             }
         }
-        else
+        else // 11
         {
-            minLim = -0.15;
-            maxLim = 0.15;
+            minLim = -0.10;
+            maxLim = 0.10;
         }
         increment = 0.02; // 2cm increment
         break;
     // otherFootRotVec
     case 3:
-        minLim = -10;
-        maxLim = 10;
-        increment = 5; // 5 deg increment
+        // 1
+        // if (supFoot == SUPPORT_FOOT::SF_DOUBLE && (paramIndex == PARAMS::P_O_FOOT_ROT_X || paramIndex == PARAMS::P_O_FOOT_ROT_Y))
+        // {
+        //     minLim = 0;
+        //     maxLim = 0.1;
+        //     increment = 0;
+        // }
+        // else
+        // {
+        //     minLim = -10;
+        //     maxLim = 10;
+        //     increment = 5; // 5 deg increment
+        // }
+        minLim = 0;
+        maxLim = 0;
+        increment = 0.1;
         break;
     };
     if (resume)
@@ -217,9 +242,9 @@ inline void jointIterFuncWithLim(const paramNameT &jointIndex, const dataT &star
 
                     bool poseGenSuccess = NaoTorsoPose::getPose(jointAngles,
                                                                 PoseUtils::getTorsoPosVFromParams(pose),
-                                                                PoseUtils::getTorsoRotVFromParams(pose),
+                                                                PoseUtils::getTorsoRotVFromParams(pose) * TO_RAD,
                                                                 PoseUtils::getOtherFootPosVFromParams(pose),
-                                                                PoseUtils::getOtherFootRotVFromParams(pose),
+                                                                PoseUtils::getOtherFootRotVFromParams(pose) * TO_RAD,
                                                                 static_cast<SUPPORT_FOOT>(supportFootVal));
                     // if pose gen success and pose is statically stable
                     if (poseGenSuccess && poseCallback(pose, static_cast<SUPPORT_FOOT>(supportFootVal)))
@@ -304,7 +329,7 @@ int main(int argc, char **argv)
     // std::vector<dataT> resumeVec;
     // std::static_assert(dataT == float); // splitter is float only :P
 
-    // bool resume = (argc > 3 && argv[2] == "-r");
+    bool resume = false; // (argc > 3 && std::string(argv[2]).compare("-r") == 0);
     // {
     //     std::string valString = argv[3];
     //     resumeVec = splitToNumbers(valString);
@@ -336,9 +361,11 @@ int main(int argc, char **argv)
     dataT minLimit, maxLimit, increment;
     getLimits(static_cast<paramNameT>(0), minLimit, maxLimit, increment, readyPose, resume);
 
-    const int count = std::ceil(abs(maxLimit - minLimit) / (dataT)increment);
+    const int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
+
     const dataT splitVal = (dataT)count * increment / (dataT)MAX_THREADS;
-    const size_t THREADS_USED = (splitVal > 0) ? MAX_THREADS : 1;
+    std::cout << "count " << count << " " << splitVal << std::endl;
+    const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
 
     /// PoseList vector and accum(pose) Vector
     std::vector<rawPoseListT> poseListList(THREADS_USED);
@@ -372,7 +399,7 @@ int main(int argc, char **argv)
             }
             const bool lastIter = (i + 1 == THREADS_USED);
 
-            dataT start = (minLimit + i * splitVal);
+            dataT start = (minLimit + ((dataT)i * splitVal));
             dataT end = lastIter ? maxLimit : (minLimit + (i + 1) * splitVal);
 
             // (const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT &incrementInRad,

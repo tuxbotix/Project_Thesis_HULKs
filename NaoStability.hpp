@@ -175,24 +175,23 @@ class SupportPolygon
      */
     inline bool isComWithinSupport(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com, const SUPPORT_FOOT &supFoot = SUPPORT_FOOT::SF_DOUBLE)
     {
-        // if (supFoot == SUPPORT_FOOT::SF_LEFT)
-        // {
-        //     KinematicMatrix comInLeftFoot = lFootPose.invert() * com;
-        //     NaoFoot supFoot = leftFoot;
-        //     float comX = comInLeftFoot.posV.x();
-        //     float comY = comInLeftFoot.posV.y();
-        //     return supFoot.isWithinFoot(comX, comY);
-        // }
-        // else if (supFoot == SUPPORT_FOOT::SF_RIGHT)
-        // {
-        //     KinematicMatrix comInRight = rFootPose.invert() * com;
-        //     NaoFoot supFoot = rightFoot;
-        //     float comX = comInRight.posV.x();
-        //     float comY = comInRight.posV.y();
-        //     return supFoot.isWithinFoot(comX, comY);
-        // }
-        // else
-         if (supFoot == SUPPORT_FOOT::SF_DOUBLE)
+        if (supFoot == SUPPORT_FOOT::SF_LEFT)
+        {
+            KinematicMatrix comInLeftFoot = lFootPose.invert() * com;
+            NaoFoot supFoot = leftFoot;
+            float comX = comInLeftFoot.posV.x();
+            float comY = comInLeftFoot.posV.y();
+            return supFoot.isWithinFoot(comX, comY);
+        }
+        else if (supFoot == SUPPORT_FOOT::SF_RIGHT)
+        {
+            KinematicMatrix comInRight = rFootPose.invert() * com;
+            NaoFoot supFoot = rightFoot;
+            float comX = comInRight.posV.x();
+            float comY = comInRight.posV.y();
+            return supFoot.isWithinFoot(comX, comY);
+        }
+        else if (supFoot == SUPPORT_FOOT::SF_DOUBLE)
         {
             return isComWithinSupportDoubleFoot(lFootPose, rFootPose, com);
         }

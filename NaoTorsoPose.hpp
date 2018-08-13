@@ -19,6 +19,8 @@ class NaoTorsoPose
     typedef std::vector<angleT> jointAnglesT;
 
   private:
+    // static const float angleTol = 2*TO_RAD;
+    static constexpr float distTol = 0.008; //5 mm
     /**
      * @brief compute body angles
      * @param bodyAngles - output
@@ -66,17 +68,34 @@ class NaoTorsoPose
 
         std::vector<float> lLegAngles, rLegAngles;
 
+        // Validations
+        KinematicMatrix genTorso2SupFoot;
+        Vector3f errFootPos, errTorsoPos;
+
         /// make the leg fixed to the side the nao is leaning.
         if (supportFoot == SUPPORT_FOOT::SF_LEFT || supportFoot == SUPPORT_FOOT::SF_DOUBLE)
         {
             lLegAngles = InverseKinematics::getLLegAngles(supFoot2targetPose);
             // KinematicMatrix mat = ForwardKinematics::getLFoot(lLegAngles);
             rLegAngles = InverseKinematics::getFixedRLegAngles(otherFoot2targetTorso, lLegAngles[0]);
+            genTorso2SupFoot = ForwardKinematics::getLFoot(lLegAngles).invert();
+            errFootPos = (genTorso2SupFoot * ForwardKinematics::getRFoot(rLegAngles)).posV;
         }
         else
         {
             rLegAngles = InverseKinematics::getRLegAngles(supFoot2targetPose);
             lLegAngles = InverseKinematics::getFixedLLegAngles(otherFoot2targetTorso, rLegAngles[0]);
+            genTorso2SupFoot = ForwardKinematics::getRFoot(rLegAngles).invert();
+            errFootPos = (genTorso2SupFoot * ForwardKinematics::getLFoot(lLegAngles)).posV;
+        }
+        /// Inv. Kinematics sometimes cannot reach a given pose, thus a nearby-enogh pose is given.
+        /// If this nearby pose isn't close enough... ;)
+        errFootPos = otherFootPos2supportFoot - errFootPos;
+        errTorsoPos = targetTorso2supportFoot.posV - genTorso2SupFoot.posV;
+        // too much error.
+        if (errTorsoPos.norm() > distTol || errFootPos.norm() > distTol)
+        {
+            return false;
         }
         /// put computed leg angles in joint angle vector for whole body
         for (int j = 0; j < JOINTS_L_LEG::L_LEG_MAX; j++)
@@ -84,6 +103,7 @@ class NaoTorsoPose
             jointAngles[JOINTS::L_HIP_YAW_PITCH + j] = lLegAngles[j];
             jointAngles[JOINTS::R_HIP_YAW_PITCH + j] = rLegAngles[j];
         }
+
         // TODO add more validation..
         return true;
     }
@@ -102,8 +122,8 @@ class NaoTorsoPose
             AngleAxisf(targetTorsoRot2supportFoot.y(), Vector3f::UnitY()) *
             AngleAxisf(targetTorsoRot2supportFoot.x(), Vector3f::UnitX());
         return leanToTorsoPose(jointAngles, torsoPose,
-                                       otherFootPos2supportFoot * 1000,
-                                       otherFootRot2SupportFoot,
-                                       supportFoot);
+                               otherFootPos2supportFoot * 1000,
+                               otherFootRot2SupportFoot,
+                               supportFoot);
     }
 };
