@@ -81,6 +81,7 @@ void commitToStream(std::vector<std::vector<T>> &poseList, std::ostream &outStre
 #if !WRITE_PARALLEL
     fileWriterReady = true;
 #endif
+    outStream.flush();
 }
 
 std::vector<std::string> split(const std::string &s, char delimiter = ',')

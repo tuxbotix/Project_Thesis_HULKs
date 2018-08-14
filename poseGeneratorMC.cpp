@@ -2,7 +2,6 @@
 #include <fstream>
 #include <thread>
 #include <algorithm>
-#include <numeric>
 
 #include <Data/CameraMatrix.hpp>
 #include <Modules/NaoProvider.h>
@@ -18,7 +17,6 @@
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
 #include "NaoPoseInfo.hpp"
-#include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
@@ -44,12 +42,15 @@ const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 const size_t totalBufferSizeInBytes = 200E6;
 const size_t BUFFER_SIZE = totalBufferSizeInBytes / (sizeof(dataT) * static_cast<size_t>(PARAMS::P_MAX) * MAX_THREADS);
 
+std::atomic<size_t> iterCount(0);
 std::atomic<size_t> poseCount(0);
+
+SupportPolygon supportPoly;
 
 /**
  * Called at end of each update of joint angle
  */
-inline bool poseCallback(rawAnglesT &pose, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
+inline bool poseCallback(rawAnglesT &pose, const SUPPORT_FOOT &supFoot)
 {
     /// Where would the com be after setting these angles?
     KinematicMatrix com2torso = KinematicMatrix(Com::getCom(pose));
@@ -64,20 +65,7 @@ inline bool poseCallback(rawAnglesT &pose, const SUPPORT_FOOT &supFoot, const Su
 /**
  * Get limits for each tuning param
  */
-inline void getLimits(const paramNameT &paramIndex, SUPPORT_FOOT &minLim, SUPPORT_FOOT &maxLim, SUPPORT_FOOT &increment,
-                      const rawPoseT &pose, const bool &resume)
-{
-    if (paramIndex == PARAMS::P_SUPPORT_FOOT)
-    {
-        minLim = resume ? static_cast<SUPPORT_FOOT>(pose[PARAMS::P_SUPPORT_FOOT]) : SUPPORT_FOOT::SF_DOUBLE;
-        maxLim = SUPPORT_FOOT::SF_DOUBLE;
-        increment = static_cast<SUPPORT_FOOT>(1);
-    }
-    else
-    {
-        std::cout << "Something is terribly wrong!!!" << std::endl;
-    }
-}
+
 inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim, dataT &increment, const rawPoseT &pose, const bool &resume)
 {
     if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
@@ -91,9 +79,9 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
     if (paramIndex == PARAMS::P_HEAD_YAW) //17
     {
         // Instead of the full range, i'll limit..
-        minLim = resume ? pose[PARAMS::P_HEAD_YAW] : -72;
-        maxLim = 72;
-        increment = 18;
+        minLim = resume ? pose[PARAMS::P_HEAD_YAW] : -75;
+        maxLim = 75;
+        increment = 15;
         return;
     }
     else if (paramIndex == PARAMS::P_HEAD_PITCH) // 17~ approx
@@ -102,19 +90,13 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = std::max((resume ? pose[PARAMS::P_HEAD_PITCH] : NaoProvider::minRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]) / TO_RAD), 0.0f);
         maxLim = NaoProvider::maxRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]) / TO_RAD;
         increment = 2;
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         return;
     }
     else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
     {
-        // minLim = resume ? pose[PARAMS::P_SUPPORT_FOOT] : static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
-        // maxLim = static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
-        // increment = 1;
-        minLim = 0;
-        maxLim = 0;
-        increment = 0;
+        minLim = resume ? pose[PARAMS::P_SUPPORT_FOOT] : static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
+        maxLim = static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
+        increment = 1;
         return;
     }
 
@@ -139,9 +121,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = 0.2;
         maxLim = 0.45;
         increment = 0.025; // 2cm increment - 11
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     case PARAMS::P_TORSO_ROT_X:
@@ -157,9 +136,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = 0;
         maxLim = 0;
         increment = 5; // 2 deg increment - 5
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     case PARAMS::P_O_FOOT_POS_X:
@@ -167,9 +143,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = -0.10;
         maxLim = 0.10;
         increment = 0.02; // 2cm increment
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     // keep origin of other foot always equal or upper than support foot.
@@ -185,10 +158,7 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
             minLim = 0.0;
             maxLim = 0.1;
         }
-        increment = 0.04; // 2cm increment
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
+        increment = 0.02; // 2cm increment
         break;
     }
     case PARAMS::P_O_FOOT_POS_Y:
@@ -204,9 +174,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
             maxLim = 0.0;
         }
         increment = 0.02; // 2cm increment
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     default:
@@ -216,6 +183,20 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         increment = 0.1;
         break;
     }
+        // case 3:
+        // 1
+        // if (supFoot == SUPPORT_FOOT::SF_DOUBLE && (paramIndex == PARAMS::P_O_FOOT_ROT_X || paramIndex == PARAMS::P_O_FOOT_ROT_Y))
+        // {
+        //     minLim = 0;
+        //     maxLim = 0.1;
+        //     increment = 0;
+        // }
+        // else
+        // {
+        //     minLim = -10;
+        //     maxLim = 10;
+        //     increment = 5; // 5 deg increment
+        // }
     };
     if (resume)
     {
@@ -223,46 +204,27 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
     }
 }
 
-template <typename T>
-inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, const T &end, T incrementInRad,
+inline void jointIterFuncWithLim(const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT incrementInRad,
                                  rawPoseT &pose, rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream,
-                                 const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount, const bool &inclusiveMax, bool &resume);
+                                 const bool &inclusiveMax, bool &resume);
 
-// template <typename T>
 inline void jointIterFunc(const paramNameT &jointIndex, rawPoseT &pose,
-                          rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream, const SupportPolygon &supportPoly,
-                          std::atomic<size_t> &iterCount, const bool &inclusiveMax, bool &resume)
+                          rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream, const bool &inclusiveMax, bool &resume)
 {
-    if (jointIndex == PARAMS::P_SUPPORT_FOOT)
-    {
-        SUPPORT_FOOT minLim, maxLim, increment;
-        getLimits(jointIndex, minLim, maxLim, increment, pose, resume);
-        jointIterFuncWithLim<SUPPORT_FOOT>(jointIndex, minLim, maxLim, increment, pose, poseList, defaultPose, outStream, supportPoly, iterCount, inclusiveMax, resume);
-    }
-    else
-    {
-        dataT minLim, maxLim, increment;
-        getLimits(jointIndex, minLim, maxLim, increment, pose, resume);
-        jointIterFuncWithLim<dataT>(jointIndex, minLim, maxLim, increment, pose, poseList, defaultPose, outStream, supportPoly, iterCount, inclusiveMax, resume);
-    }
+    dataT minLim, maxLim, increment;
+    getLimits(jointIndex, minLim, maxLim, increment, pose, resume);
+    jointIterFuncWithLim(jointIndex, minLim, maxLim, increment, pose, poseList, defaultPose, outStream, inclusiveMax, resume);
 }
 
-template <typename T>
-inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, const T &end, T incrementInRad,
+inline void jointIterFuncWithLim(const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT incrementInRad,
                                  rawPoseT &pose, rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream,
-                                 const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount, const bool &inclusiveMax, bool &resume)
+                                 const bool &inclusiveMax, bool &resume)
 {
-    if (jointIndex >= PARAMS::P_MAX)
-    {
-        std::lock_guard<std::mutex> lock(mtx_cout_);
-        std::cout << "SOMETHING IS WRONG, exceeding limits!!!" << jointIndex << std::endl; // "\r";
-        return;
-    }
     if (jointIndex != PARAMS::P_SUPPORT_FOOT)
     {
         // this section will manipulate head, leg joints only. Others will be skipped.
         // End-of joints will be reached at a different place
-        for (dataT j = start; (inclusiveMax ? j <= end : j < end); j += incrementInRad)
+        for (dataT j = start; j < end || (inclusiveMax ? j == end : false); j += incrementInRad)
         {
             // std::cout << "iter joint " << jointIndex << std::endl;
             /// skip validation for right hip yaw pitch as it is same as left hip yaw pitch
@@ -270,7 +232,7 @@ inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, c
             const paramNameT nextIndex = static_cast<paramNameT>(jointIndex + 1);
             if (nextIndex < PARAMS::P_MAX)
             {
-                jointIterFunc(nextIndex, pose, poseList, defaultPose, outStream, supportPoly, iterCount, true, resume);
+                jointIterFunc(nextIndex, pose, poseList, defaultPose, outStream, true, resume);
             }
             else
             {
@@ -299,7 +261,7 @@ inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, c
                                                                 PoseUtils::getOtherFootRotVFromParams(pose) * TO_RAD,
                                                                 static_cast<SUPPORT_FOOT>(supportFootVal));
                     // if pose gen success and pose is statically stable
-                    if (poseGenSuccess && poseCallback(pose, static_cast<SUPPORT_FOOT>(supportFootVal), supportPoly))
+                    if (poseGenSuccess && poseCallback(pose, static_cast<SUPPORT_FOOT>(supportFootVal)))
                     {
                         poseCount++;
 #if DO_COMMIT
@@ -322,8 +284,8 @@ inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, c
     }
     else
     {
-        for (int supportFootIdx = static_cast<int>(start);
-             supportFootIdx < (inclusiveMax ? supportFootIdx <= static_cast<int>(end) : supportFootIdx < static_cast<int>(end));
+        for (int supportFootIdx = static_cast<int>(SUPPORT_FOOT::SF_RIGHT);
+             supportFootIdx < static_cast<int>(SUPPORT_FOOT::SF_NONE);
              supportFootIdx++)
         {
             pose[PARAMS::P_SUPPORT_FOOT] = supportFootIdx;
@@ -331,7 +293,7 @@ inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, c
             const paramNameT nextIndex = static_cast<paramNameT>(jointIndex + 1);
             if (nextIndex < PARAMS::P_MAX)
             {
-                jointIterFunc(nextIndex, pose, poseList, defaultPose, outStream, supportPoly, iterCount, true, resume);
+                jointIterFunc(nextIndex, pose, poseList, defaultPose, outStream, true, resume);
             }
 #if DEBUG_IN_THREAD
             /// If we get the "else", there is something wrong as end-of-list must be reached at above
@@ -395,46 +357,30 @@ int main(int argc, char **argv)
     // }
 
     TUHH tuhhInstance(confRoot);
+
+    Vector2f fc, cc, fov;
+
+    tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);
+    tuhhInstance.config_.get("Projection", "top_fc") >> fc;
+    tuhhInstance.config_.get("Projection", "top_cc") >> cc;
+    tuhhInstance.config_.get("Projection", "top_fov") >> fov;
+
+    int imageWidth = 640;
+    int imageHeight = 480;
+
     /// Pose Gen
     std::cout << "# Init for pose generation" << std::endl;
 
     const rawPoseT readyPose(PARAMS::P_MAX);
 
-    {
-        size_t count = 1;
-        float minLimit, maxLimit, increment;
-        SUPPORT_FOOT minLimitSF, maxLimitSF, incrementSF;
-        for (int i = 0; i < static_cast<int>(paramNameT::P_MAX); i++)
-        {
-            if (i == static_cast<int>(paramNameT::P_SUPPORT_FOOT))
-            {
-                getLimits(static_cast<paramNameT>(i), minLimitSF, maxLimitSF, incrementSF, readyPose, resume);
-                if ((maxLimitSF - minLimitSF) < 0)
-                {
-                    std::cout << "min > max???" << std::endl;
-                }
-                count *= std::floor((maxLimitSF - minLimitSF) / incrementSF) + 1;
-            }
-            else
-            {
-                getLimits(static_cast<paramNameT>(i), minLimit, maxLimit, increment, readyPose, resume);
-                if ((maxLimit - minLimit) < 0)
-                {
-                    std::cout << "min > max???" << std::endl;
-                }
-                count *= std::floor((maxLimit - minLimit) / increment) + 1;
-            }
-        }
-        std::cout << "Max iters -> " << std::scientific << (double)count << std::endl;
-    }
     /// Start threading work.
     dataT minLimit, maxLimit, increment;
     getLimits(static_cast<paramNameT>(0), minLimit, maxLimit, increment, readyPose, resume);
 
-    const unsigned int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
+    const int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
 
-    const dataT splitVal = count >= MAX_THREADS ? (std::floor((dataT)count / (dataT)MAX_THREADS) * increment) : (increment);
-    std::cout << "count " << std::defaultfloat << count << " " << splitVal << std::endl;
+    const dataT splitVal = (dataT)count * increment / (dataT)MAX_THREADS;
+    std::cout << "count " << count << " " << splitVal << std::endl;
     const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
 
     /// PoseList vector and accum(pose) Vector
@@ -447,12 +393,11 @@ int main(int argc, char **argv)
         i = rawPoseT(PARAMS::P_MAX);
     }
 
-    std::vector<std::atomic<size_t>> iterCount(THREADS_USED);
     /// Start the real threading..
     {
         std::vector<std::thread> threadList(THREADS_USED);
         std::vector<std::fstream> outputFileList(THREADS_USED);
-        std::vector<SupportPolygon> supportPolyList(THREADS_USED);
+        
         // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
@@ -478,9 +423,9 @@ int main(int argc, char **argv)
             //                      poseT &pose, rawPoseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
             //                      const bool &inclusiveMax)
             std::cout << "Start, end, lastIter " << start << " " << end << " " << lastIter << std::endl;
-            threadList[i] = std::thread(jointIterFuncWithLim<dataT>, static_cast<paramNameT>(0), start, end, increment,
+            threadList[i] = std::thread(jointIterFuncWithLim, static_cast<paramNameT>(0), start, end, increment,
                                         std::ref(accumList[i]), std::ref(poseListList[i]), std::ref(readyPose),
-                                        std::ref(outputFileList[i]), std::ref(supportPolyList[i]), std::ref(iterCount[i]), lastIter, std::ref(resume));
+                                        std::ref(outputFileList[i]), lastIter, std::ref(resume));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -489,24 +434,9 @@ int main(int argc, char **argv)
             const size_t interval = 5;
             while (continueTicker)
             {
-                size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), 0);
-                if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterSum << " g. poses " << poseCount.load() << std::endl; // "\r";
-                }
-                else
-                {
-                    std::stringstream t;
-                    t << "Elapsed: " << elapsed << " ";
-                    for (size_t i = 0; i < THREADS_USED; i++)
-                    {
-                        t << "T" << i << " :" << iterCount[i].load() << " ";
-                    }
-                    {
-                        std::lock_guard<std::mutex> lock(mtx_cout_);
-                        std::cout << t.str() << std::endl;
-                    }
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
                 }
                 elapsed += interval;
                 std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
@@ -538,7 +468,7 @@ int main(int argc, char **argv)
         }
 #endif
     }
-    std::cout << "Tried " << std::scientific << (double)std::accumulate(iterCount.begin(), iterCount.end(), 0) << " poses!" << std::endl;
+    std::cout << "Tried " << std::scientific << (double)iterCount.load() << " poses!" << std::endl;
     std::cout << "Found " << std::scientific << (double)poseCount.load() << " good poses!" << std::endl;
 
     return 0;

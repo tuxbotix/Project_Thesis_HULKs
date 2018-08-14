@@ -72,7 +72,7 @@ class SupportPolygon
     }
 
   private:
-    inline bool isComWithinSupportDoubleFoot(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com)
+    inline bool isComWithinSupportDoubleFoot(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com) const
     {
         KinematicMatrix rFoot2LeftFoot = lFootPose.invert() * rFootPose;
         bool leftFootForward = rFoot2LeftFoot.posV.x() < 0;
@@ -173,7 +173,7 @@ class SupportPolygon
      * 
      * TODO check other intersection shit..
      */
-    inline bool isComWithinSupport(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com, const SUPPORT_FOOT &supFoot = SUPPORT_FOOT::SF_DOUBLE)
+    inline bool isComWithinSupport(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com, const SUPPORT_FOOT &supFoot = SUPPORT_FOOT::SF_DOUBLE) const
     {
         if (supFoot == SUPPORT_FOOT::SF_LEFT)
         {
