@@ -45,6 +45,70 @@ enum PARAMS
 };
 typedef PARAMS paramNameT;
 
+enum SENSOR_NAME
+{
+    TOP_CAMERA,
+    BOTTOM_CAMERA
+    // Future : 3d measurements, etc on lifted foot, etc.
+};
+
+class Sensor
+{
+  public:
+    SENSOR_NAME name;
+
+    const static std::vector<JOINTS::JOINT> CAM_OBS_L_SUP_FOOT;
+    const static std::vector<JOINTS::JOINT> CAM_OBS_R_SUP_FOOT;
+};
+
+const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_L_SUP_FOOT = {
+    JOINTS::JOINT::L_HIP_YAW_PITCH,
+    JOINTS::JOINT::L_HIP_ROLL,
+    JOINTS::JOINT::L_HIP_PITCH,
+    JOINTS::JOINT::L_KNEE_PITCH,
+    JOINTS::JOINT::L_ANKLE_PITCH,
+    JOINTS::JOINT::L_ANKLE_ROLL};
+const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_R_SUP_FOOT = {
+    JOINTS::JOINT::R_HIP_YAW_PITCH,
+    JOINTS::JOINT::R_HIP_ROLL,
+    JOINTS::JOINT::R_HIP_PITCH,
+    JOINTS::JOINT::R_KNEE_PITCH,
+    JOINTS::JOINT::R_ANKLE_PITCH,
+    JOINTS::JOINT::R_ANKLE_ROLL};
+
+template <typename T = Vector3f>
+class PoseSensitivity
+{
+    /**
+     * This class store sensitivity per joint (except arms and head) and also by which sensor.
+     */
+    SENSOR_NAME sensorName;
+    std::vector<T> sensitivities;
+    std::vector<bool> observationMask;
+
+  public:
+    PoseSensitivity(const SENSOR_NAME &sn)
+        : sensorName(sn),
+          sensitivities(std::vector<T>(JOINTS::JOINT::JOINTS_MAX)),
+          observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX))
+    {
+    }
+    SENSOR_NAME getSensorName()
+    {
+        return sensorName;
+    }
+    void setSensitivity(const JOINTS::JOINT &joint, const T &val, const bool &obs)
+    {
+        sensitivities[joint] = val;
+        observationMask[joint] = obs;
+    }
+    void getSensitivity(const JOINTS::JOINT &joint, T &val, bool &obs)
+    {
+        val = sensitivities[joint];
+        obs = observationMask[joint];
+    }
+};
+
 class PoseUtils
 {
   public:

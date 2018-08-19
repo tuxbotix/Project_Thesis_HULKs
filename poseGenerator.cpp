@@ -325,7 +325,7 @@ int main(int argc, char **argv)
     }
 
     TUHH tuhhInstance(confRoot);
-    const std::string dateTimeString = getISOTimeString();
+    // const std::string dateTimeString = getISOTimeString();
     /// Pose Gen
     std::cout << "# Init for pose generation" << std::endl;
 
@@ -360,8 +360,9 @@ int main(int argc, char **argv)
         }
         std::cout << count << std::endl;
     }
+    size_t maxIterCount = headYawPitchList.size();
     {
-        size_t count = headYawPitchList.size();
+        
         Vector3<dataT> minLimit, maxLimit, increment;
         for (int i = static_cast<int>(paramNameT::P_TORSO_POS_X); i < static_cast<int>(paramNameT::P_MAX); i += 3)
         {
@@ -372,25 +373,25 @@ int main(int argc, char **argv)
             {
             case static_cast<int>(paramNameT::P_TORSO_POS_X):
                 torsoPosList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
-                count *= torsoPosList.size();
+                maxIterCount *= torsoPosList.size();
                 break;
             case static_cast<int>(paramNameT::P_TORSO_ROT_X):
                 torsoRotList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
-                count *= torsoRotList.size();
+                maxIterCount *= torsoRotList.size();
                 break;
             case static_cast<int>(paramNameT::P_O_FOOT_POS_X):
                 OtherFootPosList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
-                count *= OtherFootPosList.size();
+                maxIterCount *= OtherFootPosList.size();
                 break;
             case static_cast<int>(paramNameT::P_O_FOOT_ROT_X):
                 OtherFootRotList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
-                count *= OtherFootRotList.size();
+                maxIterCount *= OtherFootRotList.size();
                 break;
             default:
                 std::cout << "something is wrong" << std::endl;
             }
         }
-        std::cout << "Max iters -> " << std::scientific << (double)count << std::endl;
+        std::cout << "Max iters -> " << std::scientific << (double)maxIterCount << std::endl;
     }
     /// Start threading work.
     std::cout << "Start Threading" << std::endl;
@@ -414,8 +415,8 @@ int main(int argc, char **argv)
         // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
-            poseFiles[i] = std::fstream((outFileName + "_" + dateTimeString + "_poses_" + std::to_string(i) + ".txt"), std::ios::out);
-            rawJointFiles[i] = std::fstream((outFileName + "_" + dateTimeString + "_joints_" + std::to_string(i) + ".txt"), std::ios::out);
+            poseFiles[i] = std::fstream((outFileName + "_poses_" + std::to_string(i) + ".txt"), std::ios::out);
+            rawJointFiles[i] = std::fstream((outFileName + "_joints_" + std::to_string(i) + ".txt"), std::ios::out);
 
             if (!poseFiles[i].is_open() || !rawJointFiles[i].is_open())
             {
@@ -451,8 +452,8 @@ int main(int argc, char **argv)
                 if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (long double)iterSum
-                              << " g. poses " << (long double)poseCount.load() << std::endl; // "\r";
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (maxIterCount/(float)iterSum)
+                              << "% g. poses " << (long double)poseCount.load() << std::endl; // "\r";
                 }
                 else
                 {

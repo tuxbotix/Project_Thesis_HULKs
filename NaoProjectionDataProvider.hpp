@@ -36,6 +36,7 @@ class NaoSensorDataProvider
         return ForwardKinematics::getHeadPitch(angles);
     }
 
+  public:
     /**
      * Derived from cycle() of Projection.cpp
      */
@@ -78,6 +79,6 @@ class NaoSensorDataProvider
 
     // static void getUpdatedCamera(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera)
     // {
-        
+
     // }
 };
