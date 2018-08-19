@@ -3,7 +3,7 @@
 #include <Tools/Kinematics/ForwardKinematics.h>
 #include <Tools/Kinematics/InverseKinematics.h>
 #include <Tools/Kinematics/KinematicMatrix.h>
-#include "Data/CameraMatrix.hpp"
+#include <Data/CameraMatrix.hpp>
 
 /**
  * This implements the very minimal of what actual SensorDataProvider of Nao codebase does.
@@ -20,12 +20,12 @@ class NaoSensorDataProvider
     // }
     // const std::vector<float> &angles,
 
-    static KinematicMatrix getTorso2Ground(const KinematicMatrix &foot2torso)
+    static KinematicMatrix getTorso2Ground(const KinematicMatrix &supFoot2torso)
     {
         /// torso2ground
-        auto foot2torsoRotM = foot2torso.rotM.toRotationMatrix();
+        auto foot2torsoRotM = supFoot2torso.rotM.toRotationMatrix();
         KinematicMatrix rotation(KinematicMatrix::rotY(-asin(foot2torsoRotM(0, 2))) * KinematicMatrix::rotX(asin(foot2torsoRotM(1, 2))));
-        KinematicMatrix torso2ground = rotation * KinematicMatrix(-foot2torso.posV);
+        KinematicMatrix torso2ground = rotation * KinematicMatrix(-supFoot2torso.posV);
         torso2ground.posV.x() = 0;
         torso2ground.posV.y() = 0;
         return torso2ground;
@@ -39,7 +39,7 @@ class NaoSensorDataProvider
     /**
      * Derived from cycle() of Projection.cpp
      */
-    static void getUpdatedCamera(const std::vector<float> &angles, const KinematicMatrix &foot2torso, CameraMatrix &cameraMatrix_, const Camera &camera)
+    static void updatedCameraMatrix(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera)
     {
         KinematicMatrix camera2head_uncalib;
         switch (camera)
@@ -52,7 +52,7 @@ class NaoSensorDataProvider
             break;
         }
         cameraMatrix_.camera2torso = getHeadToTorso(angles) * camera2head_uncalib;
-        cameraMatrix_.camera2ground = getTorso2Ground(foot2torso) * cameraMatrix_.camera2torso;
+        cameraMatrix_.camera2ground = getTorso2Ground(supFoot2torso) * cameraMatrix_.camera2torso;
         // do some calculations here because they are needed in other functions that may be called often
         cameraMatrix_.camera2torsoInv = cameraMatrix_.camera2torso.invert();
         cameraMatrix_.camera2groundInv = cameraMatrix_.camera2ground.invert();
@@ -75,4 +75,9 @@ class NaoSensorDataProvider
         }
         cameraMatrix_.valid = true;
     }
+
+    // static void getUpdatedCamera(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera)
+    // {
+        
+    // }
 };

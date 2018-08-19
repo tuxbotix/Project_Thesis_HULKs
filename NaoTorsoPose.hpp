@@ -15,8 +15,6 @@ class NaoTorsoPose
     //     SF_LEFT = 1,
     //     SF_NO = 2
     // };
-    typedef float angleT;
-    typedef std::vector<angleT> jointAnglesT;
 
   private:
     // static const float angleTol = 2*TO_RAD;

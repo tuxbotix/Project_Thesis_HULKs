@@ -15,9 +15,9 @@
 #include <Tools/Kinematics/KinematicMatrix.h>
 #include <Hardware/RobotInterface.hpp>
 
+#include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
-#include "NaoPoseInfo.hpp"
 #include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
@@ -28,15 +28,15 @@
 
 #include "utils.hpp"
 
-typedef NaoTorsoPose::angleT dataT;
-typedef PARAMS paramNameT;
-
-// const dataT deltaTheta = 1; // 1 deg +-
-
-typedef NaoTorsoPose::jointAnglesT rawAnglesT;
-typedef std::vector<dataT> rawPoseT;
-
-typedef std::vector<rawPoseT> rawPoseListT;
+inline void doLog(const std::string &value)
+{
+    {
+#if DEBUG_IN_THREAD
+        std::lock_guard<std::mutex> lck(mtx_cout_);
+#endif
+        std::cout << value << std::endl;
+    }
+}
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
@@ -49,13 +49,13 @@ std::atomic<size_t> poseCount(0);
 /**
  * Called at end of each update of joint angle
  */
-inline bool poseCallback(rawAnglesT &pose, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
+inline bool poseCallback(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
 {
     /// Where would the com be after setting these angles?
-    KinematicMatrix com2torso = KinematicMatrix(Com::getCom(pose));
+    KinematicMatrix com2torso = KinematicMatrix(Com::getCom(poseByAngles));
 
-    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(rawPoseT(&pose[JOINTS::L_HIP_YAW_PITCH], &pose[JOINTS::L_ANKLE_ROLL]));
-    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(rawPoseT(&pose[JOINTS::R_HIP_YAW_PITCH], &pose[JOINTS::R_ANKLE_ROLL]));
+    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(rawPoseT(&poseByAngles[JOINTS::L_HIP_YAW_PITCH], &poseByAngles[JOINTS::L_ANKLE_ROLL]));
+    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(rawPoseT(&poseByAngles[JOINTS::R_HIP_YAW_PITCH], &poseByAngles[JOINTS::R_ANKLE_ROLL]));
 
     bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso, supFoot);
     return isStable;
@@ -64,21 +64,35 @@ inline bool poseCallback(rawAnglesT &pose, const SUPPORT_FOOT &supFoot, const Su
 /**
  * Get limits for each tuning param
  */
-inline void getLimits(const paramNameT &paramIndex, SUPPORT_FOOT &minLim, SUPPORT_FOOT &maxLim, SUPPORT_FOOT &increment,
-                      const rawPoseT &pose, const bool &resume)
+inline void getSupportFootLimits(SUPPORT_FOOT &minLim, SUPPORT_FOOT &maxLim, SUPPORT_FOOT &increment)
 {
-    if (paramIndex == PARAMS::P_SUPPORT_FOOT)
-    {
-        minLim = resume ? static_cast<SUPPORT_FOOT>(pose[PARAMS::P_SUPPORT_FOOT]) : SUPPORT_FOOT::SF_DOUBLE;
-        maxLim = SUPPORT_FOOT::SF_DOUBLE;
-        increment = static_cast<SUPPORT_FOOT>(1);
-    }
-    else
-    {
-        std::cout << "Something is terribly wrong!!!" << std::endl;
-    }
+    //TODO fix this..
+    minLim = SUPPORT_FOOT::SF_DOUBLE;
+    maxLim = SUPPORT_FOOT::SF_DOUBLE;
+    increment = static_cast<SUPPORT_FOOT>(1);
 }
-inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim, dataT &increment, const rawPoseT &pose, const bool &resume)
+
+inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) // 8
+{
+    // Instead of the full range, i'll limit..
+    minLim = -72;
+    maxLim = 72;
+    increment = 18;
+    // minLim = -1;
+    // maxLim = 1;
+    // increment = 1;
+    return;
+}
+inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim, dataT &maxLim, dataT &increment) // 19
+{
+    minLim = std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD), 0.0f) / TO_RAD;
+    maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
+    // minLim = 0;
+    // maxLim = 2;
+    increment = 1;
+    return;
+}
+inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment)
 {
     if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
     {
@@ -88,40 +102,13 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         std::cout << "param index out of bounds" << std::endl;
         return;
     }
-    if (paramIndex == PARAMS::P_HEAD_YAW) //17
-    {
-        // Instead of the full range, i'll limit..
-        minLim = resume ? pose[PARAMS::P_HEAD_YAW] : -72;
-        maxLim = 72;
-        increment = 18;
-        return;
-    }
-    else if (paramIndex == PARAMS::P_HEAD_PITCH) // 17~ approx
-    {
-        // feed the current head yaw to get corresponding head pitch limits
-        minLim = std::max((resume ? pose[PARAMS::P_HEAD_PITCH] : NaoProvider::minRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]) / TO_RAD), 0.0f);
-        maxLim = NaoProvider::maxRangeHeadPitch(pose[PARAMS::P_HEAD_YAW]) / TO_RAD;
-        increment = 2;
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
-        return;
-    }
     else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
     {
-        // minLim = resume ? pose[PARAMS::P_SUPPORT_FOOT] : static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
-        // maxLim = static_cast<float>(SUPPORT_FOOT::SF_DOUBLE);
-        // increment = 1;
-        minLim = 0;
-        maxLim = 0;
-        increment = 0;
+        std::lock_guard<std::mutex> lock(mtx_cout_);
+        std::cout << "SOMETHING IS WRONG, This method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
         return;
     }
 
-    SUPPORT_FOOT supFoot = static_cast<SUPPORT_FOOT>(pose[P_SUPPORT_FOOT]);
-    // shift index by two and partition by pieces of 3
-    // int out = static_cast<int>(paramIndex - 3) / 3;
-    // int remain = static_cast<int>(paramIndex) % 3;
     switch (paramIndex)
     {
     // torsoPosVector
@@ -139,17 +126,14 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = 0.2;
         maxLim = 0.45;
         increment = 0.025; // 2cm increment - 11
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     case PARAMS::P_TORSO_ROT_X:
     case PARAMS::P_TORSO_ROT_Y:
     {
-        minLim = -10;
-        maxLim = 10;
-        increment = 5; // 2 deg increment - 5
+        minLim = -12;
+        maxLim = 12;
+        increment = 3; // 2 deg increment - 5
         break;
     }
     case PARAMS::P_TORSO_ROT_Z:
@@ -157,9 +141,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = 0;
         maxLim = 0;
         increment = 5; // 2 deg increment - 5
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     case PARAMS::P_O_FOOT_POS_X:
@@ -167,9 +148,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         minLim = -0.10;
         maxLim = 0.10;
         increment = 0.02; // 2cm increment
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     // keep origin of other foot always equal or upper than support foot.
@@ -186,9 +164,6 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
             maxLim = 0.1;
         }
         increment = 0.04; // 2cm increment
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
         break;
     }
     case PARAMS::P_O_FOOT_POS_Y:
@@ -201,146 +176,102 @@ inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim
         else // 5
         {
             minLim = -0.10;
-            maxLim = 0.0;
+            maxLim = 0.10; //0.0;
         }
         increment = 0.02; // 2cm increment
-        // minLim = -1;
-        // maxLim = 1;
-        // increment = 1;
+        break;
+    }
+    case PARAMS::P_O_FOOT_ROT_X:
+    case PARAMS::P_O_FOOT_ROT_Y:
+    case PARAMS::P_O_FOOT_ROT_Z:
+    {
+        minLim = 0;
+        maxLim = 0;
+        increment = 5; // 2 deg increment - 5
         break;
     }
     default:
     {
+        {
+            std::lock_guard<std::mutex> lock(mtx_cout_);
+            std::cout << "Default should not be reached.. method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
+        }
         minLim = 0;
         maxLim = 0;
         increment = 0.1;
         break;
     }
     };
-    if (resume)
-    {
-        minLim = pose[paramIndex];
-    }
 }
 
-template <typename T>
-inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, const T &end, T incrementInRad,
-                                 rawPoseT &pose, rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream,
-                                 const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount, const bool &inclusiveMax, bool &resume);
-
-// template <typename T>
-inline void jointIterFunc(const paramNameT &jointIndex, rawPoseT &pose,
-                          rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream, const SupportPolygon &supportPoly,
-                          std::atomic<size_t> &iterCount, const bool &inclusiveMax, bool &resume)
+void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, const SUPPORT_FOOT supFoot,
+                          const std::vector<HeadYawPitch> &headYawPitchList, const vector3ListT torsoPosList, const vector3ListT torsoRotList,
+                          const vector3ListT OFootPosList,
+                          const vector3ListT OFootRotList, poseListT &poseList, rawPoseListT &rawPoseList, std::ostream &poseOutStream, std::ostream &jointOutStream,
+                          const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount)
 {
-    if (jointIndex == PARAMS::P_SUPPORT_FOOT)
+    const rawAnglesT defaultPose = Poses::getPose(Poses::READY);
+    for (size_t iter = torsoPosBegin; iter < torsoPosEnd; ++iter)
     {
-        SUPPORT_FOOT minLim, maxLim, increment;
-        getLimits(jointIndex, minLim, maxLim, increment, pose, resume);
-        jointIterFuncWithLim<SUPPORT_FOOT>(jointIndex, minLim, maxLim, increment, pose, poseList, defaultPose, outStream, supportPoly, iterCount, inclusiveMax, resume);
-    }
-    else
-    {
-        dataT minLim, maxLim, increment;
-        getLimits(jointIndex, minLim, maxLim, increment, pose, resume);
-        jointIterFuncWithLim<dataT>(jointIndex, minLim, maxLim, increment, pose, poseList, defaultPose, outStream, supportPoly, iterCount, inclusiveMax, resume);
-    }
-}
-
-template <typename T>
-inline void jointIterFuncWithLim(const paramNameT &jointIndex, const T &start, const T &end, T incrementInRad,
-                                 rawPoseT &pose, rawPoseListT &poseList, const rawPoseT &defaultPose, std::ostream &outStream,
-                                 const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount, const bool &inclusiveMax, bool &resume)
-{
-    if (jointIndex >= PARAMS::P_MAX)
-    {
-        std::lock_guard<std::mutex> lock(mtx_cout_);
-        std::cout << "SOMETHING IS WRONG, exceeding limits!!!" << jointIndex << std::endl; // "\r";
-        return;
-    }
-    if (jointIndex != PARAMS::P_SUPPORT_FOOT)
-    {
-        // this section will manipulate head, leg joints only. Others will be skipped.
-        // End-of joints will be reached at a different place
-        for (dataT j = start; (inclusiveMax ? j <= end : j < end); j += incrementInRad)
+        Vector3<dataT> torsoPos(torsoPosList[iter]);
+        for (auto torsoRot : torsoRotList)
         {
-            // std::cout << "iter joint " << jointIndex << std::endl;
-            /// skip validation for right hip yaw pitch as it is same as left hip yaw pitch
-            pose[jointIndex] = j; //abs(j) < incrementInRad ? j : 0; //if the current value is less than increment (near zero), then round off to zero.
-            const paramNameT nextIndex = static_cast<paramNameT>(jointIndex + 1);
-            if (nextIndex < PARAMS::P_MAX)
+            for (auto OFootPos : OFootPosList)
             {
-                jointIterFunc(nextIndex, pose, poseList, defaultPose, outStream, supportPoly, iterCount, true, resume);
-            }
-            else
-            {
-                // reached a full cycle, disable the resume hook..
-                resume = false;
-
-                iterCount++;
-                SUPPORT_FOOT supportFootVal = static_cast<SUPPORT_FOOT>(pose[PARAMS::P_SUPPORT_FOOT]);
                 /// Prefiltering.. Check for collisions and others here. :)
                 /// First check, double foot..
-                if (supportFootVal == SUPPORT_FOOT::SF_DOUBLE && (std::abs(pose[PARAMS::P_O_FOOT_POS_Z]) > __FLT_EPSILON__ ||
-                                                                  std::abs(pose[PARAMS::P_O_FOOT_ROT_X]) > __FLT_EPSILON__ ||
-                                                                  std::abs(pose[PARAMS::P_O_FOOT_ROT_Y]) > __FLT_EPSILON__))
+                if (supFoot == SUPPORT_FOOT::SF_DOUBLE && OFootPos.z() > __FLT_EPSILON__)
                 {
+                    iterCount += (OFootRotList.size() * headYawPitchList.size());
                     continue;
                 }
-                // TODO insert more checks here
-                else
+                for (auto OFootRot : OFootRotList)
                 {
-                    rawAnglesT jointAngles = Poses::getPose(Poses::READY);
-
-                    bool poseGenSuccess = NaoTorsoPose::getPose(jointAngles,
-                                                                PoseUtils::getTorsoPosVFromParams(pose),
-                                                                PoseUtils::getTorsoRotVFromParams(pose) * TO_RAD,
-                                                                PoseUtils::getOtherFootPosVFromParams(pose),
-                                                                PoseUtils::getOtherFootRotVFromParams(pose) * TO_RAD,
-                                                                static_cast<SUPPORT_FOOT>(supportFootVal));
-                    // if pose gen success and pose is statically stable
-                    if (poseGenSuccess && poseCallback(pose, static_cast<SUPPORT_FOOT>(supportFootVal), supportPoly))
+                    iterCount += headYawPitchList.size();
+                    /// Prefiltering.. Check for collisions and others here. :)
+                    /// First check, double foot..
+                    if (supFoot == SUPPORT_FOOT::SF_DOUBLE && (OFootRot.x() > __FLT_EPSILON__ ||
+                                                               OFootRot.x() > __FLT_EPSILON__))
                     {
-                        poseCount++;
-#if DO_COMMIT
-                        poseList.push_back(pose);
-                        if (poseList.size() > BUFFER_SIZE)
+                        continue;
+                    }
+                    // TODO insert more checks here
+
+                    rawAnglesT jointAngles = defaultPose;
+                    bool poseGenSuccess = NaoTorsoPose::getPose(jointAngles,
+                                                                torsoPos,
+                                                                torsoRot * TO_RAD,
+                                                                OFootPos,
+                                                                OFootRot * TO_RAD,
+                                                                supFoot);
+                    // if pose gen success and pose is statically stable
+                    if (poseGenSuccess)
+                    {
+                        for (size_t iter = 0; iter < headYawPitchList.size(); iter++)
                         {
-#if !WRITE_PARALLEL
-                            while (!fileWriterReady.load())
+                            jointAngles[JOINTS::HEAD_YAW] = headYawPitchList[iter].yaw * TO_RAD;
+                            jointAngles[JOINTS::HEAD_PITCH] = headYawPitchList[iter].pitch * TO_RAD;
+                            if (poseCallback(jointAngles, supFoot, supportPoly))
                             {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                                poseCount++;
+#if DO_COMMIT
+                                poseList.emplace_back(supFoot, headYawPitchList[iter], torsoPos, torsoRot,
+                                                      OFootPos, OFootRot);
+                                rawPoseList.push_back(jointAngles);
+                                if (poseList.size() > BUFFER_SIZE)
+                                {
+                                    commitToStream<dataT>(poseList, poseOutStream);
+                                }
+                                if (rawPoseList.size() > BUFFER_SIZE)
+                                {
+                                    commitToStream<dataT>(rawPoseList, jointOutStream);
+                                }
+#endif
                             }
-#endif
-                            commitToStream<dataT>(poseList, outStream);
                         }
-#endif
                     }
                 }
             }
-        }
-    }
-    else
-    {
-        for (int supportFootIdx = static_cast<int>(start);
-             supportFootIdx < (inclusiveMax ? supportFootIdx <= static_cast<int>(end) : supportFootIdx < static_cast<int>(end));
-             supportFootIdx++)
-        {
-            pose[PARAMS::P_SUPPORT_FOOT] = supportFootIdx;
-
-            const paramNameT nextIndex = static_cast<paramNameT>(jointIndex + 1);
-            if (nextIndex < PARAMS::P_MAX)
-            {
-                jointIterFunc(nextIndex, pose, poseList, defaultPose, outStream, supportPoly, iterCount, true, resume);
-            }
-#if DEBUG_IN_THREAD
-            /// If we get the "else", there is something wrong as end-of-list must be reached at above
-            else
-            {
-                std::lock_guard<std::mutex> lock(mtx_cout_);
-                std::cout << "SOMETHING IS WRONG!!!" << jointIndex << std::endl; // "\r";
-            }
-#endif
         }
     }
 }
@@ -377,110 +308,137 @@ int main(int argc, char **argv)
 {
     std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
     std::string outFileName((argc > 2 ? argv[2] : "out"));
+    std::string supportFootName((argc > 3 ? argv[3] : "d"));
 
-    // std::vector<dataT> resumeVec;
-    // std::static_assert(dataT == float); // splitter is float only :P
-
-    bool resume = false; // (argc > 3 && std::string(argv[2]).compare("-r") == 0);
-    // {
-    //     std::string valString = argv[3];
-    //     resumeVec = splitToNumbers(valString);
-    //     if (resumeVec.size() == PARAMS::P_MAX)
-    //     {
-    //         resume = true;
-    //         std::cout << "Resuming from values: " << valString << std::endl;
-    //     }else{
-    //         std::cout << "Resuming string parse failed: " << valString << std::endl;
-    //     }
-    // }
+    SUPPORT_FOOT supportFoot = SUPPORT_FOOT::SF_DOUBLE;
+    if (supportFootName.compare("l") == 0)
+    {
+        supportFoot = SUPPORT_FOOT::SF_LEFT;
+    }
+    else if (supportFootName.compare("r") == 0)
+    {
+        supportFoot = SUPPORT_FOOT::SF_RIGHT;
+    }
+    else
+    {
+        std::cout << "Going for double foot." << std::endl;
+    }
 
     TUHH tuhhInstance(confRoot);
+    const std::string dateTimeString = getISOTimeString();
     /// Pose Gen
     std::cout << "# Init for pose generation" << std::endl;
 
     const rawPoseT readyPose(PARAMS::P_MAX);
 
+    std::vector<HeadYawPitch> headYawPitchList;
+    vector3ListT torsoPosList;
+    vector3ListT torsoRotList;
+    vector3ListT OtherFootPosList;
+    vector3ListT OtherFootRotList;
     {
-        size_t count = 1;
-        float minLimit, maxLimit, increment;
-        SUPPORT_FOOT minLimitSF, maxLimitSF, incrementSF;
-        for (int i = 0; i < static_cast<int>(paramNameT::P_MAX); i++)
+        size_t count = 0;
+        dataT minLimit, maxLimit, increment;
+        getHeadYawLimits(minLimit, maxLimit, increment);
+        for (dataT yaw = minLimit; yaw <= maxLimit; yaw += increment)
         {
-            if (i == static_cast<int>(paramNameT::P_SUPPORT_FOOT))
+            if (std::abs(yaw) < increment)
             {
-                getLimits(static_cast<paramNameT>(i), minLimitSF, maxLimitSF, incrementSF, readyPose, resume);
-                if ((maxLimitSF - minLimitSF) < 0)
-                {
-                    std::cout << "min > max???" << std::endl;
-                }
-                count *= std::floor((maxLimitSF - minLimitSF) / incrementSF) + 1;
+                yaw = 0;
             }
-            else
+            dataT minPitch, maxPitch, pitchIncr;
+            getHeadPitchLimits(yaw, minPitch, maxPitch, pitchIncr);
+            for (dataT pitch = minPitch; pitch <= maxPitch; pitch += pitchIncr)
             {
-                getLimits(static_cast<paramNameT>(i), minLimit, maxLimit, increment, readyPose, resume);
-                if ((maxLimit - minLimit) < 0)
+                if (std::abs(pitch) < pitchIncr)
                 {
-                    std::cout << "min > max???" << std::endl;
+                    pitch = 0;
                 }
-                count *= std::floor((maxLimit - minLimit) / increment) + 1;
+                // count++;
+                headYawPitchList.emplace_back(yaw, pitch);
+            }
+        }
+        std::cout << count << std::endl;
+    }
+    {
+        size_t count = headYawPitchList.size();
+        Vector3<dataT> minLimit, maxLimit, increment;
+        for (int i = static_cast<int>(paramNameT::P_TORSO_POS_X); i < static_cast<int>(paramNameT::P_MAX); i += 3)
+        {
+            getLimits(static_cast<paramNameT>(i), supportFoot, minLimit.x(), maxLimit.x(), increment.x());
+            getLimits(static_cast<paramNameT>(i + 1), supportFoot, minLimit.y(), maxLimit.y(), increment.y());
+            getLimits(static_cast<paramNameT>(i + 2), supportFoot, minLimit.z(), maxLimit.z(), increment.z());
+            switch (i)
+            {
+            case static_cast<int>(paramNameT::P_TORSO_POS_X):
+                torsoPosList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
+                count *= torsoPosList.size();
+                break;
+            case static_cast<int>(paramNameT::P_TORSO_ROT_X):
+                torsoRotList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
+                count *= torsoRotList.size();
+                break;
+            case static_cast<int>(paramNameT::P_O_FOOT_POS_X):
+                OtherFootPosList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
+                count *= OtherFootPosList.size();
+                break;
+            case static_cast<int>(paramNameT::P_O_FOOT_ROT_X):
+                OtherFootRotList = PoseUtils::getVector3List<dataT>(minLimit, maxLimit, increment);
+                count *= OtherFootRotList.size();
+                break;
+            default:
+                std::cout << "something is wrong" << std::endl;
             }
         }
         std::cout << "Max iters -> " << std::scientific << (double)count << std::endl;
     }
     /// Start threading work.
-    dataT minLimit, maxLimit, increment;
-    getLimits(static_cast<paramNameT>(0), minLimit, maxLimit, increment, readyPose, resume);
+    std::cout << "Start Threading" << std::endl;
+    const unsigned int count = torsoPosList.size();
 
-    const unsigned int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
-
-    const dataT splitVal = count >= MAX_THREADS ? (std::floor((dataT)count / (dataT)MAX_THREADS) * increment) : (increment);
-    std::cout << "count " << std::defaultfloat << count << " " << splitVal << std::endl;
+    const dataT splitVal = count >= MAX_THREADS ? (std::floor((dataT)count / (dataT)MAX_THREADS)) : 1;
+    std::cout << "1st level count " << std::defaultfloat << count << " " << splitVal << std::endl;
     const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
 
     /// PoseList vector and accum(pose) Vector
-    std::vector<rawPoseListT> poseListList(THREADS_USED);
-    rawPoseListT accumList(THREADS_USED);
-
-    /// populate poseList and poseAccum
-    for (auto &i : accumList)
-    {
-        i = rawPoseT(PARAMS::P_MAX);
-    }
+    std::vector<poseListT> poseListList(THREADS_USED);
+    std::vector<rawPoseListT> jointListList(THREADS_USED);
 
     std::vector<std::atomic<size_t>> iterCount(THREADS_USED);
     /// Start the real threading..
     {
         std::vector<std::thread> threadList(THREADS_USED);
-        std::vector<std::fstream> outputFileList(THREADS_USED);
+        std::vector<std::fstream> poseFiles(THREADS_USED);
+        std::vector<std::fstream> rawJointFiles(THREADS_USED);
         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
         // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
-            // if(resume){
-            //     outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::in);
-            //     if(outputFileList[i].is_open()){
+            poseFiles[i] = std::fstream((outFileName + "_" + dateTimeString + "_poses_" + std::to_string(i) + ".txt"), std::ios::out);
+            rawJointFiles[i] = std::fstream((outFileName + "_" + dateTimeString + "_joints_" + std::to_string(i) + ".txt"), std::ios::out);
 
-            //     }
-            // }
-
-            outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
-            if (!outputFileList[i].is_open())
+            if (!poseFiles[i].is_open() || !rawJointFiles[i].is_open())
             {
                 std::cerr << "output file creation failed. Aborting!!!" << std::endl;
                 break;
             }
             const bool lastIter = (i + 1 == THREADS_USED);
 
-            dataT start = (minLimit + ((dataT)i * splitVal));
-            dataT end = lastIter ? maxLimit : (minLimit + (i + 1) * splitVal);
+            dataT start = (0 + ((dataT)i * splitVal));
+            dataT end = lastIter ? count : (0 + (i + 1) * splitVal);
 
-            // (const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT &incrementInRad,
-            //                      poseT &pose, rawPoseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
-            //                      const bool &inclusiveMax)
             std::cout << "Start, end, lastIter " << start << " " << end << " " << lastIter << std::endl;
-            threadList[i] = std::thread(jointIterFuncWithLim<dataT>, static_cast<paramNameT>(0), start, end, increment,
-                                        std::ref(accumList[i]), std::ref(poseListList[i]), std::ref(readyPose),
-                                        std::ref(outputFileList[i]), std::ref(supportPolyList[i]), std::ref(iterCount[i]), lastIter, std::ref(resume));
+
+            // void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, const SUPPORT_FOOT supFoot,
+            //                           const std::vector<HeadYawPitch> &headYawPitchList, const vector3ListT torsoPosList, const vector3ListT torsoRotList,
+            //                           const vector3ListT OFootPosList,
+            //                           const vector3ListT OFootRotList, poseListT &poseList, rawPoseListT &rawPoseList, std::ostream &poseOutStream, std::ostream &jointOutStream,
+            //                           const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount)
+            threadList[i] = std::thread(jointIterFuncWithLim, start, end, supportFoot,
+                                        std::ref(headYawPitchList), std::ref(torsoPosList), std::ref(torsoRotList),
+                                        std::ref(OtherFootPosList),
+                                        std::ref(OtherFootRotList), std::ref(poseListList[i]), std::ref(jointListList[i]),
+                                        std::ref(poseFiles[i]), std::ref(rawJointFiles[i]), std::ref(supportPolyList[i]), std::ref(iterCount[i]));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -489,11 +447,12 @@ int main(int argc, char **argv)
             const size_t interval = 5;
             while (continueTicker)
             {
-                size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), 0);
+                size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
                 if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterSum << " g. poses " << poseCount.load() << std::endl; // "\r";
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (long double)iterSum
+                              << " g. poses " << (long double)poseCount.load() << std::endl; // "\r";
                 }
                 else
                 {
@@ -533,13 +492,16 @@ int main(int argc, char **argv)
 #if DO_COMMIT
         for (size_t i = 0; i < THREADS_USED; i++)
         {
-            commitToStream<dataT>(poseListList[i], outputFileList[i]);
-            outputFileList[i].close();
+            commitToStream<dataT>(poseListList[i], poseFiles[i]);
+            poseFiles[i].close();
+            commitToStream<dataT>(jointListList[i], rawJointFiles[i]);
+            rawJointFiles[i].close();
         }
 #endif
     }
-    std::cout << "Tried " << std::scientific << (double)std::accumulate(iterCount.begin(), iterCount.end(), 0) << " poses!" << std::endl;
-    std::cout << "Found " << std::scientific << (double)poseCount.load() << " good poses!" << std::endl;
+
+    std::cout << "Tried " << std::scientific << (long double)std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0) << " poses!" << std::endl;
+    std::cout << "Found " << std::scientific << (long double)poseCount.load() << " good poses!" << std::endl;
 
     return 0;
 }

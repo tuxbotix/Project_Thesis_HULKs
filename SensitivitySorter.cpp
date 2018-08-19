@@ -28,28 +28,6 @@
 
 // const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
-// //2000MB(approx)  total buffer usage = BUFFER_SIZE *sizeof(int) * JOINT_COUNT * MAX_THREADS
-// const size_t totalBufferSizeInBytes = 200E6;
-// const size_t BUFFER_SIZE = totalBufferSizeInBytes / (sizeof(dataT) * static_cast<size_t>(PARAMS::P_MAX) * MAX_THREADS);
-
-// std::atomic<size_t> iterCount(0);
-// std::atomic<size_t> poseCount(0);
-
-// /**
-//  * Called at end of each update of joint angle
-//  */
-// inline bool poseCallback(rawAnglesT &pose, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
-// {
-//     /// Where would the com be after setting these angles?
-//     KinematicMatrix com2torso = KinematicMatrix(Com::getCom(pose));
-
-//     KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(rawPoseT(&pose[JOINTS::L_HIP_YAW_PITCH], &pose[JOINTS::L_ANKLE_ROLL]));
-//     KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(rawPoseT(&pose[JOINTS::R_HIP_YAW_PITCH], &pose[JOINTS::R_ANKLE_ROLL]));
-
-//     bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso, supFoot);
-//     return isStable;
-// }
-
 // /**
 //  * Minimal TUHH class impl. in order to use configuration
 //  * This is a rather hacky way, but doesn't need touching the actual belly of the beast xD

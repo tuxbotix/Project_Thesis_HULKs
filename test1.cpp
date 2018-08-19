@@ -24,8 +24,8 @@
 
 typedef float dataT;
 typedef JOINTS::JOINT jointT;
-typedef std::vector<dataT> poseT;
-typedef std::vector<poseT> poseListT;
+typedef std::vector<dataT> oldPoseT;
+typedef std::vector<oldPoseT> oldPoseListT;
 
 const jointT JOINT_COUNT = JOINTS::JOINTS_MAX;
 
@@ -42,13 +42,13 @@ SupportPolygon supportPoly;
 /**
  * Called at end of each update of joint angle
  */
-inline bool poseCallback(poseT &pose)
+inline bool poseCallback(oldPoseT &pose)
 {
     /// Where would the com be after setting these angles?
     KinematicMatrix com2torso = KinematicMatrix(Com::getCom(pose));
 
-    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(poseT(&pose[JOINTS::L_HIP_YAW_PITCH], &pose[JOINTS::L_ANKLE_ROLL]));
-    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(poseT(&pose[JOINTS::R_HIP_YAW_PITCH], &pose[JOINTS::R_ANKLE_ROLL]));
+    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(oldPoseT(&pose[JOINTS::L_HIP_YAW_PITCH], &pose[JOINTS::L_ANKLE_ROLL]));
+    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(oldPoseT(&pose[JOINTS::R_HIP_YAW_PITCH], &pose[JOINTS::R_ANKLE_ROLL]));
 
     bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso);
     return isStable;
@@ -58,7 +58,7 @@ inline bool poseCallback(poseT &pose)
  * Iterate through a given joint, and recursively call the next joint..
  */
 
-inline void getLimits(const jointT &jointIndex, dataT &minLim, dataT &maxLim, const poseT &pose)
+inline void getLimits(const jointT &jointIndex, dataT &minLim, dataT &maxLim, const oldPoseT &pose)
 {
 
     if (jointIndex == JOINTS::HEAD_PITCH)
@@ -94,11 +94,11 @@ inline void getLimits(const jointT &jointIndex, dataT &minLim, dataT &maxLim, co
 }
 
 inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, const dataT &end, dataT incrementInRad,
-                                 poseT &pose, poseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
+                                 oldPoseT &pose, oldPoseListT &poseList, const oldPoseT &defaultPose, std::ostream &outStream,
                                  const bool &inclusiveMax);
 
-inline void jointIterFunc(const jointT &jointIndex, dataT incrementInRad, poseT &pose,
-                          poseListT &poseList, const poseT &defaultPose, std::ostream &outStream, const bool &inclusiveMax)
+inline void jointIterFunc(const jointT &jointIndex, dataT incrementInRad, oldPoseT &pose,
+                          oldPoseListT &poseList, const oldPoseT &defaultPose, std::ostream &outStream, const bool &inclusiveMax)
 {
     dataT minLim, maxLim;
     getLimits(jointIndex, minLim, maxLim, pose);
@@ -106,7 +106,7 @@ inline void jointIterFunc(const jointT &jointIndex, dataT incrementInRad, poseT 
 }
 
 inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, const dataT &end, dataT incrementInRad,
-                                 poseT &pose, poseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
+                                 oldPoseT &pose, oldPoseListT &poseList, const oldPoseT &defaultPose, std::ostream &outStream,
                                  const bool &inclusiveMax)
 {
     // bool skip = false;
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
     /// Pose Gen
     std::cout << "# Init for pose generation" << std::endl;
 
-    const poseT readyPose(PARAMS::P_MAX);
+    const oldPoseT readyPose(PARAMS::P_MAX);
     const dataT incrementInRad = 10 * TO_RAD; // 10 deg increment
 
     /// Start threading work.
@@ -255,17 +255,17 @@ int main(int argc, char **argv)
     const size_t THREADS_USED = (splitVal > 0) ? MAX_THREADS : 1;
 
     /// PoseList vector and accum(pose) Vector
-    std::vector<poseListT> poseListList(THREADS_USED);
-    poseListT accumList(THREADS_USED);
+    std::vector<oldPoseListT> poseListList(THREADS_USED);
+    oldPoseListT accumList(THREADS_USED);
 
     /// populate poseList and poseAccum
     for (auto &i : accumList)
     {
-        i = Poses::getPose(Poses::READY);//poseT(JOINT_COUNT);
+        i = Poses::getPose(Poses::READY);//oldPoseT(JOINT_COUNT);
     }
     // for (auto &i : poseListList)
     // {
-    //     i.reserve(BUFFER_SIZE); // = poseListT(BUFFER_SIZE);
+    //     i.reserve(BUFFER_SIZE); // = oldPoseListT(BUFFER_SIZE);
     // }
 
     /// Start the real threading..
@@ -287,7 +287,7 @@ int main(int argc, char **argv)
             dataT end = lastIter ? maxLimit : (minLimit + (i + 1) * splitVal);
 
             // (const jointT &jointIndex, const dataT &start, const dataT &end, dataT &incrementInRad,
-            //                      poseT &pose, poseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
+            //                      oldPoseT &pose, oldPoseListT &poseList, const oldPoseT &defaultPose, std::ostream &outStream,
             //                      const bool &inclusiveMax)
             std::cout << "Start, end, lastIter " << start << " " << end << " " << lastIter << std::endl;
             threadList[i] = std::thread(jointIterFuncWithLim, static_cast<jointT>(0), start, end, incrementInRad,

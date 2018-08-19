@@ -5,6 +5,9 @@
 #include <iostream>
 #include <fstream>
 #include <atomic>
+#include <ctime>
+
+#include "NaoPoseInfo.hpp"
 
 #if !WRITE_PARALLEL
 static std::atomic<bool> fileWriterReady(true);
@@ -29,6 +32,57 @@ static std::atomic<bool> fileWriterReady(true);
 #if DEBUG_IN_THREAD || DEBUG_FILE_COMMIT || ENABLE_PROGRESS
 static std::mutex mtx_cout_;
 #endif
+
+template <typename T>
+void commitToStream(std::vector<NaoPose<T>> &poseList, std::ostream &outStream)
+{
+#if !WRITE_PARALLEL
+    fileWriterReady = false;
+#endif
+#if DEBUG_FILE_COMMIT
+    {
+        std::lock_guard<std::mutex> lock(mtx_cout_);
+        std::cout << "commit Start" << std::endl;
+    }
+#endif
+#if USE_STRINGSTREAM
+    std::stringstream buffer;
+#endif
+    for (const auto &p : poseList)
+    {
+#if USE_STRINGSTREAM
+        buffer << p;
+#else
+        outStream << p;
+#endif
+#if USE_STRINGSTREAM
+        buffer << "\n";
+        if (buffer.tellg() > 4E6)
+        { // write each 4MB :P
+            std::cout << "buf write";
+            outStream << buffer.str();
+            buffer.str(std::string());
+            buffer.clear();
+        }
+#else
+        outStream << "\n";
+#endif
+    }
+#if USE_STRINGSTREAM
+    outStream << buffer.str();
+#endif
+    poseList.clear();
+#if DEBUG_FILE_COMMIT
+    {
+        std::lock_guard<std::mutex> lock(mtx_cout_);
+        std::cout << "commit End" << std::endl;
+    }
+#endif
+#if !WRITE_PARALLEL
+    fileWriterReady = true;
+#endif
+    outStream.flush();
+}
 
 template <typename T>
 void commitToStream(std::vector<std::vector<T>> &poseList, std::ostream &outStream)
@@ -109,4 +163,15 @@ std::vector<float> splitToNumbers(const std::string &s, char delimiter = ',')
         }
     }
     return tokens;
+}
+
+std::string getISOTimeString()
+{
+    time_t now;
+    time(&now);
+    char buf[sizeof "2011-10-08T07:07:09Z"];
+    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
+    // this will work too, if your compiler doesn't support %F or %T:
+    //strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    return std::string(buf);
 }
