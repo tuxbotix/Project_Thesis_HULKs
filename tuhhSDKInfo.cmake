@@ -145,7 +145,7 @@ set(TUHHSDK_HEADERS
   #${TUHHSDK_HOME}/Framework/Thread.hpp
   #${TUHHSDK_HOME}/Hardware/AudioInterface.hpp
   #${TUHHSDK_HOME}/Hardware/FakeDataInterface.hpp
-  #${TUHHSDK_HOME}/Hardware/CameraInterface.hpp
+  ${TUHHSDK_HOME}/Hardware/CameraInterface.hpp
   #${TUHHSDK_HOME}/Hardware/RobotInterface.hpp
   #${TUHHSDK_HOME}/Libs/json/json-forwards.h
   #${TUHHSDK_HOME}/Libs/json/json.h

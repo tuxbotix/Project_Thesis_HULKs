@@ -51,15 +51,23 @@ target_include_directories(${target1} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_
 
 target_link_libraries(${target1} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
 
-set(extraSources ObservationSensitivityProvider.hpp NaoStability.hpp  NaoTorsoPose.hpp NaoProjectionDataProvider.hpp NaoPoseInfo.hpp Solvers.hpp)
+set(extraSources NaoStability.hpp  NaoTorsoPose.hpp NaoProjectionDataProvider.hpp NaoPoseInfo.hpp Solvers.hpp)
+set(observabilitySources ObservationSensitivityProvider.hpp Solvers.hpp)
+
 set(target2 poseGen)
 add_executable(${target2} poseGenerator.cpp ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_include_directories(${target2} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
 target_link_libraries(${target2} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
 
 #
-#set(extraSources ObservationSensitivityProvider.hpp NaoStability.hpp  NaoTorsoPose.hpp NaoProjectionDataProvider.hpp NaoPoseInfo.hpp Solvers.hpp)
-#set(target3 sensitivitySorter)
-#add_executable(${target3} SensitivitySorter.cpp ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-#target_include_directories(${target3} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
-#target_link_libraries(${target3} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
+
+set(target3 sensitivitySorter)
+add_executable(${target3} SensitivitySorter.cpp ${observabilitySources} ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_include_directories(${target3} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
+target_link_libraries(${target3} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
+
+# other tests
+set(target4 tests)
+add_executable(${target4} tests.cpp ${observabilitySources} ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_include_directories(${target4} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
+target_link_libraries(${target4} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})

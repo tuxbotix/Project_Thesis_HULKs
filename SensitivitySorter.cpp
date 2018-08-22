@@ -1,20 +1,32 @@
-// #include <iostream>
-// #include <fstream>
-// #include <thread>
-// #include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <thread>
+#include <algorithm>
+#include <numeric>
 
-// #include "NaoStability.hpp"
-// #include "NaoTorsoPose.hpp"
-// #include "NaoPoseInfo.hpp"
-// #include "ObservationSensitivityProvider.hpp"
+#include <Data/CameraMatrix.hpp>
+#include <Modules/NaoProvider.h>
+#include <Modules/Configuration/Configuration.h>
+#include <Modules/Configuration/UnixSocketConfig.hpp>
+#include <Modules/Poses.h>
 
-// #define DO_COMMIT 1
-// #define WRITE_PARALLEL 1
-// #define DEBUG_FILE_COMMIT 1
-// #define DEBUG_IN_THREAD 1
-// #define ENABLE_PROGRESS 1
+#include <Tools/Storage/Image.hpp>
+#include <Tools/Storage/Image422.hpp>
+#include <Tools/Kinematics/KinematicMatrix.h>
+#include <Hardware/RobotInterface.hpp>
 
-// #include "utils.hpp"
+#include "NaoPoseInfo.hpp"
+#include "NaoStability.hpp"
+#include "NaoTorsoPose.hpp"
+#include "ObservationSensitivityProvider.hpp"
+
+#define DO_COMMIT 1
+#define WRITE_PARALLEL 1
+#define DEBUG_FILE_COMMIT 1
+#define DEBUG_IN_THREAD 1
+#define ENABLE_PROGRESS 1
+
+#include "utils.hpp"
 
 // typedef NaoTorsoPose::angleT dataT;
 // typedef PARAMS paramNameT;
@@ -28,170 +40,157 @@
 
 // const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
-// /**
-//  * Minimal TUHH class impl. in order to use configuration
-//  * This is a rather hacky way, but doesn't need touching the actual belly of the beast xD
-//  */
-// class Configuration;
-// class TUHH
-// {
+/**
+ * Minimal TUHH class impl. in order to use configuration
+ * This is a rather hacky way, but doesn't need touching the actual belly of the beast xD
+ */
+class Configuration;
+class TUHH
+{
 
-//   public:
-//     Configuration config_;
-//     TUHH(std::string fileRoot) : config_(fileRoot)
-//     {
-//         NaoInfo info;
-//         info.bodyVersion = NaoVersion::V5;
-//         info.headVersion = NaoVersion::V5;
-//         info.bodyName = "default";
-//         info.headName = "default";
+  public:
+    Configuration config_;
+    TUHH(std::string fileRoot) : config_(fileRoot)
+    {
+        NaoInfo info;
+        info.bodyVersion = NaoVersion::V5;
+        info.headVersion = NaoVersion::V5;
+        info.bodyName = "default";
+        info.headName = "default";
 
-//         config_.setLocationName("default");
-//         config_.setNaoHeadName(info.headName);
-//         config_.setNaoBodyName(info.bodyName);
+        config_.setLocationName("default");
+        config_.setNaoHeadName(info.headName);
+        config_.setNaoBodyName(info.bodyName);
 
-//         NaoProvider::init(config_, info);
-//         std::cout << "initialize TUHH" << std::endl;
-//         std::cout << Poses::init(fileRoot) << std::endl;
-//     }
-// };
+        NaoProvider::init(config_, info);
+        std::cout << "initialize TUHH" << std::endl;
+        std::cout << Poses::init(fileRoot) << std::endl;
+    }
+};
 
-// int main(int argc, char **argv)
-// {
-//     std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
-//     std::string outFileName((argc > 2 ? argv[2] : "out"));
+int main(int argc, char **argv)
+{
+    std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
+    std::string inFileName((argc > 2 ? argv[2] : "out"));
 
-//     // std::vector<dataT> resumeVec;
-//     // std::static_assert(dataT == float); // splitter is float only :P
+    TUHH tuhhInstance(confRoot);
 
-//     bool resume = false; // (argc > 3 && std::string(argv[2]).compare("-r") == 0);
-//     // {
-//     //     std::string valString = argv[3];
-//     //     resumeVec = splitToNumbers(valString);
-//     //     if (resumeVec.size() == PARAMS::P_MAX)
-//     //     {
-//     //         resume = true;
-//     //         std::cout << "Resuming from values: " << valString << std::endl;
-//     //     }else{
-//     //         std::cout << "Resuming string parse failed: " << valString << std::endl;
-//     //     }
-//     // }
+    Vector2f fc, cc, fov;
 
-//     TUHH tuhhInstance(confRoot);
+    tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);
+    tuhhInstance.config_.get("Projection", "top_fc") >> fc;
+    tuhhInstance.config_.get("Projection", "top_cc") >> cc;
+    // tuhhInstance.config_.get("Projection", "top_fov") >> fov;
 
-//     Vector2f fc, cc, fov;
+    Vector2i imSize(640, 480);
 
-//     tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);
-//     tuhhInstance.config_.get("Projection", "top_fc") >> fc;
-//     tuhhInstance.config_.get("Projection", "top_cc") >> cc;
-//     tuhhInstance.config_.get("Projection", "top_fov") >> fov;
+    /// Pose Gen
+    std::cout << "# Init for Sensitivity Sorting" << std::endl;
 
-//     Vector2i imSize(640, 480);
+    Vector2f i(10,40);
+    Eigen::Rotation2D<float> rot(20*TO_RAD);
+    std::cout<<(rot * i)<<std::endl;
+    //     const rawPoseT readyPose(PARAMS::P_MAX);
 
-//     /// Pose Gen
-//     std::cout << "# Init for Sensitivity Sorting" << std::endl;
+    //     /// Start threading work.
+    //     dataT minLimit, maxLimit, increment;
+    //     getLimits(static_cast<paramNameT>(0), minLimit, maxLimit, increment, readyPose, resume);
 
-//     const rawPoseT readyPose(PARAMS::P_MAX);
+    //     const unsigned int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
 
-//     /// Start threading work.
-//     dataT minLimit, maxLimit, increment;
-//     getLimits(static_cast<paramNameT>(0), minLimit, maxLimit, increment, readyPose, resume);
+    //     const dataT splitVal = count >= MAX_THREADS ? (std::floor((dataT)count / (dataT)MAX_THREADS) * increment) : (increment);
+    //     std::cout << "count " << count << " " << splitVal << std::endl;
+    //     const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
 
-//     const unsigned int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
+    //     /// PoseList vector and accum(pose) Vector
+    //     std::vector<rawPoseListT> poseListList(THREADS_USED);
+    //     rawPoseListT accumList(THREADS_USED);
 
-//     const dataT splitVal = count >= MAX_THREADS ? (std::floor((dataT)count / (dataT)MAX_THREADS) * increment) : (increment);
-//     std::cout << "count " << count << " " << splitVal << std::endl;
-//     const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
+    //     /// populate poseList and poseAccum
+    //     for (auto &i : accumList)
+    //     {
+    //         i = rawPoseT(PARAMS::P_MAX);
+    //     }
 
-//     /// PoseList vector and accum(pose) Vector
-//     std::vector<rawPoseListT> poseListList(THREADS_USED);
-//     rawPoseListT accumList(THREADS_USED);
+    //     /// Start the real threading..
+    //     {
+    //         std::vector<std::thread> threadList(THREADS_USED);
+    //         std::vector<std::fstream> outputFileList(THREADS_USED);
+    //         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
+    //         std::vector<ObservationSensitivity> obsSensitivities =
+    //             ObservationSensitivityProvider::getSensitivityProviders(THREADS_USED, imSize, fc, cc, fov, 0.05);
+    //         // bool resumeFlags[THREADS_USED];
+    //         for (unsigned int i = 0; i < THREADS_USED; i++)
+    //         {
+    //             // if(resume){
+    //             //     outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::in);
+    //             //     if(outputFileList[i].is_open()){
 
-//     /// populate poseList and poseAccum
-//     for (auto &i : accumList)
-//     {
-//         i = rawPoseT(PARAMS::P_MAX);
-//     }
+    //             //     }
+    //             // }
 
-//     /// Start the real threading..
-//     {
-//         std::vector<std::thread> threadList(THREADS_USED);
-//         std::vector<std::fstream> outputFileList(THREADS_USED);
-//         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
-//         std::vector<ObservationSensitivity> obsSensitivities =
-//             ObservationSensitivityProvider::getSensitivityProviders(THREADS_USED, imSize, fc, cc, fov, 0.05);
-//         // bool resumeFlags[THREADS_USED];
-//         for (unsigned int i = 0; i < THREADS_USED; i++)
-//         {
-//             // if(resume){
-//             //     outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::in);
-//             //     if(outputFileList[i].is_open()){
+    //             outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
+    //             if (!outputFileList[i].is_open())
+    //             {
+    //                 std::cerr << "output file creation failed. Aborting!!!" << std::endl;
+    //                 break;
+    //             }
+    //             const bool lastIter = (i + 1 == THREADS_USED);
 
-//             //     }
-//             // }
+    //             dataT start = (minLimit + ((dataT)i * splitVal));
+    //             dataT end = lastIter ? maxLimit : (minLimit + (i + 1) * splitVal);
 
-//             outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
-//             if (!outputFileList[i].is_open())
-//             {
-//                 std::cerr << "output file creation failed. Aborting!!!" << std::endl;
-//                 break;
-//             }
-//             const bool lastIter = (i + 1 == THREADS_USED);
+    //             // (const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT &incrementInRad,
+    //             //                      poseT &pose, rawPoseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
+    //             //                      const bool &inclusiveMax)
+    //             std::cout << "Start, end, lastIter " << start << " " << end << " " << lastIter << std::endl;
+    //             threadList[i] = std::thread(jointIterFuncWithLim, static_cast<paramNameT>(0), start, end, increment,
+    //                                         std::ref(accumList[i]), std::ref(poseListList[i]), std::ref(readyPose),
+    //                                         std::ref(outputFileList[i]), std::ref(supportPolyList[i]), lastIter, std::ref(resume));
+    //         }
+    // #if ENABLE_PROGRESS
+    //         bool continueTicker = true;
+    //         std::thread tTick = std::thread([&]() {
+    //             int elapsed = 0;
+    //             const size_t interval = 5;
+    //             while (continueTicker)
+    //             {
+    //                 {
+    //                     std::lock_guard<std::mutex> lock(mtx_cout_);
+    //                     std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
+    //                 }
+    //                 elapsed += interval;
+    //                 std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
+    //             }
+    //         });
+    // #endif
+    //         /// Join all :P
+    //         for (auto &t : threadList)
+    //         {
+    //             if (t.joinable())
+    //             {
+    //                 t.join();
+    //             }
+    //         }
+    // #if ENABLE_PROGRESS
+    //         continueTicker = false;
+    //         if (tTick.joinable())
+    //         {
+    //             tTick.join();
+    //         }
+    // #endif
+    //         /// Write the remaining buffers to file
+    //         std::cout << "flushing all " << std::endl;
+    // #if DO_COMMIT
+    //         for (size_t i = 0; i < THREADS_USED; i++)
+    //         {
+    //             commitToStream<dataT>(poseListList[i], outputFileList[i]);
+    //             outputFileList[i].close();
+    //         }
+    // #endif
+    //     }
+    //     std::cout << "Tried " << std::scientific << (double)iterCount.load() << " poses!" << std::endl;
+    //     std::cout << "Found " << std::scientific << (double)poseCount.load() << " good poses!" << std::endl;
 
-//             dataT start = (minLimit + ((dataT)i * splitVal));
-//             dataT end = lastIter ? maxLimit : (minLimit + (i + 1) * splitVal);
-
-//             // (const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT &incrementInRad,
-//             //                      poseT &pose, rawPoseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
-//             //                      const bool &inclusiveMax)
-//             std::cout << "Start, end, lastIter " << start << " " << end << " " << lastIter << std::endl;
-//             threadList[i] = std::thread(jointIterFuncWithLim, static_cast<paramNameT>(0), start, end, increment,
-//                                         std::ref(accumList[i]), std::ref(poseListList[i]), std::ref(readyPose),
-//                                         std::ref(outputFileList[i]), std::ref(supportPolyList[i]), lastIter, std::ref(resume));
-//         }
-// #if ENABLE_PROGRESS
-//         bool continueTicker = true;
-//         std::thread tTick = std::thread([&]() {
-//             int elapsed = 0;
-//             const size_t interval = 5;
-//             while (continueTicker)
-//             {
-//                 {
-//                     std::lock_guard<std::mutex> lock(mtx_cout_);
-//                     std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
-//                 }
-//                 elapsed += interval;
-//                 std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
-//             }
-//         });
-// #endif
-//         /// Join all :P
-//         for (auto &t : threadList)
-//         {
-//             if (t.joinable())
-//             {
-//                 t.join();
-//             }
-//         }
-// #if ENABLE_PROGRESS
-//         continueTicker = false;
-//         if (tTick.joinable())
-//         {
-//             tTick.join();
-//         }
-// #endif
-//         /// Write the remaining buffers to file
-//         std::cout << "flushing all " << std::endl;
-// #if DO_COMMIT
-//         for (size_t i = 0; i < THREADS_USED; i++)
-//         {
-//             commitToStream<dataT>(poseListList[i], outputFileList[i]);
-//             outputFileList[i].close();
-//         }
-// #endif
-//     }
-//     std::cout << "Tried " << std::scientific << (double)iterCount.load() << " poses!" << std::endl;
-//     std::cout << "Found " << std::scientific << (double)poseCount.load() << " good poses!" << std::endl;
-
-//     return 0;
-// }
+    return 0;
+}

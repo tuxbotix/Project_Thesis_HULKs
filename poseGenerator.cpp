@@ -18,7 +18,7 @@
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
-#include "ObservationSensitivityProvider.hpp"
+// #include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
