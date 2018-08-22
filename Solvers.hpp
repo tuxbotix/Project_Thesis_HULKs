@@ -1,128 +1,108 @@
 #pragma once
 
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+
 #include <unsupported/Eigen/NonLinearOptimization>
 
 namespace ObservationSolvers
 {
 
+typedef std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> Point2DVector;
+typedef std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f>> Point2FVector;
+
 /**
- * Below modified implementation extracted from
- * https://github.com/SarvagyaVaish/Eigen-Levenberg-Marquardt-Optimization
+ * Extracted from https://github.com/daviddoria/Examples/blob/master/c%2B%2B/Eigen/LevenbergMarquardt/CurveFitting.cpp
+ * This definition structure is needed to use NumericalDiff module
  */
-struct Pose2DFunctor
+
+template <typename _Scalar = float, int NX = Eigen::Dynamic, int NY = Eigen::Dynamic>
+struct Functor
+{
+  typedef _Scalar Scalar;
+  enum
+  {
+    InputsAtCompileTime = NX,
+    ValuesAtCompileTime = NY
+  };
+  typedef Eigen::Matrix<Scalar, InputsAtCompileTime, 1> InputType;
+  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, 1> ValueType;
+  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, InputsAtCompileTime> JacobianType;
+
+  int n_inputs, m_values;
+
+  Functor() : n_inputs(InputsAtCompileTime), m_values(ValuesAtCompileTime) {}
+  Functor(int inputs, int values) : n_inputs(inputs), m_values(values) {}
+
+  int inputs() const { return n_inputs; }
+  int values() const { return m_values; }
+};
+
+template <typename _Scalar = float>
+struct Pose2DFunctor : Functor<_Scalar>
 {
   // 'm' pairs of (x, f(x))
-  Eigen::MatrixXf measuredValues;
-  Eigen::MatrixXf initialValues;
-
-  void populateDataMatrices(const std::vector<float> &initialPoints, const std::vector<float> &measuements)
-  {
-    // TODO chweck if the input vectors have same size
-    m = initialPoints.size() / 2;
-    measuredValues = Eigen::MatrixXf(m, 2);
-    initialValues = Eigen::MatrixXf(m, 2);
-    for (size_t i = 0; i < m; i++)
-    {
-      measuredValues(i, 0) = measuements[i * 2];
-      measuredValues(i, 1) = measuements[(i * 2) + 1];
-      initialValues(i, 0) = initialPoints[i * 2];
-      initialValues(i, 1) = initialPoints[(i * 2) + 1];
-    }
-  }
+  Point2FVector initialPoints;
+  Point2FVector transformedPoints;
 
   // Compute 'm' errors, one for each data point, for the given parameter values in 'x'
   int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
   {
-    // 'x' has dimensions n x 1
-    // It contains the current estimates for the parameters.
 
-    // 'fvec' has dimensions m x 1
-    // It will contain the error for each data point.
+    _Scalar xTrans = x(0);
+    _Scalar yTrans = x(1);
+    _Scalar zRot = x(2);
+    Eigen::Translation<_Scalar, 2> trans(xTrans, yTrans);
+    Eigen::Rotation2D<_Scalar> rot2(zRot * TO_RAD);
+    Vector2f diff;
 
-    float aParam = x(0);
-    float bParam = x(1);
-    float cParam = x(2);
-    Eigen::Translation<float, 2> trans(aParam, bParam);
-    Eigen::Rotation2D<float> rot2(cParam * TO_RAD);
-
-    for (size_t i = 0; i < m; i++)
+    for (size_t i = 0; i < initialPoints.size(); i++)
     {
-      Eigen::Vector2f val = trans * rot2 * Eigen::Vector2f(initialValues.row(i));
-
-      fvec(i) = (val - Eigen::Vector2f(measuredValues.row(i))).norm();
+      diff = transformedPoints[i] - (trans * rot2 * initialPoints[i]);
+      fvec(i) = diff.norm();
     }
     return 0;
   }
 
-  // Compute the jacobian of the errors
-  int df(const Eigen::VectorXf &x, Eigen::MatrixXf &fjac) const
-  {
-    // 'x' has dimensions n x 1
-    // It contains the current estimates for the parameters.
-
-    // 'fjac' has dimensions m x n
-    // It will contain the jacobian of the errors, calculated numerically in this case.
-
-    float epsilon;
-    epsilon = 1e-5f;
-
-    for (int i = 0; i < x.size(); i++)
-    {
-      Eigen::VectorXf xPlus(x);
-      xPlus(i) += epsilon;
-      Eigen::VectorXf xMinus(x);
-      xMinus(i) -= epsilon;
-
-      Eigen::VectorXf fvecPlus(m);
-      operator()(xPlus, fvecPlus);
-
-      Eigen::VectorXf fvecMinus(m);
-      operator()(xMinus, fvecMinus);
-
-      Eigen::VectorXf fvecDiff(m);
-      fvecDiff = (fvecPlus - fvecMinus) / (2.0f * epsilon);
-
-      fjac.block(0, i, m, 1) = fvecDiff;
-    }
-
-    return 0;
-  }
-
-  // Number of data points, i.e. values.
-  size_t m;
-
-  // Returns 'm', the number of values.
-  size_t values() const { return m; }
-
-  // The number of parameters, i.e. inputs.
-  size_t n;
-
-  // Returns 'n', the number of inputs.
-  size_t inputs() const { return n; }
+  int inputs() const { return 3; }
+  int values() const { return initialPoints.size(); }
 };
 
 /**
  * This is quick n dirty way to call this..
  */
 
-void get2dPose(const std::vector<float> &initialPoints,
-               const std::vector<float> &transformedPoints, Eigen::Vector3f &params)
+// template <typename _Scalar>
+return get2dPose(const std::vector<float> &initialVec,
+                 const std::vector<float> &transformedVec, Vector3<float> &params)
 {
-  if (initialPoints.size() != transformedPoints.size())
+  if (initialVec.size() != transformedVec.size())
   {
     std::cerr << "input list dimension mismatch" << std::endl;
     return;
   }
-  VectorXf x(params);
+  VectorXf paramsX(params);
 
-  Pose2DFunctor functor;
-  functor.populateDataMatrices(initialPoints, transformedPoints);
-  functor.n = 3;
+  Point2FVector initialPoints;
+  Point2FVector transformedPoints;
 
-  Eigen::LevenbergMarquardt<Pose2DFunctor, float> lm(functor);
-  int status = lm.minimize(x);
-  params = Eigen::Vector3f(x);
-  std::cout << "LM optimization status: " << status << std::endl;
+  for (size_t i = 0; i < initialVec.size() / 2; i++)
+  {
+    initialPoints.emplace_back(initialVec[i * 2], initialVec[(i * 2) + 1]);
+    transformedPoints.emplace_back(transformedVec[i * 2], transformedVec[(i * 2) + 1]);
+  }
+
+  Pose2DFunctor<float> functor;
+  functor.initialPoints = initialPoints;
+  functor.transformedPoints = transformedPoints;
+
+  Eigen::NumericalDiff<Pose2DFunctor<float>> functorDiff(functor);
+  Eigen::LevenbergMarquardt<Eigen::NumericalDiff<Pose2DFunctor<float>>, float> lm(functorDiff);
+
+  int status = lm.minimize(paramsX);
+  params = Eigen::Vector3f(paramsX);
+  // std::cout << "LM optimization status: " << status << std::endl;
+  return status;
 }
 
 } // namespace ObservationSolvers
