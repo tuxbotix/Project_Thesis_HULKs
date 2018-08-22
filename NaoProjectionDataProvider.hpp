@@ -37,6 +37,26 @@ class NaoSensorDataProvider
     }
 
   public:
+    static KinematicMatrix getSupportFootMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf)
+    {
+        KinematicMatrix supFoot2Torso;
+        if(sf == SUPPORT_FOOT::SF_NONE){
+            throw "None-support foot. Cannot compute cam2gnd";
+        }
+        if (sf == SUPPORT_FOOT::SF_RIGHT)
+        {
+            supFoot2Torso = ForwardKinematics::getRFoot(rawPoseT(&angles[JOINTS::R_HIP_YAW_PITCH], &angles[JOINTS::R_ANKLE_ROLL]));
+        }
+        else
+        {
+            supFoot2Torso = ForwardKinematics::getLFoot(rawPoseT(&angles[JOINTS::L_HIP_YAW_PITCH], &angles[JOINTS::L_ANKLE_ROLL]));
+        }
+        return supFoot2Torso;
+    }
+    static void updatedCameraMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf, CameraMatrix &cameraMatrix_, const Camera &camera)
+    {
+        updatedCameraMatrix(angles, getSupportFootMatrix(angles, sf), cameraMatrix_, camera);
+    }
     /**
      * Derived from cycle() of Projection.cpp
      */
@@ -54,13 +74,15 @@ class NaoSensorDataProvider
         }
         cameraMatrix_.camera2torso = getHeadToTorso(angles) * camera2head_uncalib;
         cameraMatrix_.camera2ground = getTorso2Ground(supFoot2torso) * cameraMatrix_.camera2torso;
-        // do some calculations here because they are needed in other functions that may be called often
-        cameraMatrix_.camera2torsoInv = cameraMatrix_.camera2torso.invert();
-        cameraMatrix_.camera2groundInv = cameraMatrix_.camera2ground.invert();
         // divide position by 1000 because we want it in meters but the head matrix buffer stores them in millimeters.
         cameraMatrix_.camera2torso.posV /= 1000.f;
         cameraMatrix_.camera2ground.posV /= 1000.f;
+        // do some calculations here because they are needed in other functions that may be called often
+        cameraMatrix_.camera2torsoInv = cameraMatrix_.camera2torso.invert();
+        cameraMatrix_.camera2groundInv = cameraMatrix_.camera2ground.invert();
+        
         const auto rM = cameraMatrix_.camera2ground.rotM.toRotationMatrix();
+
         if (rM(2, 2) == 0.f)
         {
             // Assume that the horizon is above the image.
