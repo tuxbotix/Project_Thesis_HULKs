@@ -4,6 +4,14 @@
 #include <Tools/Kinematics/ForwardKinematics.h>
 #include <Tools/Kinematics/InverseKinematics.h>
 #include <Tools/Kinematics/KinematicMatrix.h>
+#include <Modules/NaoProvider.h>
+
+/**
+ * This file define data types, classes related to poses
+ * Raw poses are just joint angles
+ * Poses are poses defined by means of pose of torso and two feet + head angles.
+ * PoseAndRaw means above two combined for convenience. [ Also can be used to test pose generators]
+ */
 
 typedef float angleT;
 typedef angleT dataT;
@@ -60,21 +68,6 @@ class Sensor
     const static std::vector<JOINTS::JOINT> CAM_OBS_L_SUP_FOOT;
     const static std::vector<JOINTS::JOINT> CAM_OBS_R_SUP_FOOT;
 };
-
-const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_L_SUP_FOOT = {
-    JOINTS::JOINT::L_HIP_YAW_PITCH,
-    JOINTS::JOINT::L_HIP_ROLL,
-    JOINTS::JOINT::L_HIP_PITCH,
-    JOINTS::JOINT::L_KNEE_PITCH,
-    JOINTS::JOINT::L_ANKLE_PITCH,
-    JOINTS::JOINT::L_ANKLE_ROLL};
-const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_R_SUP_FOOT = {
-    JOINTS::JOINT::R_HIP_YAW_PITCH,
-    JOINTS::JOINT::R_HIP_ROLL,
-    JOINTS::JOINT::R_HIP_PITCH,
-    JOINTS::JOINT::R_KNEE_PITCH,
-    JOINTS::JOINT::R_ANKLE_PITCH,
-    JOINTS::JOINT::R_ANKLE_ROLL};
 
 /**
  * IMPORTANT : The type T MUST have implemented a Zero() method (static)
@@ -262,9 +255,6 @@ class NaoPose
     bool isGood() { return valid; }
 };
 
-template <typename T>
-const std::string NaoPose<T>::className = "NaoPose";
-
 template <typename T = angleT>
 class NaoPoseAndRawAngles
 {
@@ -331,8 +321,6 @@ class NaoPoseAndRawAngles
     }
     bool isGood() { return valid; }
 };
-template <typename T>
-const std::string NaoPoseAndRawAngles<T>::className = "NaoPoseAndRawAngles";
 
 typedef NaoPoseAndRawAngles<dataT> poseAndRawAngleT;
 typedef std::vector<NaoPoseAndRawAngles<dataT>> poseAndRawAngleListT;

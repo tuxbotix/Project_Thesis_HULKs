@@ -164,7 +164,7 @@ int main(int argc, char **argv)
         ObservationSensitivity obs = sensitivitues[0];
 
         std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-            obs.getSensitivities(val.angles, val.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
+            obs.camObsModelPtr->getSensitivities(val.angles, val.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
 
         for (auto &i : sensitivityOutput)
         {
