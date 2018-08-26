@@ -186,24 +186,3 @@ class SupportPolygon
         }
     }
 };
-
-const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_L_SUP_FOOT = {
-    JOINTS::JOINT::L_HIP_YAW_PITCH,
-    JOINTS::JOINT::L_HIP_ROLL,
-    JOINTS::JOINT::L_HIP_PITCH,
-    JOINTS::JOINT::L_KNEE_PITCH,
-    JOINTS::JOINT::L_ANKLE_PITCH,
-    JOINTS::JOINT::L_ANKLE_ROLL};
-const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_R_SUP_FOOT = {
-    JOINTS::JOINT::R_HIP_YAW_PITCH,
-    JOINTS::JOINT::R_HIP_ROLL,
-    JOINTS::JOINT::R_HIP_PITCH,
-    JOINTS::JOINT::R_KNEE_PITCH,
-    JOINTS::JOINT::R_ANKLE_PITCH,
-    JOINTS::JOINT::R_ANKLE_ROLL};
-
-template <typename T>
-const std::string NaoPose<T>::className = "NaoPose";
-
-template <typename T>
-const std::string NaoPoseAndRawAngles<T>::className = "NaoPoseAndRawAngles";
