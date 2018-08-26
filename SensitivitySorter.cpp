@@ -121,7 +121,7 @@ int main(int argc, char **argv)
 
     std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
     std::string inFileName((argc > 2 ? argv[2] : "out"));
-
+    
     TUHH tuhhInstance(confRoot);
 
     Vector2f fc, cc, fov;
@@ -280,8 +280,6 @@ int main(int argc, char **argv)
     //         }
     // #endif
     //     }
-    //     std::cout << "Tried " << std::scientific << (double)iterCount.load() << " poses!" << std::endl;
-    //     std::cout << "Found " << std::scientific << (double)poseCount.load() << " good poses!" << std::endl;
 
     return 0;
 }

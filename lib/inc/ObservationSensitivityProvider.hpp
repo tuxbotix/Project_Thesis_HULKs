@@ -46,7 +46,7 @@ private:
     camMat.cc.y() *= imSize.y();
     camMat.fov = fov;
     // Default state, ready pose and top camera with double foot.
-    updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT, SENSOR_NAME::TOP_CAMERA);
+    // updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT, SENSOR_NAME::TOP_CAMERA);
 
     float x, y;
     const int gridSizeHalf = maxGridPointsPerSide / 2;

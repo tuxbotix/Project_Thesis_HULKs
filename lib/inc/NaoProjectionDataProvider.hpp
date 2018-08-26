@@ -15,11 +15,6 @@
 
 class NaoSensorDataProvider
 {
-    // static KinematicMatrix getTorso2Ground(const std::vector<float> &angles){
-
-    // }
-    // const std::vector<float> &angles,
-
     static KinematicMatrix getTorso2Ground(const KinematicMatrix &supFoot2torso)
     {
         /// torso2ground
@@ -42,6 +37,8 @@ class NaoSensorDataProvider
         KinematicMatrix supFoot2Torso;
         if (sf == SUPPORT_FOOT::SF_NONE)
         {
+            // TODO catch these exceptions instead of direct printing?
+            std::cerr << "None-support foot. Cannot compute cam2gnd" << std::endl;
             throw "None-support foot. Cannot compute cam2gnd";
         }
         if (sf == SUPPORT_FOOT::SF_RIGHT)
@@ -54,12 +51,14 @@ class NaoSensorDataProvider
         }
         else if (sf == SUPPORT_FOOT::SF_DOUBLE)
         {
-            std::cout << "double" << std::endl;
+            // TODO catch these exceptions instead of direct printing?
+            std::cerr << "getSupportFootMatrix() -> Double foot not supported" << std::endl;
             throw "getSupportFootMatrix() -> Double foot not supported";
         }
         else
         {
-            std::cout << "none" << std::endl;
+            // TODO catch these exceptions instead of direct printing?
+            std::cerr << "getSupportFootMatrix() -> None foot not supported" << std::endl;
             throw "getSupportFootMatrix() -> None foot not supported";
         }
         return supFoot2Torso;
@@ -109,9 +108,4 @@ class NaoSensorDataProvider
         }
         cameraMatrix_.valid = true;
     }
-
-    // static void getUpdatedCamera(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera)
-    // {
-
-    // }
 };

@@ -316,14 +316,15 @@ class NaoPoseAndRawAngles
                 }
                 else
                 {
-                    std::cout << "tru in" << std::endl;
+                    std::cerr << "Input stream \"not good\", can't extract joint angle." << std::endl;
+                    break;
                 }
             }
             p.valid = true;
         }
         else
         {
-            std::cout << "err" << std::endl;
+            std::cerr << "NaoPoseAndRawAngle deserialize issue." << std::endl;
             throw "Cannot deserialize this stream to NaoPoseAndRawAngles, Header mismatch!!!";
         }
         return in;

@@ -76,6 +76,23 @@ int main(int argc, char **argv)
 
     std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
     std::string inFileName((argc > 2 ? argv[2] : "out"));
+    std::string supportFootName((argc > 3 ? argv[3] : "d"));
+
+    SUPPORT_FOOT supportFoot = SUPPORT_FOOT::SF_DOUBLE;
+    if (supportFootName.compare("l") == 0)
+    {
+        supportFoot = SUPPORT_FOOT::SF_LEFT;
+        std::cout << "Left Support foot." << std::endl;
+    }
+    else if (supportFootName.compare("r") == 0)
+    {
+        supportFoot = SUPPORT_FOOT::SF_RIGHT;
+        std::cout << "Right Support foot." << std::endl;
+    }
+    else
+    {
+        std::cout << "Going for double foot." << std::endl;
+    }
 
     TUHH tuhhInstance(confRoot);
 
@@ -103,20 +120,20 @@ int main(int argc, char **argv)
         1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.05);
 
     ObservationSensitivity obs = sensitivitues[0];
-    std::vector<float> jointAngles = Poses::getPose(Poses::READY);
+    std::vector<float> jointAngles(JOINTS::JOINT::JOINTS_MAX, 0.0);
 
     std::cout << NaoProvider::minRange(JOINTS::JOINT::L_KNEE_PITCH) << std::endl;
     /**
      *  Test for sensitivity calculation
      */
-    SUPPORT_FOOT sf = SUPPORT_FOOT::SF_DOUBLE;
+
     SENSOR_NAME sensorName = SENSOR_NAME::BOTTOM_CAMERA;
     // Camera cameraName = (sensorName == SENSOR_NAME::TOP_CAMERA) ? Camera::TOP : Camera::BOTTOM;
 
     jointAngles[JOINTS::JOINT::HEAD_PITCH] = 20 * TO_RAD;
     const std::vector<float> newJoints(jointAngles);
 
-    obs.updateState(newJoints, SUPPORT_FOOT::SF_LEFT, sensorName);
+    obs.updateState(newJoints, supportFoot, sensorName);
 
     // // Update camera matrix.. & get baseline grid
     // // KinematicMatrix supFoot = NaoSensorDataProvider::getSupportFootMatrix(newJoints, sf);
@@ -128,14 +145,14 @@ int main(int argc, char **argv)
     bool observed = false;
 
     // test head pitch sensitivity.
-    Vector3f sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::L_ANKLE_ROLL, newJoints, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed);
+    Vector3f sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::L_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
     std::cout << "Test for left ankle roll pitch\n"
               << sensitivity << "\n "
               << "Observed? " << observed << std::endl;
     observed = false;
     // obs.updateState(newJoints, sf, sensorName);
     // test head yaw sensitivity.
-    sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::R_ANKLE_ROLL, newJoints, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed);
+    sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::R_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
     std::cout << "Test for right ankle roll pitch\n"
               << sensitivity << "\n "
               << "Observed? " << observed << std::endl;
@@ -146,7 +163,7 @@ int main(int argc, char **argv)
     //     std::cout << "(" << i.x() << ", " << i.y() << ")" << std::endl;
     // }
     std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-        obs.getSensitivities(newJoints, sf, {SENSOR_NAME::BOTTOM_CAMERA});
+        obs.getSensitivities(newJoints, supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
 
     for (auto &i : sensitivityOutput)
     {

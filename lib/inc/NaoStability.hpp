@@ -85,13 +85,8 @@ class SupportPolygon
         const float comX = comInLeftFoot.posV.x();
         const float comY = comInLeftFoot.posV.y();
 
-        // std::cout << "leftForward " << leftFootForward << " \n"
-        //           << comX << " " << comY << std::endl;
         if (leftFootForward)
         {
-            // std::cout << "feet bounding box: lfoot\n"
-            //           << lFoot.tl() << "\n rfoot \n"
-            //           << rFootInLFoot.br() << std::endl;
             // if in the bounding box
             if (lFoot.tl().x() > comX && rFootInLFoot.br().x() < comX &&
                 lFoot.tl().y() > comY && rFootInLFoot.br().y() < comY)
@@ -105,13 +100,11 @@ class SupportPolygon
                     const float y1 = gradientTR * (comX - rFootInLFoot.tr().x()) + rFootInLFoot.tr().y();
                     if (rFootInLFoot.tr().x() > comX && comY < y1)
                     {
-                        // std::cout << "Upper triangle " << gradientTR << " " << y1 << std::endl;
                         return false;
                     }
                     const float y2 = gradientTR * (comX - rFootInLFoot.bl().x()) + rFootInLFoot.bl().y();
                     if (lFoot.bl().x() > comX && comY > y2)
                     {
-                        // std::cout << "Lower triangle " << y2 << std::endl;
                         return false;
                     }
                 }
@@ -120,15 +113,11 @@ class SupportPolygon
             }
             else
             {
-                // std::cout << "Not in bounding box" << std::endl;
                 return false;
             }
         }
         else // right foot forward
         {
-            // std::cout << "feet bounding box: rfoot\n"
-            //           << rFootInLFoot.tr() << "\n lfoot \n"
-            //           << lFoot.bl() << std::endl;
             // if in the bounding box
             if (rFootInLFoot.tr().x() > comX && lFoot.bl().x() < comX &&
                 rFootInLFoot.tr().y() < comY && lFoot.bl().y() > comY)
@@ -142,13 +131,11 @@ class SupportPolygon
                     const float y1 = gradientTR * (comX - rFootInLFoot.tl().x()) + rFootInLFoot.tl().y();
                     if (lFoot.tl().x() > comX && comY > y1)
                     {
-                        // std::cout << "Upper triangle" << std::endl;
                         return false;
                     }
                     const float y2 = gradientTR * (comX - rFootInLFoot.br().x()) + rFootInLFoot.br().y();
                     if (rFootInLFoot.br().x() < comX && comY < y2)
                     {
-                        // std::cout << "lower triangle" << std::endl;
                         return false;
                     }
                 }
@@ -157,7 +144,6 @@ class SupportPolygon
             }
             else
             {
-                // std::cout << "Not in bounding box" << std::endl;
                 return false;
             }
         }
