@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Tools/Kinematics/Com.h>
 #include <Tools/Kinematics/ForwardKinematics.h>
 #include <Tools/Kinematics/InverseKinematics.h>

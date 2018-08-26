@@ -133,26 +133,26 @@ int main(int argc, char **argv)
     jointAngles[JOINTS::JOINT::HEAD_PITCH] = 20 * TO_RAD;
     const std::vector<float> newJoints(jointAngles);
 
-    obs.updateState(newJoints, supportFoot, sensorName);
+    obs.camObsModelPtr->updateState(newJoints, supportFoot, sensorName);
 
     // // Update camera matrix.. & get baseline grid
     // // KinematicMatrix supFoot = NaoSensorDataProvider::getSupportFootMatrix(newJoints, sf);
 
-    const std::vector<Vector2f> grid = obs.getGroundGrid();
-    const std::vector<float> baseLinePoints = obs.robotToPixelMulti(grid);
+    const std::vector<Vector2f> grid = obs.camObsModelPtr->getGroundGrid();
+    const std::vector<float> baseLinePoints = obs.camObsModelPtr->robotToPixelMulti(grid);
 
     // obs.updateState(newJoints, sf, sensorName);
     bool observed = false;
 
     // test head pitch sensitivity.
-    Vector3f sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::L_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
+    Vector3f sensitivity = obs.camObsModelPtr->getSensitivityForJointForCamera(JOINTS::JOINT::L_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
     std::cout << "Test for left ankle roll pitch\n"
               << sensitivity << "\n "
               << "Observed? " << observed << std::endl;
     observed = false;
     // obs.updateState(newJoints, sf, sensorName);
     // test head yaw sensitivity.
-    sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::R_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
+    sensitivity = obs.camObsModelPtr->getSensitivityForJointForCamera(JOINTS::JOINT::R_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
     std::cout << "Test for right ankle roll pitch\n"
               << sensitivity << "\n "
               << "Observed? " << observed << std::endl;
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
     //     std::cout << "(" << i.x() << ", " << i.y() << ")" << std::endl;
     // }
     std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-        obs.getSensitivities(newJoints, supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
+        obs.camObsModelPtr->getSensitivities(newJoints, supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
 
     for (auto &i : sensitivityOutput)
     {

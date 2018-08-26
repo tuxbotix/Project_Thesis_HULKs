@@ -29,8 +29,8 @@ add_library(${libtuhh} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_include_directories(${libtuhh} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
 target_link_libraries(${libtuhh} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
 
-add_library(naoPose inc/NaoStability.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoPoseInfo.hpp)
-target_include_directories(naoPose SYSTEM PUBLIC  inc)
+add_library(naoPose src/NaoProjectionDataProvider.cpp src/Sensors.cpp inc/NaoStability.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoPoseInfo.hpp inc/Sensors.hpp)
+target_include_directories(naoPose SYSTEM PUBLIC inc)
 target_link_libraries(naoPose tuhh)
 
 
@@ -39,7 +39,18 @@ target_include_directories(utils SYSTEM PUBLIC inc)
 target_link_libraries(utils naoPose tuhh)
 
 set(libObs observability)
-add_library(${libObs} inc/ObservationSensitivityProvider.hpp inc/Solvers.hpp )
+set(OBS_HEADERS 
+    inc/ObservationSensitivityProvider.hpp
+    inc/CameraObservationModel.hpp
+    inc/Solvers.hpp
+    inc/ObservationModel.hpp
+)
+
+set(OBS_SOURCES
+    src/CameraObservationModel.cpp 
+)
+
+add_library(${libObs} ${OBS_SOURCES} ${OBS_HEADERS})
 target_include_directories(${libObs} SYSTEM PUBLIC inc)
 target_link_libraries(${libObs} naoPose tuhh)
 
