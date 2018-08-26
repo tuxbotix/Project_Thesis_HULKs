@@ -127,7 +127,7 @@ inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, c
 // #if DEBUG_IN_THREAD
         if (iterCount.load() % 100000 == 0)
         {
-            std::lock_guard<std::mutex> lock(mtx_cout_);
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
             std::cout << "Iterations: " << iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
         }
 // #endif
@@ -146,7 +146,7 @@ inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, c
                 }
 #endif
 
-                commitToStream<dataT>(poseList, outStream);
+                utils::commitToStreamVec<rawPoseT>(poseList, outStream);
             }
 #endif
         }
@@ -185,7 +185,7 @@ inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, c
             /// If we get the "else", there is something wrong as end-of-list must be reached at above
             else
             {
-                std::lock_guard<std::mutex> lock(mtx_cout_);
+                std::lock_guard<std::mutex> lock(utils::mtx_cout_);
                 std::cout << "SOMETHING IS WRONG!!!" << jointIndex << std::endl; // "\r";
             }
 // #endif
@@ -307,7 +307,7 @@ int main(int argc, char **argv)
 #if DO_COMMIT
         for (size_t i = 0; i < THREADS_USED; i++)
         {
-            commitToStream<dataT>(poseListList[i], outputFileList[i]);
+            utils::commitToStreamVec<rawPoseT>(poseListList[i], outputFileList[i]);
             outputFileList[i].close();
         }
 #endif

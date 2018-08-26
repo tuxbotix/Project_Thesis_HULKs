@@ -13,61 +13,33 @@ set(NAO_PATH "${CMAKE_CURRENT_LIST_DIR}/../nao")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${NAO_PATH}/CMake")
 
-#set(Boost_USE_STATIC_LIBS   ON)
-#SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-#SET(BUILD_SHARED_LIBS OFF)
-#SET(CMAKE_EXE_LINKER_FLAGS "-static")
-
 # generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 # for some weird compiler bug
 set(RTTR_ENABLE_WERROR 0)
 
-set(FIND_CMAKE_SCRIPT_DIR "${NAO_PATH}/CMake")
-
-include("${FIND_CMAKE_SCRIPT_DIR}/settings.cmake")
-include("${FIND_CMAKE_SCRIPT_DIR}/dependencies.cmake")
-
-
-
-# Find packages
-find_package(tuhhSDK REQUIRED)
-
-#target_include_directories(${PROJECT_NAME} PUBLIC ${TUHHSDK_INCLUDE_DIRS})
-
-set(TUHHSDK_HOME ${NAO_PATH}/src/tuhhsdk)
-
-add_subdirectory(${TUHHSDK_HOME} "${CMAKE_CURRENT_BINARY_DIR}/tuhhsdk")
-
-message("lalal" ${TUHHSDK_HOME})
-include(tuhhSDKInfo.cmake)
-
+add_subdirectory(lib)
 # Execs
 #poseGen
 
 set(target1 test1)
-add_executable(${target1} test1.cpp NaoStability.hpp  NaoTorsoPose.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_include_directories(${target1} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
+add_executable(${target1} test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target1} utils naoPose tuhh)
 
-target_link_libraries(${target1} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
-
-set(extraSources NaoStability.hpp  NaoTorsoPose.hpp NaoProjectionDataProvider.hpp NaoPoseInfo.hpp Solvers.hpp)
-set(observabilitySources ObservationSensitivityProvider.hpp Solvers.hpp)
+# set(extraSources NaoStability.hpp  NaoTorsoPose.hpp NaoProjectionDataProvider.hpp NaoPoseInfo.hpp Solvers.hpp)
+# set(observabilitySources ObservationSensitivityProvider.hpp Solvers.hpp)
 
 set(target2 poseGen)
-add_executable(${target2} poseGenerator.cpp ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_include_directories(${target2} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
-target_link_libraries(${target2} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
+add_executable(${target2} poseGenerator.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target2} observability utils naoPose tuhh)
 
 #
 
 set(target3 sensitivitySorter)
-add_executable(${target3} SensitivitySorter.cpp ${observabilitySources} ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_include_directories(${target3} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
-target_link_libraries(${target3} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
+add_executable(${target3} SensitivitySorter.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target3} observability utils naoPose tuhh)
 
 # other tests
 set(target4 tests)
-add_executable(${target4} tests.cpp ${observabilitySources} ${extraSources} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_include_directories(${target4} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
-target_link_libraries(${target4} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
+add_executable(${target4} tests.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target4} observability utils naoPose tuhh)

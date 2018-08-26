@@ -76,6 +76,9 @@ const std::vector<JOINTS::JOINT> Sensor::CAM_OBS_R_SUP_FOOT = {
     JOINTS::JOINT::R_ANKLE_PITCH,
     JOINTS::JOINT::R_ANKLE_ROLL};
 
+/**
+ * IMPORTANT : The type T MUST have implemented a Zero() method (static)
+ */
 template <typename T = Vector3f>
 class PoseSensitivity
 {
@@ -89,7 +92,7 @@ class PoseSensitivity
   public:
     PoseSensitivity(const SENSOR_NAME &sn)
         : sensorName(sn),
-          sensitivities(std::vector<T>(JOINTS::JOINT::JOINTS_MAX)),
+          sensitivities(std::vector<T>(JOINTS::JOINT::JOINTS_MAX, T::Zero())),
           observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX))
     {
     }
@@ -104,8 +107,15 @@ class PoseSensitivity
     }
     void getSensitivity(const JOINTS::JOINT &joint, T &val, bool &obs)
     {
-        val = sensitivities[joint];
         obs = observationMask[joint];
+        if (obs)
+        {
+            val = sensitivities[joint];
+        }
+        else
+        {
+            val = T::Zero();
+        }
     }
 };
 
@@ -196,6 +206,10 @@ struct HeadYawPitch
 template <typename T = angleT>
 class NaoPose
 {
+  private:
+    static const std::string className;
+    bool valid; // set true once valid data is loaded.
+
   public:
     SUPPORT_FOOT supportFoot;
     HeadYawPitch headYawPitch;
@@ -209,9 +223,13 @@ class NaoPose
           otherFootRotV(OFRotV)
     {
     }
+    NaoPose() : supportFoot(SUPPORT_FOOT::SF_NONE), headYawPitch(0, 0), torsoPosV(), torsoRotV(), otherFootPosV(),
+                otherFootRotV()
+    {
+    }
     friend std::ostream &operator<<(std::ostream &out, const NaoPose &p)
     {
-        out << p.supportFoot << " " << p.headYawPitch.yaw << " " << p.headYawPitch.pitch << " "
+        out << className << " " << p.supportFoot << " " << p.headYawPitch.yaw << " " << p.headYawPitch.pitch << " "
             << p.torsoPosV.x() << " " << p.torsoPosV.y() << " " << p.torsoPosV.z() << " "
             << p.torsoRotV.x() << " " << p.torsoRotV.y() << " " << p.torsoRotV.z() << " "
             << p.otherFootPosV.x() << " " << p.otherFootPosV.y() << " " << p.otherFootPosV.z()
@@ -220,18 +238,106 @@ class NaoPose
     }
     friend std::istream &operator>>(std::istream &in, NaoPose &p)
     {
+        p.valid = false;
+        std::string name;
         int i;
-        in >> i >> p.headYawPitch.yaw >> p.headYawPitch.pitch >>
-            p.torsoPosV.x() >> p.torsoPosV.y() >> p.torsoPosV.z() >>
-            p.torsoRotV.x() >> p.torsoRotV.y() >> p.torsoRotV.z() >>
-            p.otherFootPosV.x() >> p.otherFootPosV.y() >> p.otherFootPosV.z() >>
-            p.otherFootRotV.x() >> p.otherFootRotV.y() >> p.otherFootRotV.z();
-        p.supportFoot = static_cast<SUPPORT_FOOT>(i);
+        in >> name;
+        if (name.compare(className) == 0)
+        {
+            in >> i >> p.headYawPitch.yaw >> p.headYawPitch.pitch >>
+                p.torsoPosV.x() >> p.torsoPosV.y() >> p.torsoPosV.z() >>
+                p.torsoRotV.x() >> p.torsoRotV.y() >> p.torsoRotV.z() >>
+                p.otherFootPosV.x() >> p.otherFootPosV.y() >> p.otherFootPosV.z() >>
+                p.otherFootRotV.x() >> p.otherFootRotV.y() >> p.otherFootRotV.z();
+            p.supportFoot = static_cast<SUPPORT_FOOT>(i);
+            p.valid = true;
+        }
+        else
+        {
+            throw "Cannot deserialize this stream to NaoPose, Header mismatch!!!";
+        }
+
         return in;
     }
+    bool isGood() { return valid; }
 };
 
-typedef std::vector<NaoPose<dataT>> poseListT;
+template <typename T>
+const std::string NaoPose<T>::className = "NaoPose";
+
+template <typename T = angleT>
+class NaoPoseAndRawAngles
+{
+  private:
+    static const size_t maxJoints = static_cast<size_t>(JOINTS::JOINT::JOINTS_MAX);
+    static const std::string className;
+    bool valid; // set true once valid data is loaded.
+  public:
+    NaoPose<T> pose;
+    std::vector<T> angles;
+
+  public:
+    NaoPoseAndRawAngles(const NaoPose<T> &pose, const std::vector<T> &jointAngles)
+        : pose(pose), angles(jointAngles)
+    {
+        valid = true;
+    }
+    NaoPoseAndRawAngles() : pose(), angles(maxJoints, 0.0f)
+    {
+        valid = false;
+    }
+    // TODO make these "safe"
+    friend std::ostream &operator<<(std::ostream &out, const NaoPoseAndRawAngles &p)
+    {
+        if (p.valid)
+        {
+            out << className << " " << p.pose; // pose is streamable.
+            for (size_t i = 0; i < maxJoints; i++)
+            {
+                out << " " << p.angles[i];
+            }
+        }
+        return out;
+    }
+    friend std::istream &operator>>(std::istream &in, NaoPoseAndRawAngles &p)
+    {
+
+        p.valid = false;
+        std::string name;
+        in >> name;
+        if (name.compare(className) == 0)
+        {
+            in >> p.pose; // pose is streamable.
+            for (size_t i = 0; i < maxJoints; i++)
+            {
+                if (in.good())
+                {
+                    in >> p.angles[i];
+                }
+                else
+                {
+                    std::cout << "tru in" << std::endl;
+                }
+            }
+            p.valid = true;
+        }
+        else
+        {
+            std::cout << "err" << std::endl;
+            throw "Cannot deserialize this stream to NaoPoseAndRawAngles, Header mismatch!!!";
+        }
+        return in;
+    }
+    bool isGood() { return valid; }
+};
+template <typename T>
+const std::string NaoPoseAndRawAngles<T>::className = "NaoPoseAndRawAngles";
+
+typedef NaoPoseAndRawAngles<dataT> poseAndRawAngleT;
+typedef std::vector<NaoPoseAndRawAngles<dataT>> poseAndRawAngleListT;
+typedef NaoPose<dataT> poseT;
+
+typedef std::vector<poseT> poseListT;
 typedef std::vector<angleT> rawPoseT;
 typedef std::vector<rawPoseT> rawPoseListT;
 typedef std::vector<Vector3<dataT>> vector3ListT;

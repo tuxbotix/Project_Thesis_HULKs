@@ -9,6 +9,8 @@
 
 #include "NaoPoseInfo.hpp"
 
+namespace utils
+{
 #if !WRITE_PARALLEL
 static std::atomic<bool> fileWriterReady(true);
 #endif
@@ -34,7 +36,7 @@ static std::mutex mtx_cout_;
 #endif
 
 template <typename T>
-void commitToStream(std::vector<NaoPose<T>> &poseList, std::ostream &outStream)
+void commitToStream(std::vector<T> &poseList, std::ostream &outStream)
 {
 #if !WRITE_PARALLEL
     fileWriterReady = false;
@@ -85,7 +87,7 @@ void commitToStream(std::vector<NaoPose<T>> &poseList, std::ostream &outStream)
 }
 
 template <typename T>
-void commitToStream(std::vector<std::vector<T>> &poseList, std::ostream &outStream)
+void commitToStreamVec(std::vector<T> &poseList, std::ostream &outStream)
 {
 #if !WRITE_PARALLEL
     fileWriterReady = false;
@@ -150,9 +152,10 @@ std::vector<std::string> split(const std::string &s, char delimiter = ',')
     return tokens;
 }
 
-std::vector<float> splitToNumbers(const std::string &s, char delimiter = ',')
+template <typename T>
+std::vector<T> splitToNumbers(const std::string &s, char delimiter = ',')
 {
-    std::vector<float> tokens;
+    std::vector<T> tokens;
     std::string token;
     std::istringstream tokenStream(s);
     while (std::getline(tokenStream, token, delimiter))
@@ -175,3 +178,4 @@ std::string getISOTimeString()
     //strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     return std::string(buf);
 }
+} // namespace utils

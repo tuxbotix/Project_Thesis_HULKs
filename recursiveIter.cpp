@@ -74,7 +74,7 @@ inline void recursiveIter(const jointT &joint, dataT start, dataT end, poseListT
                         std::this_thread::sleep_for(std::chrono::milliseconds(20));
                     }
 #endif
-                    commitToStream<dataT>(poseList, outStream);
+                    commitToStreamVec<rawPoseT>(poseList, outStream);
                 }
             }
         }
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
         std::cout << "flushing all " << std::endl;
         for (int i = 0; i < THREADS_USED; i++)
         {
-            commitToStream<dataT>(poseListList[i], outputFileList[i]);
+            commitToStreamVec<rawPoseT>(poseListList[i], outputFileList[i]);
             outputFileList[i].close();
         }
     }

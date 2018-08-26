@@ -33,12 +33,7 @@
 
 // // const dataT deltaTheta = 1; // 1 deg +-
 
-// typedef NaoTorsoPose::jointAnglesT rawAnglesT;
-// typedef std::vector<dataT> rawPoseT;
-
-// typedef std::vector<rawPoseT> rawPoseListT;
-
-// const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
+const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
 /**
  * Minimal TUHH class impl. in order to use configuration
@@ -68,8 +63,62 @@ class TUHH
     }
 };
 
+class JointsAndPosesStream
+{
+  private:
+    size_t currentLine;
+    std::ifstream inputPoseFile;
+
+  public:
+    JointsAndPosesStream(const std::string &poseFileName)
+        : currentLine(0), inputPoseFile(poseFileName, std::ios::in)
+    {
+    }
+    ~JointsAndPosesStream()
+    {
+        // if (inputPoseFile)
+        // {
+        //     inputPoseFile.close();
+        // }
+        // if (inputJointFile)
+        // {
+        //     inputJointFile.close();
+        // }
+    }
+    bool getNextPoseAndRawAngles(NaoPoseAndRawAngles<float> &val)
+    {
+        if (inputPoseFile.good())
+        {
+            // TODO Improve this.
+            currentLine++;
+            std::string poseStr;
+            std::getline(inputPoseFile, poseStr);
+            std::stringstream line(poseStr);
+            line >> val;
+            return val.isGood();
+        }
+        return false;
+    }
+
+    // bool getNextJoints(std::vector<float> &val, SUPPORT_FOOT &sf)
+    // {
+    //     if (inputJointFile.good())
+    //     {
+    //         // TODO Improve this.
+    //         currentLine++;
+    //         std::string jointStr;
+    //         std::getline(inputJointFile, jointStr);
+    //         std::stringstream line(jointStr);
+    //         val = utils::splitToNumbers<float>(jointStr, ' ');
+    //         return val.size() == static_cast<size_t>(JOINTS::JOINT::JOINTS_MAX);
+    //     }
+    //     return false;
+    // }
+};
+
 int main(int argc, char **argv)
 {
+
     std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
     std::string inFileName((argc > 2 ? argv[2] : "out"));
 
@@ -80,16 +129,58 @@ int main(int argc, char **argv)
     tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);
     tuhhInstance.config_.get("Projection", "top_fc") >> fc;
     tuhhInstance.config_.get("Projection", "top_cc") >> cc;
-    // tuhhInstance.config_.get("Projection", "top_fov") >> fov;
+    tuhhInstance.config_.get("Projection", "fov") >> fov;
 
     Vector2i imSize(640, 480);
 
-    /// Pose Gen
-    std::cout << "# Init for Sensitivity Sorting" << std::endl;
+    size_t maxGridPointsPerSide = 15;
 
-    Vector2f i(10,40);
-    Eigen::Rotation2D<float> rot(20*TO_RAD);
-    std::cout<<(rot * i)<<std::endl;
+    std::cout << "init" << std::endl;
+    std::vector<ObservationSensitivity> sensitivitues = ObservationSensitivityProvider::getSensitivityProviders(
+        1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.05);
+
+    size_t usableThreads = 0;
+
+    JointsAndPosesStream poseJointSource(inFileName + "_" + std::to_string(0) + ".txt");
+
+    NaoPoseAndRawAngles<float> val;
+    if (poseJointSource.getNextPoseAndRawAngles(val))
+    {
+        std::cout << val << std::endl;
+    }
+    else
+    {
+        std::cout << "Reading pose and angles failed" << std::endl;
+    }
+
+    // std::vector<std::istream> inputPoseFiles;
+    // std::vector<std::istream> inputJointFiles;
+    // for (const size_t i = 0; i < MAX_THREADS; i++)
+    // {
+    //     if (std::ifstream(fileName))
+    // }
+    if (val.isGood())
+    {
+        ObservationSensitivity obs = sensitivitues[0];
+
+        std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
+            obs.getSensitivities(val.angles, val.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
+
+        for (auto &i : sensitivityOutput)
+        {
+            Vector3f val;
+            bool obs;
+            for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
+            {
+                i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
+                // std::cout << "SENS-> " << j << " (" << val.x() << ", " << val.y() << ", " << val.z() << ") o:" << obs << std::endl;
+                if (obs)
+                {
+                    std::cout << "SENS-> " << j << " " << Vector2f(val.x(), val.y()).norm() << " o:" << obs << std::endl;
+                }
+            }
+        }
+    }
     //     const rawPoseT readyPose(PARAMS::P_MAX);
 
     //     /// Start threading work.
@@ -184,7 +275,7 @@ int main(int argc, char **argv)
     // #if DO_COMMIT
     //         for (size_t i = 0; i < THREADS_USED; i++)
     //         {
-    //             commitToStream<dataT>(poseListList[i], outputFileList[i]);
+    //             commitToStream<rawPoseT>(poseListList[i], outputFileList[i]);
     //             outputFileList[i].close();
     //         }
     // #endif

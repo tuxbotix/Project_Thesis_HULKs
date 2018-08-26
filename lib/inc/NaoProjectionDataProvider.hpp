@@ -40,16 +40,27 @@ class NaoSensorDataProvider
     static KinematicMatrix getSupportFootMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf)
     {
         KinematicMatrix supFoot2Torso;
-        if(sf == SUPPORT_FOOT::SF_NONE){
+        if (sf == SUPPORT_FOOT::SF_NONE)
+        {
             throw "None-support foot. Cannot compute cam2gnd";
         }
         if (sf == SUPPORT_FOOT::SF_RIGHT)
         {
             supFoot2Torso = ForwardKinematics::getRFoot(rawPoseT(&angles[JOINTS::R_HIP_YAW_PITCH], &angles[JOINTS::R_ANKLE_ROLL]));
         }
-        else
+        else if (sf == SUPPORT_FOOT::SF_LEFT)
         {
             supFoot2Torso = ForwardKinematics::getLFoot(rawPoseT(&angles[JOINTS::L_HIP_YAW_PITCH], &angles[JOINTS::L_ANKLE_ROLL]));
+        }
+        else if (sf == SUPPORT_FOOT::SF_DOUBLE)
+        {
+            std::cout << "double" << std::endl;
+            throw "getSupportFootMatrix() -> Double foot not supported";
+        }
+        else
+        {
+            std::cout << "none" << std::endl;
+            throw "getSupportFootMatrix() -> None foot not supported";
         }
         return supFoot2Torso;
     }
@@ -80,7 +91,7 @@ class NaoSensorDataProvider
         // do some calculations here because they are needed in other functions that may be called often
         cameraMatrix_.camera2torsoInv = cameraMatrix_.camera2torso.invert();
         cameraMatrix_.camera2groundInv = cameraMatrix_.camera2ground.invert();
-        
+
         const auto rM = cameraMatrix_.camera2ground.rotM.toRotationMatrix();
 
         if (rM(2, 2) == 0.f)

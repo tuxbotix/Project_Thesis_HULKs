@@ -32,7 +32,7 @@ inline void doLog(const std::string &value)
 {
     {
 #if DEBUG_IN_THREAD
-        std::lock_guard<std::mutex> lck(mtx_cout_);
+        std::lock_guard<std::mutex> lck(utils::mtx_cout_);
 #endif
         std::cout << value << std::endl;
     }
@@ -104,7 +104,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     }
     else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
     {
-        std::lock_guard<std::mutex> lock(mtx_cout_);
+        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
         std::cout << "SOMETHING IS WRONG, This method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
         return;
     }
@@ -171,12 +171,12 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
         if (supFoot == SUPPORT_FOOT::SF_RIGHT) // 5
         {
             minLim = 0.0;
-            maxLim = 0.10;
+            maxLim = 0.15;
         }
         else // 5
         {
-            minLim = -0.10;
-            maxLim = 0.10; //0.0;
+            minLim = -0.15;
+            maxLim = 0; //0.0;
         }
         increment = 0.02; // 2cm increment
         break;
@@ -193,7 +193,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     default:
     {
         {
-            std::lock_guard<std::mutex> lock(mtx_cout_);
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
             std::cout << "Default should not be reached.. method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
         }
         minLim = 0;
@@ -207,7 +207,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
 void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, const SUPPORT_FOOT supFoot,
                           const std::vector<HeadYawPitch> &headYawPitchList, const vector3ListT torsoPosList, const vector3ListT torsoRotList,
                           const vector3ListT OFootPosList,
-                          const vector3ListT OFootRotList, poseListT &poseList, rawPoseListT &rawPoseList, std::ostream &poseOutStream, std::ostream &jointOutStream,
+                          const vector3ListT OFootRotList, poseAndRawAngleListT &poseList, std::ostream &poseOutStream,
                           const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount)
 {
     const rawAnglesT defaultPose = Poses::getPose(Poses::READY);
@@ -255,17 +255,18 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                             {
                                 poseCount++;
 #if DO_COMMIT
-                                poseList.emplace_back(supFoot, headYawPitchList[iter], torsoPos, torsoRot,
-                                                      OFootPos, OFootRot);
-                                rawPoseList.push_back(jointAngles);
+                                poseList.emplace_back(poseT(supFoot, headYawPitchList[iter], torsoPos, torsoRot,
+                                                            OFootPos, OFootRot),
+                                                      jointAngles);
+                                // rawPoseList.push_back(jointAngles);
                                 if (poseList.size() > BUFFER_SIZE)
                                 {
-                                    commitToStream<dataT>(poseList, poseOutStream);
+                                    utils::commitToStream<NaoPoseAndRawAngles<dataT>>(poseList, poseOutStream);
                                 }
-                                if (rawPoseList.size() > BUFFER_SIZE)
-                                {
-                                    commitToStream<dataT>(rawPoseList, jointOutStream);
-                                }
+                                // if (rawPoseList.size() > BUFFER_SIZE)
+                                // {
+                                //     utils::commitToStreamVec<rawPoseT>(rawPoseList, jointOutStream);
+                                // }
 #endif
                             }
                         }
@@ -362,7 +363,7 @@ int main(int argc, char **argv)
     }
     size_t maxIterCount = headYawPitchList.size();
     {
-        
+
         Vector3<dataT> minLimit, maxLimit, increment;
         for (int i = static_cast<int>(paramNameT::P_TORSO_POS_X); i < static_cast<int>(paramNameT::P_MAX); i += 3)
         {
@@ -402,23 +403,23 @@ int main(int argc, char **argv)
     const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
 
     /// PoseList vector and accum(pose) Vector
-    std::vector<poseListT> poseListList(THREADS_USED);
-    std::vector<rawPoseListT> jointListList(THREADS_USED);
+    std::vector<poseAndRawAngleListT> poseAndAnglesListList(THREADS_USED);
+    // std::vector<rawPoseListT> jointListList(THREADS_USED);
 
     std::vector<std::atomic<size_t>> iterCount(THREADS_USED);
     /// Start the real threading..
     {
         std::vector<std::thread> threadList(THREADS_USED);
-        std::vector<std::fstream> poseFiles(THREADS_USED);
-        std::vector<std::fstream> rawJointFiles(THREADS_USED);
+        std::vector<std::fstream> poseAndAnglesFiles(THREADS_USED);
+        // std::vector<std::fstream> rawJointFiles(THREADS_USED);
         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
         // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
-            poseFiles[i] = std::fstream((outFileName + "_poses_" + std::to_string(i) + ".txt"), std::ios::out);
-            rawJointFiles[i] = std::fstream((outFileName + "_joints_" + std::to_string(i) + ".txt"), std::ios::out);
+            poseAndAnglesFiles[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
+            // poseAndAnglesFiles[i] = std::fstream((outFileName + "_joints_" + std::to_string(i) + ".txt"), std::ios::out);
 
-            if (!poseFiles[i].is_open() || !rawJointFiles[i].is_open())
+            if (!poseAndAnglesFiles[i].is_open())
             {
                 std::cerr << "output file creation failed. Aborting!!!" << std::endl;
                 break;
@@ -433,13 +434,12 @@ int main(int argc, char **argv)
             // void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, const SUPPORT_FOOT supFoot,
             //                           const std::vector<HeadYawPitch> &headYawPitchList, const vector3ListT torsoPosList, const vector3ListT torsoRotList,
             //                           const vector3ListT OFootPosList,
-            //                           const vector3ListT OFootRotList, poseListT &poseList, rawPoseListT &rawPoseList, std::ostream &poseOutStream, std::ostream &jointOutStream,
+            //                           const vector3ListT OFootRotList, poseListT &poseList, std::ostream &poseOutStream,
             //                           const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount)
             threadList[i] = std::thread(jointIterFuncWithLim, start, end, supportFoot,
                                         std::ref(headYawPitchList), std::ref(torsoPosList), std::ref(torsoRotList),
                                         std::ref(OtherFootPosList),
-                                        std::ref(OtherFootRotList), std::ref(poseListList[i]), std::ref(jointListList[i]),
-                                        std::ref(poseFiles[i]), std::ref(rawJointFiles[i]), std::ref(supportPolyList[i]), std::ref(iterCount[i]));
+                                        std::ref(OtherFootRotList), std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]), std::ref(supportPolyList[i]), std::ref(iterCount[i]));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -451,8 +451,8 @@ int main(int argc, char **argv)
                 size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
                 if (elapsed % 100)
                 {
-                    std::lock_guard<std::mutex> lock(mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (maxIterCount/(float)iterSum)
+                    std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (maxIterCount / (float)iterSum)
                               << "% g. poses " << (long double)poseCount.load() << std::endl; // "\r";
                 }
                 else
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
                         t << "T" << i << " :" << iterCount[i].load() << " ";
                     }
                     {
-                        std::lock_guard<std::mutex> lock(mtx_cout_);
+                        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
                         std::cout << t.str() << std::endl;
                     }
                 }
@@ -493,10 +493,8 @@ int main(int argc, char **argv)
 #if DO_COMMIT
         for (size_t i = 0; i < THREADS_USED; i++)
         {
-            commitToStream<dataT>(poseListList[i], poseFiles[i]);
-            poseFiles[i].close();
-            commitToStream<dataT>(jointListList[i], rawJointFiles[i]);
-            rawJointFiles[i].close();
+            utils::commitToStream<NaoPoseAndRawAngles<dataT>>(poseAndAnglesListList[i], poseAndAnglesFiles[i]);
+            poseAndAnglesFiles[i].close();
         }
 #endif
     }

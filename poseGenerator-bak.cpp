@@ -304,7 +304,7 @@ void jointIterFuncWithLim(const paramNameT &jointIndex, const dataT &start, cons
                                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
                             }
 #endif
-                            commitToStream<dataT>(poseList, outStream);
+                            commitToStreamVec<rawPoseT>(poseList, outStream);
                         }
 #endif
                     }
@@ -516,7 +516,7 @@ int main(int argc, char **argv)
 #if DO_COMMIT
         for (size_t i = 0; i < THREADS_USED; i++)
         {
-            commitToStream<dataT>(poseListList[i], outputFileList[i]);
+            commitToStreamVec<rawPoseT>(poseListList[i], outputFileList[i]);
             outputFileList[i].close();
         }
 #endif

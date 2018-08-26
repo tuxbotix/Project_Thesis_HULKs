@@ -25,6 +25,28 @@
 #include "NaoTorsoPose.hpp"
 #include "ObservationSensitivityProvider.hpp"
 
+bool poseStreamingTest()
+{
+    NaoPoseAndRawAngles<float> poseAndAngles1;
+    std::string p = "NaoPoseAndRawAngles NaoPose 0 -72 0 -0.1 -0.1 0.225 6 -12 0 -0.04 -0.1 0 0 0 0 -1.25664 0 "
+                    "1.5708 0.2 1.5708 -0.00872665 0 0 0.0895838 0.274045 -1.33344 1.64128 -0.157236 -0.384673 0.0895838 0.277598 "
+                    "-1.30291 2.00971 -0.543341 -0.365134 1.5708 -0.2 -1.5708 0.00872665 0 0";
+    std::stringstream ss(p);
+    ss >> poseAndAngles1;
+    // std::cout << "PoseandAngles Istream" << std::endl;
+    // std::cout << poseAndAngles1 << std::endl;
+    // std::cout << std::endl;
+    // std::cout << "PoseandAngles Ostream" << std::endl;
+    // NaoPoseAndRawAngles<float> poseAndAngles(pose, joints);
+    // std::cout << poseAndAngles1 << std::endl;
+    // std::cout << std::endl;
+    std::stringstream ss1;
+    ss1 << poseAndAngles1;
+    bool success = p.compare(ss1.str()) == 0;
+    std::cout << "NaoPoseAndRaw Istreamed vs Ostreamed compare: " << (success ? "success" : "fail") << std::endl;
+    return success;
+}
+
 class Configuration;
 class TUHH
 {
@@ -66,15 +88,24 @@ int main(int argc, char **argv)
 
     Vector2i imSize(640, 480);
 
-    size_t maxGridPointsPerSide = 5;
+    /**
+     * Pose types streaming test
+     */
+    poseStreamingTest();
+
+    /**
+     * Other tests
+     */
+    size_t maxGridPointsPerSide = 15;
 
     std::cout << "init" << std::endl;
     std::vector<ObservationSensitivity> sensitivitues = ObservationSensitivityProvider::getSensitivityProviders(
-        1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.1);
+        1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.05);
 
     ObservationSensitivity obs = sensitivitues[0];
     std::vector<float> jointAngles = Poses::getPose(Poses::READY);
 
+    std::cout << NaoProvider::minRange(JOINTS::JOINT::L_KNEE_PITCH) << std::endl;
     /**
      *  Test for sensitivity calculation
      */
@@ -83,27 +114,54 @@ int main(int argc, char **argv)
     // Camera cameraName = (sensorName == SENSOR_NAME::TOP_CAMERA) ? Camera::TOP : Camera::BOTTOM;
 
     jointAngles[JOINTS::JOINT::HEAD_PITCH] = 20 * TO_RAD;
-    obs.updateState(jointAngles, sf, sensorName);
+    const std::vector<float> newJoints(jointAngles);
 
-    // Update camera matrix.. & get baseline grid
-    KinematicMatrix supFoot = NaoSensorDataProvider::getSupportFootMatrix(jointAngles, sf);
+    obs.updateState(newJoints, SUPPORT_FOOT::SF_LEFT, sensorName);
 
-    std::vector<Vector2f> grid = obs.getGroundGrid();
-    std::vector<float> baseLinePoints = obs.robotToPixelMulti(grid);
+    // // Update camera matrix.. & get baseline grid
+    // // KinematicMatrix supFoot = NaoSensorDataProvider::getSupportFootMatrix(newJoints, sf);
 
+    const std::vector<Vector2f> grid = obs.getGroundGrid();
+    const std::vector<float> baseLinePoints = obs.robotToPixelMulti(grid);
+
+    // obs.updateState(newJoints, sf, sensorName);
     bool observed = false;
 
     // test head pitch sensitivity.
-    Vector3f sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::HEAD_PITCH, jointAngles, supFoot, grid, baseLinePoints, sensorName, observed);
-    std::cout << "Test for Head pitch\n"
+    Vector3f sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::L_ANKLE_ROLL, newJoints, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed);
+    std::cout << "Test for left ankle roll pitch\n"
               << sensitivity << "\n "
               << "Observed? " << observed << std::endl;
     observed = false;
-    // // test head yaw sensitivity.
-    sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::HEAD_YAW, jointAngles, supFoot, grid, baseLinePoints, sensorName, observed);
-    std::cout << "Test for Head yaw \n"
+    // obs.updateState(newJoints, sf, sensorName);
+    // test head yaw sensitivity.
+    sensitivity = obs.getSensitivityForJointForCamera(JOINTS::JOINT::R_ANKLE_ROLL, newJoints, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed);
+    std::cout << "Test for right ankle roll pitch\n"
               << sensitivity << "\n "
               << "Observed? " << observed << std::endl;
+
+    // for (auto i : grid)
+    // {
+    //     // std::cout << i<<std::endl;
+    //     std::cout << "(" << i.x() << ", " << i.y() << ")" << std::endl;
+    // }
+    std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
+        obs.getSensitivities(newJoints, sf, {SENSOR_NAME::BOTTOM_CAMERA});
+
+    for (auto &i : sensitivityOutput)
+    {
+        Vector3f val;
+        bool obs;
+        for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
+        {
+            i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
+            // std::cout << "SENS-> " << j << " (" << val.x() << ", " << val.y() << ", " << val.z() << ") o:" << obs << std::endl;
+            if (obs)
+            {
+                std::cout << "SENS-> " << j << " " << Vector2f(val.x(), val.y()).norm() << " o:" << obs << std::endl;
+            }
+        }
+    }
 
     return 0;
 }

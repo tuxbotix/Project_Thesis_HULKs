@@ -1,11 +1,14 @@
 #pragma once
 
+#include <cmath>
+
 #include "Data/CameraMatrix.hpp"
 
 #include "NaoPoseInfo.hpp"
 #include "NaoProjectionDataProvider.hpp"
 
 #include "Solvers.hpp"
+
 /**
  * To be precise, this give sensitivity of camera observation :P
  */
@@ -33,7 +36,7 @@ private:
       : maxGridPointsPerSide(maxGridPointsPerSide),
         imSize(imSize),
         // gridSpacing(gridSpacing),
-        deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0), dimensionScale(imSize.x() / 2, imSize.y() / 2, M_PI_2f64)
+        deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0), dimensionScale(imSize.x() / 2, imSize.y() / 2, M_PI_2)
   {
     camMat.fc = fc;
     camMat.fc.x() *= imSize.x();
@@ -43,7 +46,7 @@ private:
     camMat.cc.y() *= imSize.y();
     camMat.fov = fov;
     // Default state, ready pose and top camera with double foot.
-    updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_DOUBLE, SENSOR_NAME::TOP_CAMERA);
+    updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT, SENSOR_NAME::TOP_CAMERA);
 
     float x, y;
     const int gridSizeHalf = maxGridPointsPerSide / 2;
@@ -70,15 +73,17 @@ public:
     Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
     NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sf, camMat, camName);
     // update default horizon
+    std::cout << camMat.camera2ground.posV << "\n"
+              << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
     horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
   }
-  void updateState(const rawPoseT &jointAngles, const KinematicMatrix &sfoot, const SENSOR_NAME &sensorNames)
-  {
-    Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
-    NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sfoot, camMat, camName);
-    // update default horizon
-    horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
-  }
+  // void updateState(const rawPoseT &jointAngles, const KinematicMatrix &sfoot, const SENSOR_NAME &sensorNames)
+  // {
+  //   Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
+  //   NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sfoot, camMat, camName);
+  //   // update default horizon
+  //   horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
+  // }
 
   /**
  * Get 3D grid with given grid spacing relative to robot's ground coord.
@@ -147,17 +152,22 @@ public:
   /**
  * Get observability (sensitivity?) of a given joint for a given camera at a given pose
  */
-  Vector3f getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const rawPoseT &jointAngles, const KinematicMatrix &sf,
-                                           std::vector<Vector2f> grid, const std::vector<float> &baselinePoints,
+  Vector3f getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
+                                           const std::vector<Vector2f> &grid, const std::vector<float> &baselinePoints,
                                            const SENSOR_NAME &sensorName, bool &observed)
   {
     Vector3f output(0, 0, 0);
 
     observed = false;
     rawPoseT tempJoints(jointAngles);
-    tempJoints[joint] += deltaThetaFine;
 
+    tempJoints[joint] += deltaThetaFine;
+    // std::cout << "JKOINT->" << joint << std::endl;
+    // std::cout << camMat.camera2ground.rotM.toRotationMatrix() << "\n"
+    //           << camMat.camera2ground.posV << std::endl;
     updateState(tempJoints, sf, sensorName);
+    // std::cout << camMat.camera2ground.rotM.toRotationMatrix() << "\n"
+    //           << camMat.camera2ground.posV << std::endl;
 
     std::vector<float> observedPoints = robotToPixelMulti(grid);
 
@@ -183,8 +193,11 @@ public:
     // }
     // std::cout << "transformed points" << std::endl;
 
-    ObservationSolvers::get2dPose(baselinePoints, observedPoints, output);
-
+    int status = ObservationSolvers::get2dPose(baselinePoints, observedPoints, output);
+    // std::cout << status << std::endl;
+    // simple check.
+    // observed = (Vector2f(output.x(), output.y()).norm() > 2 || abs(output.z()) > 3);
+    observed = true;
     return output;
   }
 
@@ -199,14 +212,19 @@ public:
     }
 
     PoseSensitivity<Vector3f> output(sensorName);
-    KinematicMatrix supportFoot2Torso = NaoSensorDataProvider::getSupportFootMatrix(jointAngles, sf);
+    // KinematicMatrix supportFoot2Torso = NaoSensorDataProvider::getSupportFootMatrix(jointAngles, sf);
 
     /// Make the basline set of points.
-    updateState(jointAngles, supportFoot2Torso, sensorName);
+    updateState(jointAngles, sf, sensorName);
 
-    std::vector<Vector2f> grid = getGroundGrid();
-    std::vector<float> baseLinePoints = robotToPixelMulti(grid);
+    const std::vector<Vector2f> grid = getGroundGrid();
+    const std::vector<float> baseLinePoints = robotToPixelMulti(grid);
 
+    /**
+     * TODO There is one major issue; The sensitivity is *ignored* based on which support foot!!!
+     * ie: if double or left sup, and right leg joints are tweaked, that's completely ignored..
+     * This only matters for double foot..
+     */
     bool observed = false;
     if (sf == SUPPORT_FOOT::SF_LEFT || sf == SUPPORT_FOOT::SF_DOUBLE)
     {
@@ -215,14 +233,17 @@ public:
         // Same as..
         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
         // output.setSensitivity(i, p, observed);
-        output.setSensitivity(i, getSensitivityForJointForCamera(i, jointAngles, supportFoot2Torso, grid, baseLinePoints, sensorName, observed), observed);
+        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed);
+        output.setSensitivity(i, sensitivity, observed);
       }
     }
     if (sf == SUPPORT_FOOT::SF_RIGHT || sf == SUPPORT_FOOT::SF_DOUBLE)
     {
       for (const auto &i : Sensor::CAM_OBS_R_SUP_FOOT)
       {
-        output.setSensitivity(i, getSensitivityForJointForCamera(i, jointAngles, supportFoot2Torso, grid, baseLinePoints, sensorName, observed), observed);
+        // temp fix in injecting support foot as right always.
+        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed);
+        output.setSensitivity(i, sensitivity, observed);
       }
     }
     return output;

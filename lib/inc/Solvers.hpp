@@ -73,13 +73,13 @@ struct Pose2DFunctor : Functor<_Scalar>
  */
 
 // template <typename _Scalar>
-return get2dPose(const std::vector<float> &initialVec,
+int get2dPose(const std::vector<float> &initialVec,
                  const std::vector<float> &transformedVec, Vector3<float> &params)
 {
   if (initialVec.size() != transformedVec.size())
   {
     std::cerr << "input list dimension mismatch" << std::endl;
-    return;
+    return -1;
   }
   VectorXf paramsX(params);
 
