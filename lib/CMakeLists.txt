@@ -29,7 +29,7 @@ add_library(${libtuhh} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_include_directories(${libtuhh} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
 target_link_libraries(${libtuhh} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
 
-add_library(naoPose src/NaoProjectionDataProvider.cpp inc/NaoStability.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoPoseInfo.hpp)
+add_library(naoPose src/NaoProjectionDataProvider.cpp src/Sensors.cpp inc/NaoStability.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoPoseInfo.hpp inc/Sensors.hpp)
 target_include_directories(naoPose SYSTEM PUBLIC inc)
 target_link_libraries(naoPose tuhh)
 

@@ -5,7 +5,6 @@
 #include "Data/CameraMatrix.hpp"
 
 #include "ObservationModel.hpp"
-#include "NaoPoseInfo.hpp"
 #include "NaoProjectionDataProvider.hpp"
 
 /**
