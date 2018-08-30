@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits> // std::numeric_limits
 #include <cmath>
 
 #include "Data/CameraMatrix.hpp"
@@ -7,18 +8,25 @@
 #include "ObservationModel.hpp"
 #include "NaoProjectionDataProvider.hpp"
 
+#ifndef DEBUG_CAM_OBS
+#define DEBUG_CAM_OBS 0
+#endif
 /**
  * To be precise, this give sensitivity of camera observation :P
  */
 class CameraObservationModel : public ObservationModel
 {
 private:
-/**
+  /**
  * To be precise, this give sensitivity of camera observation :P
  */
-
+  typedef int16_t sensitivityOutputType;
   static const std::string name;
-  static constexpr float maxViewDist= 3.0;
+  static constexpr float maxViewDist = 3.0;
+  // we scale the output to a signed integer occupying the below byte count.
+  // ie: to fit
+  // static const uint8_t bytesPerDim = sizeof(sensitivityOutputType);
+  const uint64_t maxValPerDim;// = std::numeric_limits<sensitivityOutputType>::max(); // max per side*, so - 38768
 
   const size_t maxGridPointsPerSide;
 
@@ -29,8 +37,7 @@ private:
   const float deltaThetaCorse;
   const float deltaThetaFine;
   int horizon;
-  // When divided by this, all outputs must scale between -1 and +1
-  const Vector3f dimensionScale;
+
   // const Vector3f dimensionMax;
   CameraMatrix camMat;
 
@@ -38,7 +45,7 @@ public:
   ~CameraObservationModel() {}
   // friend class ObservationSensitivity;
   CameraObservationModel(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov,
-                         const size_t &maxGridPointsPerSide = 15, const float &gridSpacing = 0.05);
+                         uint64_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing);
 
   std::string getName()
   {
@@ -56,7 +63,7 @@ public:
    * 1. This has a hard range limit of 2m
    */
   // TODO  Make this private.
-  std::vector<Vector2f> getGroundGrid();
+  std::vector<Vector2f> getGroundGrid(bool & success);
 
   /**
    * Robot to pixel, multiple point support

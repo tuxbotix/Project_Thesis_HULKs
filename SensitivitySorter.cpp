@@ -3,6 +3,7 @@
 #include <thread>
 #include <algorithm>
 #include <numeric>
+#include <limits>
 
 #include <Data/CameraMatrix.hpp>
 #include <Modules/NaoProvider.h>
@@ -18,13 +19,14 @@
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
+#define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
 #define DEBUG_FILE_COMMIT 1
 #define DEBUG_IN_THREAD 1
-#define ENABLE_PROGRESS 1
+#define ENABLE_PROGRESS 0
 
 #include "utils.hpp"
 
@@ -65,63 +67,64 @@ class TUHH
 
 class JointsAndPosesStream
 {
-  private:
-    size_t currentLine;
-    std::ifstream inputPoseFile;
-
   public:
-    JointsAndPosesStream(const std::string &poseFileName)
-        : currentLine(0), inputPoseFile(poseFileName, std::ios::in)
-    {
-    }
-    ~JointsAndPosesStream()
-    {
-        // if (inputPoseFile)
-        // {
-        //     inputPoseFile.close();
-        // }
-        // if (inputJointFile)
-        // {
-        //     inputJointFile.close();
-        // }
-    }
-    bool getNextPoseAndRawAngles(NaoPoseAndRawAngles<float> &val)
+    static bool getNextPoseAndRawAngles(std::istream &inputPoseFile, NaoPoseAndRawAngles<float> &val)
     {
         if (inputPoseFile.good())
         {
-            // TODO Improve this.
-            currentLine++;
             std::string poseStr;
             std::getline(inputPoseFile, poseStr);
-            std::stringstream line(poseStr);
-            line >> val;
-            return val.isGood();
+            if (inputPoseFile.good())
+            {
+                std::stringstream line(poseStr);
+                line >> val;
+                return val.isGood();
+            }
         }
         return false;
     }
-
-    // bool getNextJoints(std::vector<float> &val, SUPPORT_FOOT &sf)
-    // {
-    //     if (inputJointFile.good())
-    //     {
-    //         // TODO Improve this.
-    //         currentLine++;
-    //         std::string jointStr;
-    //         std::getline(inputJointFile, jointStr);
-    //         std::stringstream line(jointStr);
-    //         val = utils::splitToNumbers<float>(jointStr, ' ');
-    //         return val.size() == static_cast<size_t>(JOINTS::JOINT::JOINTS_MAX);
-    //     }
-    //     return false;
-    // }
 };
+
+typedef int16_t dataOutType;
+
+void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream)
+{
+    NaoPoseAndRawAngles<float> poseAndAngles;
+    while (JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
+    {
+        std::cout << poseAndAngles << std::endl;
+        std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
+            obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA});
+        std::cout << sensitivityOutput.size() << " got this much?" << std::endl;
+        for (auto &i : sensitivityOutput)
+        {
+            Vector3f val;
+            bool obs;
+            outputStream << "SENS " << poseAndAngles.pose.id << " " << i.getSensorName() << " " << i.getDimensionCount() << " ";
+            for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
+            {
+                i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
+                if (obs)
+                {
+                    outputStream << j << " ";
+                    for (int k = 0; k < i.getDimensionCount(); k++)
+                    {
+                        outputStream << val(k) << " ";
+                    }
+                }
+            }
+            outputStream << std::endl;
+        }
+    }
+}
 
 int main(int argc, char **argv)
 {
 
     std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
     std::string inFileName((argc > 2 ? argv[2] : "out"));
-    
+    const std::string outFileName(inFileName + "_sensOut");
+
     TUHH tuhhInstance(confRoot);
 
     Vector2f fc, cc, fov;
@@ -136,150 +139,105 @@ int main(int argc, char **argv)
     size_t maxGridPointsPerSide = 15;
 
     std::cout << "init" << std::endl;
-    std::vector<ObservationSensitivity> sensitivitues = ObservationSensitivityProvider::getSensitivityProviders(
-        1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.05);
+    // std::vector<ObservationSensitivity> sensitivitues = ObservationSensitivityProvider::getSensitivityProviders(
+    //     1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.05);
 
     size_t usableThreads = 0;
 
-    JointsAndPosesStream poseJointSource(inFileName + "_" + std::to_string(0) + ".txt");
+    // JointsAndPosesStream poseJointSource(inFileName + "_" + std::to_string(0) + ".txt");
 
-    NaoPoseAndRawAngles<float> val;
-    if (poseJointSource.getNextPoseAndRawAngles(val))
-    {
-        std::cout << val << std::endl;
-    }
-    else
-    {
-        std::cout << "Reading pose and angles failed" << std::endl;
-    }
-
-    // std::vector<std::istream> inputPoseFiles;
-    // std::vector<std::istream> inputJointFiles;
-    // for (const size_t i = 0; i < MAX_THREADS; i++)
+    // NaoPoseAndRawAngles<float> val;
+    // if (poseJointSource.getNextPoseAndRawAngles(val))
     // {
-    //     if (std::ifstream(fileName))
+    //     std::cout << val << std::endl;
     // }
-    if (val.isGood())
+    // else
+    // {
+    //     std::cout << "Reading pose and angles failed" << std::endl;
+    // }
+
+    std::vector<std::fstream> inputPoseAndJointStreams;
+    for (size_t i = 0; i < MAX_THREADS; i++)
     {
-        ObservationSensitivity obs = sensitivitues[0];
-
-        std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-            obs.camObsModelPtr->getSensitivities(val.angles, val.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
-
-        for (auto &i : sensitivityOutput)
+        std::string fileName = inFileName + "_" + std::to_string(i) + ".txt";
+        if (std::ifstream(fileName))
         {
-            Vector3f val;
-            bool obs;
-            for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
-            {
-                i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
-                // std::cout << "SENS-> " << j << " (" << val.x() << ", " << val.y() << ", " << val.z() << ") o:" << obs << std::endl;
-                if (obs)
-                {
-                    std::cout << "SENS-> " << j << " " << Vector2f(val.x(), val.y()).norm() << " o:" << obs << std::endl;
-                }
-            }
+            inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
+            usableThreads++;
+        }
+        else
+        {
+            break;
         }
     }
-    //     const rawPoseT readyPose(PARAMS::P_MAX);
 
-    //     /// Start threading work.
-    //     dataT minLimit, maxLimit, increment;
-    //     getLimits(static_cast<paramNameT>(0), minLimit, maxLimit, increment, readyPose, resume);
+    /// Start the real threading..
+    {
+        std::vector<std::thread> threadList(usableThreads);
+        std::vector<std::fstream> outputFileList(usableThreads);
+        std::vector<ObservationSensitivity> obsSensitivities =
+            ObservationSensitivityProvider::getSensitivityProviders(usableThreads, imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
+        // bool resumeFlags[THREADS_USED];
+        for (unsigned int i = 0; i < usableThreads; i++)
+        {
+            // if(resume){
+            //     outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::in);
+            //     if(outputFileList[i].is_open()){
 
-    //     const unsigned int count = std::ceil(abs(maxLimit + 0.1 - minLimit) / (dataT)increment);
+            //     }
+            // }
 
-    //     const dataT splitVal = count >= MAX_THREADS ? (std::floor((dataT)count / (dataT)MAX_THREADS) * increment) : (increment);
-    //     std::cout << "count " << count << " " << splitVal << std::endl;
-    //     const size_t THREADS_USED = (splitVal > 1) ? MAX_THREADS : count;
+            outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
+            if (!outputFileList[i].is_open())
+            {
+                std::cerr << "output file creation failed. Aborting!!!" << std::endl;
+                break;
+            }
 
-    //     /// PoseList vector and accum(pose) Vector
-    //     std::vector<rawPoseListT> poseListList(THREADS_USED);
-    //     rawPoseListT accumList(THREADS_USED);
-
-    //     /// populate poseList and poseAccum
-    //     for (auto &i : accumList)
-    //     {
-    //         i = rawPoseT(PARAMS::P_MAX);
-    //     }
-
-    //     /// Start the real threading..
-    //     {
-    //         std::vector<std::thread> threadList(THREADS_USED);
-    //         std::vector<std::fstream> outputFileList(THREADS_USED);
-    //         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
-    //         std::vector<ObservationSensitivity> obsSensitivities =
-    //             ObservationSensitivityProvider::getSensitivityProviders(THREADS_USED, imSize, fc, cc, fov, 0.05);
-    //         // bool resumeFlags[THREADS_USED];
-    //         for (unsigned int i = 0; i < THREADS_USED; i++)
-    //         {
-    //             // if(resume){
-    //             //     outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::in);
-    //             //     if(outputFileList[i].is_open()){
-
-    //             //     }
-    //             // }
-
-    //             outputFileList[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
-    //             if (!outputFileList[i].is_open())
-    //             {
-    //                 std::cerr << "output file creation failed. Aborting!!!" << std::endl;
-    //                 break;
-    //             }
-    //             const bool lastIter = (i + 1 == THREADS_USED);
-
-    //             dataT start = (minLimit + ((dataT)i * splitVal));
-    //             dataT end = lastIter ? maxLimit : (minLimit + (i + 1) * splitVal);
-
-    //             // (const paramNameT &jointIndex, const dataT &start, const dataT &end, dataT &incrementInRad,
-    //             //                      poseT &pose, rawPoseListT &poseList, const poseT &defaultPose, std::ostream &outStream,
-    //             //                      const bool &inclusiveMax)
-    //             std::cout << "Start, end, lastIter " << start << " " << end << " " << lastIter << std::endl;
-    //             threadList[i] = std::thread(jointIterFuncWithLim, static_cast<paramNameT>(0), start, end, increment,
-    //                                         std::ref(accumList[i]), std::ref(poseListList[i]), std::ref(readyPose),
-    //                                         std::ref(outputFileList[i]), std::ref(supportPolyList[i]), lastIter, std::ref(resume));
-    //         }
-    // #if ENABLE_PROGRESS
-    //         bool continueTicker = true;
-    //         std::thread tTick = std::thread([&]() {
-    //             int elapsed = 0;
-    //             const size_t interval = 5;
-    //             while (continueTicker)
-    //             {
-    //                 {
-    //                     std::lock_guard<std::mutex> lock(mtx_cout_);
-    //                     std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
-    //                 }
-    //                 elapsed += interval;
-    //                 std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
-    //             }
-    //         });
-    // #endif
-    //         /// Join all :P
-    //         for (auto &t : threadList)
-    //         {
-    //             if (t.joinable())
-    //             {
-    //                 t.join();
-    //             }
-    //         }
-    // #if ENABLE_PROGRESS
-    //         continueTicker = false;
-    //         if (tTick.joinable())
-    //         {
-    //             tTick.join();
-    //         }
-    // #endif
-    //         /// Write the remaining buffers to file
-    //         std::cout << "flushing all " << std::endl;
-    // #if DO_COMMIT
-    //         for (size_t i = 0; i < THREADS_USED; i++)
-    //         {
-    //             commitToStream<rawPoseT>(poseListList[i], outputFileList[i]);
-    //             outputFileList[i].close();
-    //         }
-    // #endif
-    //     }
+            threadList[i] = std::thread(sensitivityTesterFunc, std::ref(obsSensitivities[i]), std::ref(inputPoseAndJointStreams[i]),
+                                        std::ref(outputFileList[i]));
+        }
+#if ENABLE_PROGRESS
+        bool continueTicker = true;
+        std::thread tTick = std::thread([&]() {
+            int elapsed = 0;
+            const size_t interval = 5;
+            while (continueTicker)
+            {
+                {
+                    std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
+                }
+                elapsed += interval;
+                std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
+            }
+        });
+#endif
+        /// Join all :P
+        for (auto &t : threadList)
+        {
+            if (t.joinable())
+            {
+                t.join();
+            }
+        }
+#if ENABLE_PROGRESS
+        continueTicker = false;
+        if (tTick.joinable())
+        {
+            tTick.join();
+        }
+#endif
+        /// Write the remaining buffers to file
+        std::cout << "flushing all " << std::endl;
+#if DO_COMMIT
+        // for (size_t i = 0; i < THREADS_USED; i++)
+        // {
+        //     utils::commitToStream<rawPoseT>(poseListList[i], outputFileList[i]);
+        //     outputFileList[i].close();
+        // }
+#endif
+    }
 
     return 0;
 }

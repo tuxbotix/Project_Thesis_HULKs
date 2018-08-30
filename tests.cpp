@@ -23,12 +23,13 @@
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
+#define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
 
 bool poseStreamingTest()
 {
     NaoPoseAndRawAngles<float> poseAndAngles1;
-    std::string p = "NaoPoseAndRawAngles NaoPose 0 -72 0 -0.1 -0.1 0.225 6 -12 0 -0.04 -0.1 0 0 0 0 -1.25664 0 "
+    std::string p = "NaoPoseAndRawAngles NaoPose someIdlalala 0 -72 0 -0.1 -0.1 0.225 6 -12 0 -0.04 -0.1 0 0 0 0 -1.25664 0 "
                     "1.5708 0.2 1.5708 -0.00872665 0 0 0.0895838 0.274045 -1.33344 1.64128 -0.157236 -0.384673 0.0895838 0.277598 "
                     "-1.30291 2.00971 -0.543341 -0.365134 1.5708 -0.2 -1.5708 0.00872665 0 0";
     std::stringstream ss(p);
@@ -117,7 +118,7 @@ int main(int argc, char **argv)
 
     std::cout << "init" << std::endl;
     std::vector<ObservationSensitivity> sensitivitues = ObservationSensitivityProvider::getSensitivityProviders(
-        1, imSize, fc, cc, fov, maxGridPointsPerSide, 0.05);
+        1, imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
 
     ObservationSensitivity obs = sensitivitues[0];
     std::vector<float> jointAngles(JOINTS::JOINT::JOINTS_MAX, 0.0);
@@ -137,8 +138,12 @@ int main(int argc, char **argv)
 
     // // Update camera matrix.. & get baseline grid
     // // KinematicMatrix supFoot = NaoSensorDataProvider::getSupportFootMatrix(newJoints, sf);
-
-    const std::vector<Vector2f> grid = obs.camObsModelPtr->getGroundGrid();
+    bool t;
+    const std::vector<Vector2f> grid = obs.camObsModelPtr->getGroundGrid(t);
+    if (!t)
+    {
+        std::cout << "failed to get ground grid for this sensor" << std::endl;
+    }
     const std::vector<float> baseLinePoints = obs.camObsModelPtr->robotToPixelMulti(grid);
 
     // obs.updateState(newJoints, sf, sensorName);

@@ -1,13 +1,10 @@
 #pragma once
 
 #include <vector>
-#include <sstream>
 #include <iostream>
 #include <fstream>
 #include <atomic>
-#include <ctime>
-
-#include "NaoPoseInfo.hpp"
+#include <mutex>
 
 namespace utils
 {
@@ -34,7 +31,6 @@ static std::atomic<bool> fileWriterReady(true);
 #if DEBUG_IN_THREAD || DEBUG_FILE_COMMIT || ENABLE_PROGRESS
 static std::mutex mtx_cout_;
 #endif
-
 template <typename T>
 void commitToStream(std::vector<T> &poseList, std::ostream &outStream)
 {
@@ -140,20 +136,8 @@ void commitToStreamVec(std::vector<T> &poseList, std::ostream &outStream)
     outStream.flush();
 }
 
-std::vector<std::string> split(const std::string &s, char delimiter = ',')
-{
-    std::vector<std::string> tokens;
-    std::string token;
-    std::istringstream tokenStream(s);
-    while (std::getline(tokenStream, token, delimiter))
-    {
-        tokens.push_back(token);
-    }
-    return tokens;
-}
-
 template <typename T>
-std::vector<T> splitToNumbers(const std::string &s, char delimiter = ',')
+std::vector<T> splitToNumbers(const std::string &s, char delimiter)
 {
     std::vector<T> tokens;
     std::string token;
@@ -168,14 +152,26 @@ std::vector<T> splitToNumbers(const std::string &s, char delimiter = ',')
     return tokens;
 }
 
-std::string getISOTimeString()
+std::vector<std::string> split(const std::string &s, char delimiter = ',');
+
+std::string getISOTimeString();
+
+std::string getMilliSecondsString();
+
+inline double constrainAngle180(double x)
 {
-    time_t now;
-    time(&now);
-    char buf[sizeof "2011-10-08T07:07:09Z"];
-    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
-    // this will work too, if your compiler doesn't support %F or %T:
-    //strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    return std::string(buf);
+    x = fmod(x + 180, 360);
+    if (x < 0)
+        x += 360;
+    return x - 180;
 }
+
+inline double constrainAngle360(double x)
+{
+    x = fmod(x, 360);
+    if (x < 0)
+        x += 360;
+    return x;
+}
+
 } // namespace utils

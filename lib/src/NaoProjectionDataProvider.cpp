@@ -35,22 +35,11 @@ KinematicMatrix NaoSensorDataProvider::getSupportFootMatrix(const std::vector<fl
     {
         supFoot2Torso = ForwardKinematics::getRFoot(rawPoseT(&angles[JOINTS::R_HIP_YAW_PITCH], &angles[JOINTS::R_ANKLE_ROLL]));
     }
-    else if (sf == SUPPORT_FOOT::SF_LEFT)
+    else
     {
         supFoot2Torso = ForwardKinematics::getLFoot(rawPoseT(&angles[JOINTS::L_HIP_YAW_PITCH], &angles[JOINTS::L_ANKLE_ROLL]));
     }
-    else if (sf == SUPPORT_FOOT::SF_DOUBLE)
-    {
-        // TODO catch these exceptions instead of direct printing?
-        std::cerr << "getSupportFootMatrix() -> Double foot not supported" << std::endl;
-        throw "getSupportFootMatrix() -> Double foot not supported";
-    }
-    else
-    {
-        // TODO catch these exceptions instead of direct printing?
-        std::cerr << "getSupportFootMatrix() -> None foot not supported" << std::endl;
-        throw "getSupportFootMatrix() -> None foot not supported";
-    }
+    
     return supFoot2Torso;
 }
 

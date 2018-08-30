@@ -54,11 +54,10 @@ enum PARAMS
 };
 typedef PARAMS paramNameT;
 
-
 /**
  * IMPORTANT : The type T MUST have implemented a Zero() method (static)
  */
-template <typename T = Vector3f>
+template <typename T>
 class PoseSensitivity
 {
   /**
@@ -67,23 +66,28 @@ class PoseSensitivity
   SENSOR_NAME sensorName;
   std::vector<T> sensitivities;
   std::vector<bool> observationMask;
-
+  std::string id;
+  const int dimensionSize;
 public:
   PoseSensitivity(const SENSOR_NAME &sn)
       : sensorName(sn),
         sensitivities(std::vector<T>(JOINTS::JOINT::JOINTS_MAX, T::Zero())),
-        observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX))
+        observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX)),
+        dimensionSize(T::Zero().size())
   {
   }
+
   SENSOR_NAME getSensorName()
   {
     return sensorName;
   }
+
   void setSensitivity(const JOINTS::JOINT &joint, const T &val, const bool &obs)
   {
     sensitivities[joint] = val;
     observationMask[joint] = obs;
   }
+
   void getSensitivity(const JOINTS::JOINT &joint, T &val, bool &obs)
   {
     obs = observationMask[joint];
@@ -95,6 +99,11 @@ public:
     {
       val = T::Zero();
     }
+  }
+
+  int getDimensionCount()
+  {
+    return dimensionSize;
   }
 };
 
@@ -190,6 +199,7 @@ private:
   bool valid; // set true once valid data is loaded.
 
 public:
+  std::string id;
   SUPPORT_FOOT supportFoot;
   HeadYawPitch headYawPitch;
   Vector3<T> torsoPosV;
@@ -197,18 +207,18 @@ public:
   Vector3<T> otherFootPosV;
   Vector3<T> otherFootRotV;
 
-  inline NaoPose(SUPPORT_FOOT sf, HeadYawPitch hyp, Vector3<T> tPosV, Vector3<T> tRotV, Vector3<T> OFPosV, Vector3<T> OFRotV)
-      : supportFoot(sf), headYawPitch(hyp), torsoPosV(tPosV), torsoRotV(tRotV), otherFootPosV(OFPosV),
+  inline NaoPose(const std::string &id, SUPPORT_FOOT sf, HeadYawPitch hyp, Vector3<T> tPosV, Vector3<T> tRotV, Vector3<T> OFPosV, Vector3<T> OFRotV)
+      : id(id), supportFoot(sf), headYawPitch(hyp), torsoPosV(tPosV), torsoRotV(tRotV), otherFootPosV(OFPosV),
         otherFootRotV(OFRotV)
   {
   }
-  inline NaoPose() : supportFoot(SUPPORT_FOOT::SF_NONE), headYawPitch(0, 0), torsoPosV(), torsoRotV(), otherFootPosV(),
+  inline NaoPose() : id("noId"), supportFoot(SUPPORT_FOOT::SF_NONE), headYawPitch(0, 0), torsoPosV(), torsoRotV(), otherFootPosV(),
                      otherFootRotV()
   {
   }
   inline friend std::ostream &operator<<(std::ostream &out, const NaoPose &p)
   {
-    out << className << " " << p.supportFoot << " " << p.headYawPitch.yaw << " " << p.headYawPitch.pitch << " "
+    out << className << " " << p.id << " " << p.supportFoot << " " << p.headYawPitch.yaw << " " << p.headYawPitch.pitch << " "
         << p.torsoPosV.x() << " " << p.torsoPosV.y() << " " << p.torsoPosV.z() << " "
         << p.torsoRotV.x() << " " << p.torsoRotV.y() << " " << p.torsoRotV.z() << " "
         << p.otherFootPosV.x() << " " << p.otherFootPosV.y() << " " << p.otherFootPosV.z()
@@ -223,7 +233,7 @@ public:
     in >> name;
     if (name.compare(className) == 0)
     {
-      in >> i >> p.headYawPitch.yaw >> p.headYawPitch.pitch >>
+      in >> p.id >> i >> p.headYawPitch.yaw >> p.headYawPitch.pitch >>
           p.torsoPosV.x() >> p.torsoPosV.y() >> p.torsoPosV.z() >>
           p.torsoRotV.x() >> p.torsoRotV.y() >> p.torsoRotV.z() >>
           p.otherFootPosV.x() >> p.otherFootPosV.y() >> p.otherFootPosV.z() >>

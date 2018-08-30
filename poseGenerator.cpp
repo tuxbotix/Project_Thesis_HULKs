@@ -208,7 +208,7 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                           const std::vector<HeadYawPitch> &headYawPitchList, const vector3ListT torsoPosList, const vector3ListT torsoRotList,
                           const vector3ListT OFootPosList,
                           const vector3ListT OFootRotList, poseAndRawAngleListT &poseList, std::ostream &poseOutStream,
-                          const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount)
+                          const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount, const std::string &id_prefix)
 {
     const rawAnglesT defaultPose = Poses::getPose(Poses::READY);
     for (size_t iter = torsoPosBegin; iter < torsoPosEnd; ++iter)
@@ -255,7 +255,7 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                             {
                                 poseCount++;
 #if DO_COMMIT
-                                poseList.emplace_back(poseT(supFoot, headYawPitchList[iter], torsoPos, torsoRot,
+                                poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, headYawPitchList[iter], torsoPos, torsoRot,
                                                             OFootPos, OFootRot),
                                                       jointAngles);
                                 // rawPoseList.push_back(jointAngles);
@@ -324,6 +324,8 @@ int main(int argc, char **argv)
     {
         std::cout << "Going for double foot." << std::endl;
     }
+
+    const std::string timestamp = utils::getMilliSecondsString();
 
     TUHH tuhhInstance(confRoot);
     // const std::string dateTimeString = getISOTimeString();
@@ -439,7 +441,8 @@ int main(int argc, char **argv)
             threadList[i] = std::thread(jointIterFuncWithLim, start, end, supportFoot,
                                         std::ref(headYawPitchList), std::ref(torsoPosList), std::ref(torsoRotList),
                                         std::ref(OtherFootPosList),
-                                        std::ref(OtherFootRotList), std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]), std::ref(supportPolyList[i]), std::ref(iterCount[i]));
+                                        std::ref(OtherFootRotList), std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]),
+                                        std::ref(supportPolyList[i]), std::ref(iterCount[i]), std::string(timestamp + std::to_string(i)));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -452,7 +455,7 @@ int main(int argc, char **argv)
                 if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (maxIterCount / (float)iterSum)
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (maxIterCount / iterSum)
                               << "% g. poses " << (long double)poseCount.load() << std::endl; // "\r";
                 }
                 else

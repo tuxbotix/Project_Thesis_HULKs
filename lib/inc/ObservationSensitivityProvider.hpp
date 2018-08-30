@@ -24,8 +24,8 @@ public:
 private:
   friend class ObservationSensitivityProvider;
   ObservationSensitivity(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov,
-                         const size_t &maxGridPointsPerSide = 15, const float &gridSpacing = 0.05)
-      : camObsModelPtr(std::make_shared<CameraObservationModel>(imSize, fc, cc, fov, maxGridPointsPerSide, gridSpacing))
+                         uint32_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing)
+      : camObsModelPtr(std::make_shared<CameraObservationModel>(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing))
   {
   }
 
@@ -34,6 +34,7 @@ private:
    * 
    * TODO make this flexible.
    */
+public:
   std::vector<PoseSensitivity<Vector3f>> getSensitivities(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const std::vector<SENSOR_NAME> &sensorNames)
   {
     std::vector<PoseSensitivity<Vector3f>> output;
@@ -63,10 +64,11 @@ public:
   static std::vector<ObservationSensitivity> getSensitivityProviders(const size_t &threadCount, const Vector2i &imSize,
                                                                      const Vector2f &fc, const Vector2f &cc,
                                                                      const Vector2f &fov,
-                                                                     const size_t &maxGridPointsPerSide = 15, const float &gridSpacing = 0.05)
+                                                                     uint32_t dimensionExtremum,
+                                                                     const size_t &maxGridPointsPerSide, const float &gridSpacing)
   {
 
-    return std::vector<ObservationSensitivity>(threadCount, ObservationSensitivity(imSize, fc, cc, fov, maxGridPointsPerSide, gridSpacing));
+    return std::vector<ObservationSensitivity>(threadCount, ObservationSensitivity(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing));
   }
 };
 

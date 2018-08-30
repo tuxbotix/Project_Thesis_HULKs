@@ -100,6 +100,7 @@ int get2dPose(const std::vector<float> &initialVec,
   Eigen::LevenbergMarquardt<Eigen::NumericalDiff<Pose2DFunctor<float>>, float> lm(functorDiff);
 
   int status = lm.minimize(paramsX);
+  
   params = Eigen::Vector3f(paramsX);
   // std::cout << "LM optimization status: " << status << std::endl;
   return status;

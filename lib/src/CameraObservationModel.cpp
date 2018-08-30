@@ -1,17 +1,18 @@
 #include "CameraObservationModel.hpp"
 #include "Solvers.hpp"
+#include "utils.hpp"
 
 /**
  * To be precise, this give sensitivity of camera observation :P
  */
 const std::string CameraObservationModel::name = "CameraObservationModel";
-
 CameraObservationModel::CameraObservationModel(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov,
-                                               const size_t &maxGridPointsPerSide, const float &gridSpacing)
+                                               uint64_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing)
     : maxGridPointsPerSide(maxGridPointsPerSide),
       imSize(imSize),
+      maxValPerDim(dimensionExtremum),
       // gridSpacing(gridSpacing),
-      deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0), dimensionScale(imSize.x() / 2, imSize.y() / 2, M_PI_2)
+      deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0)
 {
   camMat.fc = fc;
   camMat.fc.x() *= imSize.x();
@@ -47,8 +48,8 @@ void CameraObservationModel::updateState(const rawPoseT &jointAngles, const SUPP
   Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
   NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sf, camMat, camName);
   // update default horizon
-  std::cout << camMat.camera2ground.posV << "\n"
-            << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
+  // std::cout << camMat.camera2ground.posV << "\n"
+  //           << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
   horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
 }
 
@@ -58,7 +59,7 @@ void CameraObservationModel::updateState(const rawPoseT &jointAngles, const SUPP
  * 1. This has a hard range limit of 2m
  */
 // TODO  Make this private.
-std::vector<Vector2f> CameraObservationModel::getGroundGrid()
+std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
 {
   std::vector<Vector2f> output;
   Vector2f robotCoords;
@@ -71,6 +72,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid()
     proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) && robotCoords.norm() <= maxViewDist);
     // std::cout << "CamCenterRayToGround: " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
   }
+  // #if DEBUG_CAM_OBS
   else
   {
     std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB << std::endl;
@@ -80,6 +82,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid()
     std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
     std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
   }
+  // #endif
   if (proceed)
   {
     Vector2f tempCoord;
@@ -92,11 +95,14 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid()
       output.push_back(tempCoord);
     }
   }
+  // #if DEBUG_CAM_OBS
   else
   {
     std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
     std::cout << "Too far view dist!" << std::endl;
   }
+  // #endif
+  success = proceed;
   return output;
 }
 
@@ -164,6 +170,19 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
   // std::cout << status << std::endl;
   // simple check.
   // observed = (Vector2f(output.x(), output.y()).norm() > 2 || abs(output.z()) > 3);
+
+  /* constrain output +-maxValPerDim and norm(output) <= abs(maxValPerDim)
+   * 1st scale each dimension to +- maxValPerDim
+   * 2nd Normalize and multiply by 1000 :P
+   * This is written in a strange way, to reduce loosing too much precision.
+   */
+  output.x() = std::floor(output.x() * maxValPerDim / imSize.x());
+  output.y() = std::floor(output.y() * maxValPerDim / imSize.y());
+  output.z() = std::floor(maxValPerDim * utils::constrainAngle180(output.z() / 180));
+  // if (output.norm() >= __FLT_EPSILON__)
+  // {
+  //   output /= (output.norm() / maxValPerDim);
+  // }
   observed = true;
   return output;
 }
@@ -183,34 +202,38 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
 
   /// Make the basline set of points.
   updateState(jointAngles, sf, sensorName);
+  bool success;
+  const std::vector<Vector2f> grid = getGroundGrid(success);
+  std::cout << " success? " << success << std::endl;
+  if (success)
+  {
+    const std::vector<float> baseLinePoints = robotToPixelMulti(grid);
 
-  const std::vector<Vector2f> grid = getGroundGrid();
-  const std::vector<float> baseLinePoints = robotToPixelMulti(grid);
-
-  /**
+    /**
      * TODO There is one major issue; The sensitivity is *ignored* based on which support foot!!!
      * ie: if double or left sup, and right leg joints are tweaked, that's completely ignored..
      * This only matters for double foot..
      */
-  bool observed = false;
-  if (sf == SUPPORT_FOOT::SF_LEFT || sf == SUPPORT_FOOT::SF_DOUBLE)
-  {
-    for (const auto &i : Sensor::CAM_OBS_L_SUP_FOOT)
+    bool observed = false;
+    if (sf == SUPPORT_FOOT::SF_LEFT || sf == SUPPORT_FOOT::SF_DOUBLE)
     {
-      // Same as..
-      // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
-      // output.setSensitivity(i, p, observed);
-      Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed);
-      output.setSensitivity(i, sensitivity, observed);
+      for (const auto &i : Sensor::CAM_OBS_L_SUP_FOOT)
+      {
+        // Same as..
+        // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
+        // output.setSensitivity(i, p, observed);
+        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed);
+        output.setSensitivity(i, sensitivity, observed);
+      }
     }
-  }
-  if (sf == SUPPORT_FOOT::SF_RIGHT || sf == SUPPORT_FOOT::SF_DOUBLE)
-  {
-    for (const auto &i : Sensor::CAM_OBS_R_SUP_FOOT)
+    if (sf == SUPPORT_FOOT::SF_RIGHT || sf == SUPPORT_FOOT::SF_DOUBLE)
     {
-      // temp fix in injecting support foot as right always.
-      Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed);
-      output.setSensitivity(i, sensitivity, observed);
+      for (const auto &i : Sensor::CAM_OBS_R_SUP_FOOT)
+      {
+        // temp fix in injecting support foot as right always.
+        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed);
+        output.setSensitivity(i, sensitivity, observed);
+      }
     }
   }
   return output;
@@ -230,6 +253,7 @@ std::vector<PoseSensitivity<Vector3f>> CameraObservationModel::getSensitivities(
     }
     else
     {
+      std::cerr << "???" << std::endl;
       throw "Sensor Sensitivity Function not implemented.";
     }
   }
