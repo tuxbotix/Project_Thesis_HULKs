@@ -92,10 +92,10 @@ void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStrea
     NaoPoseAndRawAngles<float> poseAndAngles;
     while (JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
     {
-        std::cout << poseAndAngles << std::endl;
+        // std::cout << poseAndAngles << std::endl;
         std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
             obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA});
-        std::cout << sensitivityOutput.size() << " got this much?" << std::endl;
+        // std::cout << sensitivityOutput.size() << " got this much?" << std::endl;
         for (auto &i : sensitivityOutput)
         {
             Vector3f val;
@@ -231,11 +231,11 @@ int main(int argc, char **argv)
         /// Write the remaining buffers to file
         std::cout << "flushing all " << std::endl;
 #if DO_COMMIT
-        // for (size_t i = 0; i < THREADS_USED; i++)
-        // {
-        //     utils::commitToStream<rawPoseT>(poseListList[i], outputFileList[i]);
-        //     outputFileList[i].close();
-        // }
+        for (size_t i = 0; i < usableThreads; i++)
+        {
+            // utils::commitToStream<rawPoseT>(poseListList[i], outputFileList[i]);
+            outputFileList[i].close();
+        }
 #endif
     }
 

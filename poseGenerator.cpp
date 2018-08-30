@@ -455,7 +455,7 @@ int main(int argc, char **argv)
                 if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (maxIterCount / iterSum)
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (iterSum / maxIterCount)
                               << "% g. poses " << (long double)poseCount.load() << std::endl; // "\r";
                 }
                 else
