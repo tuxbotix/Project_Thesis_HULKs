@@ -16,86 +16,35 @@
 #include <Tools/Kinematics/KinematicMatrix.h>
 #include <Hardware/RobotInterface.hpp>
 
+#include "TUHHMin.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
-#define DEBUG_CAM_OBS 1
+// #define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
 #define DEBUG_FILE_COMMIT 1
 #define DEBUG_IN_THREAD 1
-#define ENABLE_PROGRESS 0
+#define ENABLE_PROGRESS 1
 
 #include "utils.hpp"
 
-// typedef NaoTorsoPose::angleT dataT;
-// typedef PARAMS paramNameT;
-
-// // const dataT deltaTheta = 1; // 1 deg +-
-
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
-
-/**
- * Minimal TUHH class impl. in order to use configuration
- * This is a rather hacky way, but doesn't need touching the actual belly of the beast xD
- */
-class Configuration;
-class TUHH
-{
-
-  public:
-    Configuration config_;
-    TUHH(std::string fileRoot) : config_(fileRoot)
-    {
-        NaoInfo info;
-        info.bodyVersion = NaoVersion::V5;
-        info.headVersion = NaoVersion::V5;
-        info.bodyName = "default";
-        info.headName = "default";
-
-        config_.setLocationName("default");
-        config_.setNaoHeadName(info.headName);
-        config_.setNaoBodyName(info.bodyName);
-
-        NaoProvider::init(config_, info);
-        std::cout << "initialize TUHH" << std::endl;
-        std::cout << Poses::init(fileRoot) << std::endl;
-    }
-};
-
-class JointsAndPosesStream
-{
-  public:
-    static bool getNextPoseAndRawAngles(std::istream &inputPoseFile, NaoPoseAndRawAngles<float> &val)
-    {
-        if (inputPoseFile.good())
-        {
-            std::string poseStr;
-            std::getline(inputPoseFile, poseStr);
-            if (inputPoseFile.good())
-            {
-                std::stringstream line(poseStr);
-                line >> val;
-                return val.isGood();
-            }
-        }
-        return false;
-    }
-};
 
 typedef int16_t dataOutType;
 
-void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream)
+void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream, 
+    std::vector<int> previousJointSensMagnitude, 
+    std::atomic<size_t> &iterations)
 {
     NaoPoseAndRawAngles<float> poseAndAngles;
     while (JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
     {
-        // std::cout << poseAndAngles << std::endl;
+        iterations++;
         std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
             obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA});
-        // std::cout << sensitivityOutput.size() << " got this much?" << std::endl;
         for (auto &i : sensitivityOutput)
         {
             Vector3f val;
@@ -174,6 +123,7 @@ int main(int argc, char **argv)
     /// Start the real threading..
     {
         std::vector<std::thread> threadList(usableThreads);
+        std::vector<std::atomic<size_t>> iterCount(usableThreads);
         std::vector<std::fstream> outputFileList(usableThreads);
         std::vector<ObservationSensitivity> obsSensitivities =
             ObservationSensitivityProvider::getSensitivityProviders(usableThreads, imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
@@ -195,7 +145,7 @@ int main(int argc, char **argv)
             }
 
             threadList[i] = std::thread(sensitivityTesterFunc, std::ref(obsSensitivities[i]), std::ref(inputPoseAndJointStreams[i]),
-                                        std::ref(outputFileList[i]));
+                                        std::ref(outputFileList[i]), std::ref(iterCount[i]));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -204,9 +154,24 @@ int main(int argc, char **argv)
             const size_t interval = 5;
             while (continueTicker)
             {
+                size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
+                if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterSum << std::endl;
+                }
+                else
+                {
+                    std::stringstream t;
+                    t << "Elapsed: " << elapsed << " ";
+                    for (size_t i = 0; i < usableThreads; i++)
+                    {
+                        t << "T" << i << " :" << iterCount[i].load() << " ";
+                    }
+                    {
+                        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+                        std::cout << t.str() << std::endl;
+                    }
                 }
                 elapsed += interval;
                 std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms

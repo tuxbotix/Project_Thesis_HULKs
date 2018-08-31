@@ -5,8 +5,9 @@
 
 enum SENSOR_NAME
 {
-  TOP_CAMERA,
-  BOTTOM_CAMERA
+  SENSOR_NONE = -1,
+  TOP_CAMERA = 0,
+  BOTTOM_CAMERA = 1
   // Future : 3d measurements, etc on lifted foot, etc.
 };
 
@@ -18,7 +19,7 @@ public:
   static const std::vector<JOINTS::JOINT> CAM_OBS_L_SUP_FOOT;
   static const std::vector<JOINTS::JOINT> CAM_OBS_R_SUP_FOOT;
 
-  static void init(){
-    
+  static void init()
+  {
   }
 };

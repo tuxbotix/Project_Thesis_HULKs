@@ -15,6 +15,7 @@
 #include <Tools/Kinematics/KinematicMatrix.h>
 #include <Hardware/RobotInterface.hpp>
 
+#include "TUHHMin.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
@@ -258,15 +259,10 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                                 poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, headYawPitchList[iter], torsoPos, torsoRot,
                                                             OFootPos, OFootRot),
                                                       jointAngles);
-                                // rawPoseList.push_back(jointAngles);
                                 if (poseList.size() > BUFFER_SIZE)
                                 {
                                     utils::commitToStream<NaoPoseAndRawAngles<dataT>>(poseList, poseOutStream);
                                 }
-                                // if (rawPoseList.size() > BUFFER_SIZE)
-                                // {
-                                //     utils::commitToStreamVec<rawPoseT>(rawPoseList, jointOutStream);
-                                // }
 #endif
                             }
                         }
@@ -276,34 +272,6 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
         }
     }
 }
-
-/**
- * Minimal TUHH class impl. in order to use configuration
- * This is a rather hacky way, but doesn't need touching the actual belly of the beast xD
- */
-class Configuration;
-class TUHH
-{
-
-  public:
-    Configuration config_;
-    TUHH(std::string fileRoot) : config_(fileRoot)
-    {
-        NaoInfo info;
-        info.bodyVersion = NaoVersion::V5;
-        info.headVersion = NaoVersion::V5;
-        info.bodyName = "default";
-        info.headName = "default";
-
-        config_.setLocationName("default");
-        config_.setNaoHeadName(info.headName);
-        config_.setNaoBodyName(info.bodyName);
-
-        NaoProvider::init(config_, info);
-        std::cout << "initialize TUHH" << std::endl;
-        std::cout << Poses::init(fileRoot) << std::endl;
-    }
-};
 
 int main(int argc, char **argv)
 {
@@ -406,20 +374,16 @@ int main(int argc, char **argv)
 
     /// PoseList vector and accum(pose) Vector
     std::vector<poseAndRawAngleListT> poseAndAnglesListList(THREADS_USED);
-    // std::vector<rawPoseListT> jointListList(THREADS_USED);
 
     std::vector<std::atomic<size_t>> iterCount(THREADS_USED);
     /// Start the real threading..
     {
         std::vector<std::thread> threadList(THREADS_USED);
         std::vector<std::fstream> poseAndAnglesFiles(THREADS_USED);
-        // std::vector<std::fstream> rawJointFiles(THREADS_USED);
         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
-        // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
             poseAndAnglesFiles[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
-            // poseAndAnglesFiles[i] = std::fstream((outFileName + "_joints_" + std::to_string(i) + ".txt"), std::ios::out);
 
             if (!poseAndAnglesFiles[i].is_open())
             {

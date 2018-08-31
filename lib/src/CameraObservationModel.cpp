@@ -33,11 +33,8 @@ CameraObservationModel::CameraObservationModel(const Vector2i &imSize, const Vec
     {
       y = ((int)j - gridSizeHalf) * gridSpacing;
       basicGrid.emplace_back(x, y);
-      // std::cout << "(" << x << ", " << y << ")\t";
     }
-    // std::cout << std::endl;
   }
-  // std::cout << "Basic Grid construction done." << std::endl;
 }
 
 /**
@@ -48,8 +45,6 @@ void CameraObservationModel::updateState(const rawPoseT &jointAngles, const SUPP
   Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
   NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sf, camMat, camName);
   // update default horizon
-  // std::cout << camMat.camera2ground.posV << "\n"
-  //           << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
   horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
 }
 
@@ -72,7 +67,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
     proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) && robotCoords.norm() <= maxViewDist);
     // std::cout << "CamCenterRayToGround: " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
   }
-  // #if DEBUG_CAM_OBS
+  #if DEBUG_CAM_OBS
   else
   {
     std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB << std::endl;
@@ -82,7 +77,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
     std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
     std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
   }
-  // #endif
+  #endif
   if (proceed)
   {
     Vector2f tempCoord;
@@ -95,13 +90,13 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
       output.push_back(tempCoord);
     }
   }
-  // #if DEBUG_CAM_OBS
+  #if DEBUG_CAM_OBS
   else
   {
     std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
     std::cout << "Too far view dist!" << std::endl;
   }
-  // #endif
+  #endif
   success = proceed;
   return output;
 }
@@ -135,36 +130,9 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
   rawPoseT tempJoints(jointAngles);
 
   tempJoints[joint] += deltaThetaFine;
-  // std::cout << "JKOINT->" << joint << std::endl;
-  // std::cout << camMat.camera2ground.rotM.toRotationMatrix() << "\n"
-  //           << camMat.camera2ground.posV << std::endl;
   updateState(tempJoints, sf, sensorName);
-  // std::cout << camMat.camera2ground.rotM.toRotationMatrix() << "\n"
-  //           << camMat.camera2ground.posV << std::endl;
-
+  
   std::vector<float> observedPoints = robotToPixelMulti(grid);
-
-  // std::cout << "Baseline points" << std::endl;
-  // for (size_t i = 0; i < baselinePoints.size(); i += 2)
-  // {
-  //   if (i % maxGridPointsPerSide == 0)
-  //   {
-  //     std::cout << std::endl;
-  //   }
-  //   std::cout << "(" << baselinePoints[i] << ", " << baselinePoints[i + 1] << ")\t";
-  // }
-  // std::cout << "Baseline points" << std::endl;
-
-  // std::cout << "transformed points" << std::endl;
-  // for (size_t i = 0; i < observedPoints.size(); i += 2)
-  // {
-  //   if (i % maxGridPointsPerSide == 0)
-  //   {
-  //     std::cout << std::endl;
-  //   }
-  //   std::cout << "(" << observedPoints[i] << ", " << observedPoints[i + 1] << ")\t";
-  // }
-  // std::cout << "transformed points" << std::endl;
 
   int status = ObservationSolvers::get2dPose(baselinePoints, observedPoints, output);
   // std::cout << status << std::endl;
@@ -179,10 +147,7 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
   output.x() = std::floor(output.x() * maxValPerDim / imSize.x());
   output.y() = std::floor(output.y() * maxValPerDim / imSize.y());
   output.z() = std::floor(maxValPerDim * utils::constrainAngle180(output.z() / 180));
-  // if (output.norm() >= __FLT_EPSILON__)
-  // {
-  //   output /= (output.norm() / maxValPerDim);
-  // }
+  
   observed = true;
   return output;
 }
@@ -204,7 +169,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
   updateState(jointAngles, sf, sensorName);
   bool success;
   const std::vector<Vector2f> grid = getGroundGrid(success);
-  std::cout << " success? " << success << std::endl;
+  // std::cout << " success? " << success << std::endl;
   if (success)
   {
     const std::vector<float> baseLinePoints = robotToPixelMulti(grid);

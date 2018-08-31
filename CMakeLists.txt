@@ -26,20 +26,22 @@ set(target1 test1)
 add_executable(${target1} test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target1} utils naoPose tuhh)
 
-# set(extraSources NaoStability.hpp  NaoTorsoPose.hpp NaoProjectionDataProvider.hpp NaoPoseInfo.hpp Solvers.hpp)
-# set(observabilitySources ObservationSensitivityProvider.hpp Solvers.hpp)
-
 set(target2 poseGen)
 add_executable(${target2} poseGenerator.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target2} observability utils naoPose tuhh)
 
-#
-
-set(target3 sensitivitySorter)
-add_executable(${target3} SensitivitySorter.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+# Get sensitivities by digesting the poses :P
+set(target3 sensitivityExtractor)
+add_executable(${target3} SensitivityExtractor.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target3} observability utils naoPose tuhh)
 
-# other tests
-set(target4 tests)
-add_executable(${target4} tests.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+# Filter poses by sensitivity, etc..
+
+set(target4 poseFilter)
+add_executable(${target4} PoseFilter.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target4} observability utils naoPose tuhh)
+
+# other tests
+set(target5 tests)
+add_executable(${target5} tests.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target5} observability utils naoPose tuhh)
