@@ -26,6 +26,45 @@
 #define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
 
+bool poseSensitivityStreamingTest()
+{
+    std::vector<std::string> pOldLst = {"SENS 1535657042008010048220 1 3 8 3833 -7828 -24 9 -846 1313 -143 10 0 0 0 11 1346 -35 300 12 1341 -55 302 13 1347 -69 302 ",
+                                        "SENS 1535657042008010048220 0 3 "};
+
+    // No trailing space at end of entry.
+    std::vector<std::string> pNewLst = {"SENS 1535657042008010048220 1 3 8 3833 -7828 -24 9 -846 1313 -143 10 0 0 0 11 1346 -35 300 12 1341 -55 302 13 1347 -69 302",
+                                        "SENS 1535657042008010048220 0 3"};
+    bool finalSuccess = true;
+    /// Test if old space-trailing format can be read
+    for (size_t i = 0; i < pOldLst.size(); i++)
+    {
+        PoseSensitivity<Vector3f> sens;
+        std::stringstream sso(pOldLst[i]);
+        std::stringstream ssi;
+
+        sso >> sens;
+        ssi << sens;
+        // Old string must convert to new strings.
+        bool success1 = pNewLst[i].compare(ssi.str()) == 0;
+        std::cout << "PoseSensitivity Istreamed vs Ostreamed compare [old -> new] " << std::to_string(i) << " : " << (success1 ? "success" : "fail") << std::endl;
+        finalSuccess &= success1;
+    }
+    /// Test if new format can be read
+    for (size_t i = 0; i < pNewLst.size(); i++)
+    {
+        PoseSensitivity<Vector3f> sens;
+        std::stringstream sso(pNewLst[i]);
+        std::stringstream ssi;
+
+        sso >> sens;
+        ssi << sens;
+        // Old string must convert to new strings.
+        bool success1 = pNewLst[i].compare(ssi.str()) == 0;
+        std::cout << "PoseSensitivity Istreamed vs Ostreamed compare [new -> new] " << std::to_string(i) << " : " << (success1 ? "success" : "fail") << std::endl;
+        finalSuccess &= success1;
+    }
+    return finalSuccess;
+}
 bool poseStreamingTest()
 {
     NaoPoseAndRawAngles<float> poseAndAngles1;
@@ -110,6 +149,11 @@ int main(int argc, char **argv)
      * Pose types streaming test
      */
     poseStreamingTest();
+
+    /**
+     * Pose sensitivity streaming test
+     */
+    poseSensitivityStreamingTest();
 
     /**
      * Other tests

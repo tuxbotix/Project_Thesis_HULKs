@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include <Tools/Kinematics/Com.h>
 #include <Tools/Kinematics/ForwardKinematics.h>
 #include <Tools/Kinematics/InverseKinematics.h>
@@ -63,13 +65,15 @@ class PoseSensitivity
   /**
      * This class store sensitivity per joint (except arms and head) and also by which sensor.
      */
+  const static std::string className;
   SENSOR_NAME sensorName;
   std::vector<T> sensitivities;
   std::vector<bool> observationMask;
   std::string id;
   const int dimensionSize;
+
 public:
-  PoseSensitivity(const SENSOR_NAME &sn)
+  PoseSensitivity(const SENSOR_NAME &sn = SENSOR_NAME::SENSOR_NONE)
       : sensorName(sn),
         sensitivities(std::vector<T>(JOINTS::JOINT::JOINTS_MAX, T::Zero())),
         observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX)),
@@ -80,6 +84,11 @@ public:
   SENSOR_NAME getSensorName()
   {
     return sensorName;
+  }
+
+  int getObservableCount()
+  {
+    return std::accumulate(observationMask.begin(), observationMask.end(), (int)0);
   }
 
   void setSensitivity(const JOINTS::JOINT &joint, const T &val, const bool &obs)
@@ -101,9 +110,56 @@ public:
     }
   }
 
-  int getDimensionCount()
+  int getDimensionCount() const
   {
     return dimensionSize;
+  }
+
+  inline friend std::ostream &operator<<(std::ostream &outputStream, const PoseSensitivity &p)
+  {
+    const int dimCount = p.getDimensionCount();
+    outputStream << className << " " << p.id << " " << p.sensorName << " " << dimCount;
+
+    for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
+    {
+      if (p.observationMask[j])
+      {
+        outputStream << " " << j;
+        for (int k = 0; k < dimCount; k++)
+        {
+          outputStream << " " << p.sensitivities[j](k);
+        }
+      }
+    }
+    return outputStream;
+  }
+  inline friend std::istream &operator>>(std::istream &in, PoseSensitivity &p)
+  {
+    std::string name;
+    int i;
+    in >> name;
+    if (name.compare(className) == 0)
+    {
+      int dimCount;
+      int jointName;
+      int tSensName;
+      in >> p.id >> tSensName >> dimCount;
+      p.sensorName = static_cast<SENSOR_NAME>(tSensName);
+      for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX && in.good(); j++)
+      {
+        in >> jointName;
+        for (int k = 0; k < dimCount; k++)
+        {
+          in >> p.sensitivities[jointName](k);
+        }
+        p.observationMask[jointName] = true;
+      }
+    }
+    else
+    {
+      throw "Cannot deserialize this stream to NaoPose, Header mismatch!!!";
+    }
+    return in;
   }
 };
 
@@ -327,6 +383,8 @@ typedef std::vector<angleT> rawPoseT;
 typedef std::vector<rawPoseT> rawPoseListT;
 typedef std::vector<Vector3<dataT>> vector3ListT;
 
+template <typename T>
+const std::string PoseSensitivity<T>::className = "SENS";
 template <typename T>
 const std::string NaoPose<T>::className = "NaoPose";
 
