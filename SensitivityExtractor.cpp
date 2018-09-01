@@ -48,11 +48,15 @@ void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStrea
         {
             Vector3f val;
             bool obs;
+            if (i.getObservableCount() <= 0)
+            {
+                continue;
+            }
             outputStream << "SENS " << poseAndAngles.pose.id << " " << i.getSensorName() << " " << i.getDimensionCount() << " ";
             for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
             {
                 i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
-                if (obs)
+                if (obs && val.norm() > __FLT_EPSILON__)
                 {
                     outputStream << j << " ";
                     for (int k = 0; k < i.getDimensionCount(); k++)

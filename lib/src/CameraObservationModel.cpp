@@ -8,9 +8,9 @@
 const std::string CameraObservationModel::name = "CameraObservationModel";
 CameraObservationModel::CameraObservationModel(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov,
                                                uint64_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing)
-    : maxGridPointsPerSide(maxGridPointsPerSide),
-      imSize(imSize),
+    : // maxGridPointsPerSide(maxGridPointsPerSide),
       maxValPerDim(dimensionExtremum),
+      imSize(imSize),
       // gridSpacing(gridSpacing),
       deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0)
 {
@@ -67,7 +67,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
     proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) && robotCoords.norm() <= maxViewDist);
     // std::cout << "CamCenterRayToGround: " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
   }
-  #if DEBUG_CAM_OBS
+#if DEBUG_CAM_OBS
   else
   {
     std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB << std::endl;
@@ -77,7 +77,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
     std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
     std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
   }
-  #endif
+#endif
   if (proceed)
   {
     Vector2f tempCoord;
@@ -90,13 +90,13 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
       output.push_back(tempCoord);
     }
   }
-  #if DEBUG_CAM_OBS
+#if DEBUG_CAM_OBS
   else
   {
     std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
     std::cout << "Too far view dist!" << std::endl;
   }
-  #endif
+#endif
   success = proceed;
   return output;
 }
@@ -131,10 +131,11 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
 
   tempJoints[joint] += deltaThetaFine;
   updateState(tempJoints, sf, sensorName);
-  
+
   std::vector<float> observedPoints = robotToPixelMulti(grid);
 
-  int status = ObservationSolvers::get2dPose(baselinePoints, observedPoints, output);
+  // int status =
+  ObservationSolvers::get2dPose(baselinePoints, observedPoints, output);
   // std::cout << status << std::endl;
   // simple check.
   // observed = (Vector2f(output.x(), output.y()).norm() > 2 || abs(output.z()) > 3);
@@ -147,7 +148,7 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
   output.x() = std::floor(output.x() * maxValPerDim / imSize.x());
   output.y() = std::floor(output.y() * maxValPerDim / imSize.y());
   output.z() = std::floor(maxValPerDim * utils::constrainAngle180(output.z() / 180));
-  
+
   observed = true;
   return output;
 }

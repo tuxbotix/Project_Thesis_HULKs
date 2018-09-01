@@ -174,6 +174,24 @@ inline double constrainAngle360(double x)
     return x;
 }
 
+template <typename T>
+bool getNextDataEntry(std::istream &inputPoseFile, T &val)
+{
+    if (inputPoseFile.good())
+    {
+        std::string poseStr;
+        std::getline(inputPoseFile, poseStr);
+        if (inputPoseFile.good())
+        {
+            std::stringstream line(poseStr);
+            line >> val;
+            // return val.isGood();
+            return true;
+        }
+    }
+    return false;
+}
+
 class JointsAndPosesStream
 {
   public:

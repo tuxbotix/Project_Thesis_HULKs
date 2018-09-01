@@ -28,7 +28,7 @@ private:
   // static const uint8_t bytesPerDim = sizeof(sensitivityOutputType);
   const uint64_t maxValPerDim;// = std::numeric_limits<sensitivityOutputType>::max(); // max per side*, so - 38768
 
-  const size_t maxGridPointsPerSide;
+  // const size_t maxGridPointsPerSide;
 
   std::vector<Vector2f> basicGrid;
 

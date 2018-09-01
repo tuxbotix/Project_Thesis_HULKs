@@ -29,11 +29,11 @@
 
 bool poseSensitivityStreamingTest()
 {
-    std::vector<std::string> pOldLst = {"SENS 1535657042008010048220 1 3 8 3833 -7828 -24 9 -846 1313 -143 10 0 0 0 11 1346 -35 300 12 1341 -55 302 13 1347 -69 302 ",
+    std::vector<std::string> pOldLst = {"SENS 1535657042008010048220 1 3 8 3833 -7828 -24 9 -846 1313 -143 11 1346 -35 300 12 1341 -55 302 13 1347 -69 302 ",
                                         "SENS 1535657042008010048220 0 3 "};
 
     // No trailing space at end of entry.
-    std::vector<std::string> pNewLst = {"SENS 1535657042008010048220 1 3 8 3833 -7828 -24 9 -846 1313 -143 10 0 0 0 11 1346 -35 300 12 1341 -55 302 13 1347 -69 302",
+    std::vector<std::string> pNewLst = {"SENS 1535657042008010048220 1 3 8 3833 -7828 -24 9 -846 1313 -143 11 1346 -35 300 12 1341 -55 302 13 1347 -69 302",
                                         "SENS 1535657042008010048220 0 3"};
     bool finalSuccess = true;
     /// Test if old space-trailing format can be read
@@ -47,6 +47,10 @@ bool poseSensitivityStreamingTest()
         ssi << sens;
         // Old string must convert to new strings.
         bool success1 = pNewLst[i].compare(ssi.str()) == 0;
+        if (!success1)
+        {
+            std::cout << ssi.str() << std::endl;
+        }
         std::cout << "PoseSensitivity Istreamed vs Ostreamed compare [old -> new] " << std::to_string(i) << " : " << (success1 ? "success" : "fail") << std::endl;
         finalSuccess &= success1;
     }
@@ -61,6 +65,10 @@ bool poseSensitivityStreamingTest()
         ssi << sens;
         // Old string must convert to new strings.
         bool success1 = pNewLst[i].compare(ssi.str()) == 0;
+        if (!success1)
+        {
+            std::cout << ssi.str() << std::endl;
+        }
         std::cout << "PoseSensitivity Istreamed vs Ostreamed compare [new -> new] " << std::to_string(i) << " : " << (success1 ? "success" : "fail") << std::endl;
         finalSuccess &= success1;
     }

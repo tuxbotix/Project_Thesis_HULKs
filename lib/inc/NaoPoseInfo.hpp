@@ -77,9 +77,14 @@ public:
   PoseSensitivity(const SENSOR_NAME &sn = SENSOR_NAME::SENSOR_NONE)
       : sensorName(sn),
         sensitivities(std::vector<T>(JOINTS::JOINT::JOINTS_MAX, T::Zero())),
-        observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX)),
+        observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX, false)),
         dimensionSize(T::Zero().size())
   {
+  }
+
+  std::string getId()
+  {
+    return id;
   }
 
   SENSOR_NAME getSensorName()
@@ -87,9 +92,21 @@ public:
     return sensorName;
   }
 
+  bool isJointObservable(const JOINTS::JOINT &joint)
+  {
+    return observationMask[joint];
+  }
   int getObservableCount()
   {
-    return std::accumulate(observationMask.begin(), observationMask.end(), (int)0);
+    int sum = 0;
+    for (const auto &i : observationMask)
+    {
+      if (i)
+      {
+        sum++;
+      }
+    }
+    return sum;
   }
 
   void setSensitivity(const JOINTS::JOINT &joint, const T &val, const bool &obs)
@@ -123,7 +140,7 @@ public:
 
     for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
     {
-      if (p.observationMask[j])
+      if (p.observationMask[j] && p.sensitivities[j].norm() > __FLT_EPSILON__)
       {
         outputStream << " " << j;
         for (int k = 0; k < dimCount; k++)
@@ -136,6 +153,10 @@ public:
   }
   inline friend std::istream &operator>>(std::istream &in, PoseSensitivity &p)
   {
+    for (size_t i = 0; i < p.observationMask.size(); i++)
+    {
+      p.observationMask[i] = false;
+    }
     std::string name;
     int i;
     in >> name;
@@ -149,11 +170,18 @@ public:
       for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX && in.good(); j++)
       {
         in >> jointName;
+        if (!in.good())
+        {
+          continue;
+        }
         for (int k = 0; k < dimCount; k++)
         {
           in >> p.sensitivities[jointName](k);
         }
-        p.observationMask[jointName] = true;
+        if (p.sensitivities[jointName].norm() > __FLT_EPSILON__)
+        {
+          p.observationMask[jointName] = true;
+        }
       }
     }
     else
