@@ -13,6 +13,7 @@
 #include <Tools/Kinematics/KinematicMatrix.h>
 #include <Hardware/RobotInterface.hpp>
 
+#include "TUHHMin.hpp"
 #include "NaoStability.hpp"
 
 #define DO_COMMIT 1
@@ -192,36 +193,6 @@ inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, c
         }
     }
 }
-
-// std::cout << "end of recursion" << std::endl;
-
-/**
- * Minimal TUHH class impl. in order to use configuration
- * This is a rather hacky way, but doesn't need touching the actual belly of the beast xD
- */
-class Configuration;
-class TUHH
-{
-
-  public:
-    Configuration config_;
-    TUHH(std::string fileRoot) : config_(fileRoot)
-    {
-        NaoInfo info;
-        info.bodyVersion = NaoVersion::V5;
-        info.headVersion = NaoVersion::V5;
-        info.bodyName = "default";
-        info.headName = "default";
-
-        config_.setLocationName("default");
-        config_.setNaoHeadName(info.headName);
-        config_.setNaoBodyName(info.bodyName);
-
-        NaoProvider::init(config_, info);
-        std::cout << "initialize TUHH" << std::endl;
-        std::cout << Poses::init(fileRoot) << std::endl;
-    }
-};
 
 int main(int argc, char **argv)
 {

@@ -20,6 +20,7 @@
 #include <Tools/Kinematics/KinematicMatrix.h>
 #include <Hardware/RobotInterface.hpp>
 
+#include "TUHHMin.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
@@ -86,30 +87,6 @@ bool poseStreamingTest()
     std::cout << "NaoPoseAndRaw Istreamed vs Ostreamed compare: " << (success ? "success" : "fail") << std::endl;
     return success;
 }
-
-class Configuration;
-class TUHH
-{
-
-  public:
-    Configuration config_;
-    TUHH(std::string fileRoot) : config_(fileRoot)
-    {
-        NaoInfo info;
-        info.bodyVersion = NaoVersion::V5;
-        info.headVersion = NaoVersion::V5;
-        info.bodyName = "default";
-        info.headName = "default";
-
-        config_.setLocationName("default");
-        config_.setNaoHeadName(info.headName);
-        config_.setNaoBodyName(info.bodyName);
-
-        NaoProvider::init(config_, info);
-        std::cout << "initialize TUHH" << std::endl;
-        std::cout << Poses::init(fileRoot) << std::endl;
-    }
-};
 
 int main(int argc, char **argv)
 {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <numeric>
 
 #include <Tools/Kinematics/Com.h>
 #include <Tools/Kinematics/ForwardKinematics.h>

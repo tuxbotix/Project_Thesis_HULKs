@@ -33,9 +33,8 @@
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
-void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream, 
-    std::vector<int> previousJointSensMagnitude, 
-    std::atomic<size_t> &iterations)
+void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream,
+                           std::atomic<size_t> &iterations)
 {
     NaoPoseAndRawAngles<float> poseAndAngles;
     while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
