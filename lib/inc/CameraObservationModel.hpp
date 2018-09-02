@@ -69,17 +69,17 @@ public:
    * Filter correspondance pairs
    */
   std::vector<std::pair<Vector2f, Vector2f>> getFilteredCorrespondancePairs(const std::vector<Vector2f> &baseline,
-                                                                            const std::vector<std::pair<bool, Vector2f>> &meas);
+                                                                            const std::vector<std::pair<bool, Vector2f>> &meas) const;
 
   /**
    * Filter out bad robot2Pixel converts
    */
-  std::vector<Vector2f> filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &val);
+  std::vector<Vector2f> filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec) const;
 
   /**
    * Robot to pixel, multiple point support
    */
-  std::vector<std::pair<bool, Vector2f>> robotToPixelMulti(const std::vector<Vector2f> &groundPoints);
+  std::vector<std::pair<bool, Vector2f>> robotToPixelMulti(const std::vector<Vector2f> &groundPoints) const;
 
   /**
    * Get observability (sensitivity?) of a given joint for a given camera at a given pose

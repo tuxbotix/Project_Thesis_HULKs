@@ -96,6 +96,34 @@ bool poseStreamingTest()
     return success;
 }
 
+bool camObserverIterTest(const Vector2f &fc, const Vector2f &cc, const Vector2f &fov, const Vector2i &imSize,
+                         std::vector<float> joints, SUPPORT_FOOT supFoot)
+{
+    size_t maxGridPointsPerSide = 5;
+
+    ObservationSensitivity obs = ObservationSensitivityProvider::getSensitivityProvider(
+        imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
+
+    std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
+        obs.getSensitivities(joints, supFoot, {SENSOR_NAME::BOTTOM_CAMERA});
+
+    for (auto &i : sensitivityOutput)
+    {
+        Vector3f val;
+        bool obs;
+        for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
+        {
+            i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
+            // std::cout << "SENS-> " << j << " (" << val.x() << ", " << val.y() << ", " << val.z() << ") o:" << obs << std::endl;
+            if (obs)
+            {
+                std::cout << "SENS-> " << j << " " << val.norm() << " o:" << obs << std::endl;
+            }
+        }
+    }
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     std::string inFileName((argc > 1 ? argv[1] : "out"));
@@ -140,78 +168,12 @@ int main(int argc, char **argv)
     poseSensitivityStreamingTest();
 
     /**
-     * Other tests
+     * Observer test
      */
-    size_t maxGridPointsPerSide = 15;
-
-    std::cout << "init" << std::endl;
-    std::vector<ObservationSensitivity> sensitivitues = ObservationSensitivityProvider::getSensitivityProviders(
-        1, imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
-
-    ObservationSensitivity obs = sensitivitues[0];
     std::vector<float> jointAngles(JOINTS::JOINT::JOINTS_MAX, 0.0);
-
-    std::cout << NaoProvider::minRange(JOINTS::JOINT::L_KNEE_PITCH) << std::endl;
-    /**
-     *  Test for sensitivity calculation
-     */
-
-    SENSOR_NAME sensorName = SENSOR_NAME::BOTTOM_CAMERA;
-    // Camera cameraName = (sensorName == SENSOR_NAME::TOP_CAMERA) ? Camera::TOP : Camera::BOTTOM;
-
     jointAngles[JOINTS::JOINT::HEAD_PITCH] = 20 * TO_RAD;
-    const std::vector<float> newJoints(jointAngles);
 
-    obs.camObsModelPtr->updateState(newJoints, supportFoot, sensorName);
-
-    // // Update camera matrix.. & get baseline grid
-    // // KinematicMatrix supFoot = NaoSensorDataProvider::getSupportFootMatrix(newJoints, sf);
-    bool t;
-    const std::vector<Vector2f> grid = obs.camObsModelPtr->getGroundGrid(t);
-    if (!t)
-    {
-        std::cout << "failed to get ground grid for this sensor" << std::endl;
-    }
-    const std::vector<float> baseLinePoints = obs.camObsModelPtr->robotToPixelMulti(grid);
-
-    // obs.updateState(newJoints, sf, sensorName);
-    bool observed = false;
-
-    // test head pitch sensitivity.
-    Vector3f sensitivity = obs.camObsModelPtr->getSensitivityForJointForCamera(JOINTS::JOINT::L_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
-    std::cout << "Test for left ankle roll pitch\n"
-              << sensitivity << "\n "
-              << "Observed? " << observed << std::endl;
-    observed = false;
-    // obs.updateState(newJoints, sf, sensorName);
-    // test head yaw sensitivity.
-    sensitivity = obs.camObsModelPtr->getSensitivityForJointForCamera(JOINTS::JOINT::R_ANKLE_ROLL, newJoints, supportFoot, grid, baseLinePoints, sensorName, observed);
-    std::cout << "Test for right ankle roll pitch\n"
-              << sensitivity << "\n "
-              << "Observed? " << observed << std::endl;
-
-    // for (auto i : grid)
-    // {
-    //     // std::cout << i<<std::endl;
-    //     std::cout << "(" << i.x() << ", " << i.y() << ")" << std::endl;
-    // }
-    std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-        obs.camObsModelPtr->getSensitivities(newJoints, supportFoot, {SENSOR_NAME::BOTTOM_CAMERA});
-
-    for (auto &i : sensitivityOutput)
-    {
-        Vector3f val;
-        bool obs;
-        for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
-        {
-            i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
-            // std::cout << "SENS-> " << j << " (" << val.x() << ", " << val.y() << ", " << val.z() << ") o:" << obs << std::endl;
-            if (obs)
-            {
-                std::cout << "SENS-> " << j << " " << Vector2f(val.x(), val.y()).norm() << " o:" << obs << std::endl;
-            }
-        }
-    }
+    camObserverIterTest(fc, cc, fov, imSize, std::vector<float>(jointAngles), supportFoot);
 
     return 0;
 }

@@ -102,7 +102,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
 }
 
 std::vector<std::pair<Vector2f, Vector2f>> CameraObservationModel::getFilteredCorrespondancePairs(const std::vector<Vector2f> &baseline,
-                                                                                                  const std::vector<std::pair<bool, Vector2f>> &meas)
+                                                                                                  const std::vector<std::pair<bool, Vector2f>> &meas) const
 {
   std::vector<std::pair<Vector2f, Vector2f>> output;
   if (baseline.size() == meas.size())
@@ -119,17 +119,19 @@ std::vector<std::pair<Vector2f, Vector2f>> CameraObservationModel::getFilteredCo
   {
     std::cout << "baseline and measurement list sizes mismatch";
   }
+#if DEBUG_CAM_OBS
   if (output.size() != baseline.size())
   {
     std::cout << "diff " << (baseline.size() - output.size()) << std::endl;
   }
+#endif
   return output;
 }
 
-std::vector<Vector2f> CameraObservationModel::filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &val)
+std::vector<Vector2f> CameraObservationModel::filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec) const
 {
   std::vector<Vector2f> output;
-  for (const auto &i : val)
+  for (const auto &i : vec)
   {
     if (i.first)
     {
@@ -142,7 +144,7 @@ std::vector<Vector2f> CameraObservationModel::filterRobot2PixelSets(const std::v
 /**
  * Robot to pixel, multiple point support
  */
-std::vector<std::pair<bool, Vector2f>> CameraObservationModel::robotToPixelMulti(const std::vector<Vector2f> &groundPoints)
+std::vector<std::pair<bool, Vector2f>> CameraObservationModel::robotToPixelMulti(const std::vector<Vector2f> &groundPoints) const
 {
   std::vector<std::pair<bool, Vector2f>> output;
   std::pair<bool, Vector2f> val;
@@ -178,15 +180,15 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
   }
 
   updateState(tempJoints, sf, sensorName);
-
+  std::vector<std::pair<bool, Vector2f>> observedPointSet = robotToPixelMulti(grid);
   const std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList = getFilteredCorrespondancePairs(baselinePoints, observedPointSet);
 
   if (baselineToObsList.size() > 4)
   {
-    int status = ObservationSolvers::get2dPose(baselineToObsList, output);
+    ObservationSolvers::get2dPose(baselineToObsList, output);
   }
   observedPointSet.clear();
-  // std::cout << status << std::endl;
+
   // simple check.
   // observed = (Vector2f(output.x(), output.y()).norm() > 2 || abs(output.z()) > 3);
 
@@ -255,7 +257,6 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
         // output.setSensitivity(i, p, observed);
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed);
-        // std::cout << sensitivity << std::endl;
         output.setSensitivity(i, sensitivity, observed);
       }
     }
@@ -265,7 +266,6 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
       {
         // temp fix in injecting support foot as right always.
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed);
-        // std::cout << sensitivity << std::endl;
         output.setSensitivity(i, sensitivity, observed);
       }
     }
