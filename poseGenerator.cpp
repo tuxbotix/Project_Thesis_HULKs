@@ -65,13 +65,6 @@ inline bool poseCallback(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot, 
 /**
  * Get limits for each tuning param
  */
-inline void getSupportFootLimits(SUPPORT_FOOT &minLim, SUPPORT_FOOT &maxLim, SUPPORT_FOOT &increment)
-{
-    //TODO fix this..
-    minLim = SUPPORT_FOOT::SF_DOUBLE;
-    maxLim = SUPPORT_FOOT::SF_DOUBLE;
-    increment = static_cast<SUPPORT_FOOT>(1);
-}
 
 inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) // 8
 {
