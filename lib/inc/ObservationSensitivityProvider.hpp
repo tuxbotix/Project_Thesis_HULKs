@@ -16,7 +16,8 @@
  */
 class ObservationSensitivity
 {
-public:
+// public:
+private:
   // TODO make this public later
   // class CameraObservationModel;
   std::shared_ptr<CameraObservationModel> camObsModelPtr;
@@ -24,7 +25,7 @@ public:
 private:
   friend class ObservationSensitivityProvider;
   ObservationSensitivity(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov,
-                         uint32_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing)
+                         uint64_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing)
       : camObsModelPtr(std::make_shared<CameraObservationModel>(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing))
   {
   }
@@ -64,11 +65,20 @@ public:
   static std::vector<ObservationSensitivity> getSensitivityProviders(const size_t &threadCount, const Vector2i &imSize,
                                                                      const Vector2f &fc, const Vector2f &cc,
                                                                      const Vector2f &fov,
-                                                                     uint32_t dimensionExtremum,
+                                                                     const uint64_t dimensionExtremum,
                                                                      const size_t &maxGridPointsPerSide, const float &gridSpacing)
   {
 
     return std::vector<ObservationSensitivity>(threadCount, ObservationSensitivity(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing));
+  }
+
+  static ObservationSensitivity getSensitivityProvider(const Vector2i imSize,
+                                                       const Vector2f fc, const Vector2f cc,
+                                                       const Vector2f fov,
+                                                       const uint64_t dimensionExtremum,
+                                                       const size_t maxGridPointsPerSide, const float gridSpacing)
+  {
+    return ObservationSensitivity(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing);
   }
 };
 

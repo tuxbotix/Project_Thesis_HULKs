@@ -26,7 +26,7 @@ private:
   // we scale the output to a signed integer occupying the below byte count.
   // ie: to fit
   // static const uint8_t bytesPerDim = sizeof(sensitivityOutputType);
-  const uint64_t maxValPerDim;// = std::numeric_limits<sensitivityOutputType>::max(); // max per side*, so - 38768
+  const uint64_t maxValPerDim; // = std::numeric_limits<sensitivityOutputType>::max(); // max per side*, so - 38768
 
   // const size_t maxGridPointsPerSide;
 
@@ -63,18 +63,29 @@ public:
    * 1. This has a hard range limit of 2m
    */
   // TODO  Make this private.
-  std::vector<Vector2f> getGroundGrid(bool & success);
+  std::vector<Vector2f> getGroundGrid(bool &success);
+
+  /**
+   * Filter correspondance pairs
+   */
+  std::vector<std::pair<Vector2f, Vector2f>> getFilteredCorrespondancePairs(const std::vector<Vector2f> &baseline,
+                                                                            const std::vector<std::pair<bool, Vector2f>> &meas);
+
+  /**
+   * Filter out bad robot2Pixel converts
+   */
+  std::vector<Vector2f> filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &val);
 
   /**
    * Robot to pixel, multiple point support
    */
-  std::vector<float> robotToPixelMulti(const std::vector<Vector2f> &groundPoints);
+  std::vector<std::pair<bool, Vector2f>> robotToPixelMulti(const std::vector<Vector2f> &groundPoints);
 
   /**
    * Get observability (sensitivity?) of a given joint for a given camera at a given pose
    */
   Vector3f getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
-                                           const std::vector<Vector2f> &grid, const std::vector<float> &baselinePoints,
+                                           const std::vector<Vector2f> &grid, const std::vector<Vector2f> &baselinePoints,
                                            const SENSOR_NAME &sensorName, bool &observed);
 
   /**

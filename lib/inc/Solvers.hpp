@@ -73,36 +73,42 @@ struct Pose2DFunctor : Functor<_Scalar>
  */
 
 // template <typename _Scalar>
-int get2dPose(const std::vector<float> &initialVec,
-                 const std::vector<float> &transformedVec, Vector3<float> &params)
+int get2dPose(const std::vector<std::pair<Vector2<float>, Vector2<float>>> &correspondancePairs,
+              Vector3<float> &params)
 {
-  if (initialVec.size() != transformedVec.size())
-  {
-    std::cerr << "input list dimension mismatch" << std::endl;
-    return -1;
-  }
-  VectorXf paramsX(params);
+  VectorXf paramsX(3);
+  paramsX(0) = params.x();
+  paramsX(1) = params.y();
+  paramsX(2) = params.z();
 
   Point2FVector initialPoints;
   Point2FVector transformedPoints;
 
-  for (size_t i = 0; i < initialVec.size() / 2; i++)
+  for (const auto &i : correspondancePairs)
   {
-    initialPoints.emplace_back(initialVec[i * 2], initialVec[(i * 2) + 1]);
-    transformedPoints.emplace_back(transformedVec[i * 2], transformedVec[(i * 2) + 1]);
+    initialPoints.push_back(i.first);
+    transformedPoints.push_back(i.second);
   }
 
   Pose2DFunctor<float> functor;
   functor.initialPoints = initialPoints;
   functor.transformedPoints = transformedPoints;
 
+  { // Initial test, if the fuctor give almost no error, then just stop
+    VectorXf diffs(initialPoints.size());
+    functor(paramsX, diffs);
+    if (diffs.norm() < sqrt(Eigen::NumTraits<float>::epsilon()))
+    {
+      return 4;
+    }
+  }
+
   Eigen::NumericalDiff<Pose2DFunctor<float>> functorDiff(functor);
   Eigen::LevenbergMarquardt<Eigen::NumericalDiff<Pose2DFunctor<float>>, float> lm(functorDiff);
 
   int status = lm.minimize(paramsX);
-  
+
   params = Eigen::Vector3f(paramsX);
-  // std::cout << "LM optimization status: " << status << std::endl;
   return status;
 }
 

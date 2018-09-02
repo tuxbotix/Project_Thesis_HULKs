@@ -157,7 +157,6 @@ class SupportPolygon
      * @param COM in torso coords
      * @return if COM within support polygon
      * 
-     * TODO check other intersection shit..
      */
     inline bool isComWithinSupport(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com, const SUPPORT_FOOT &supFoot = SUPPORT_FOOT::SF_DOUBLE) const
     {
