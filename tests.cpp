@@ -98,10 +98,9 @@ bool poseStreamingTest()
 
 int main(int argc, char **argv)
 {
-
-    std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
-    std::string inFileName((argc > 2 ? argv[2] : "out"));
-    std::string supportFootName((argc > 3 ? argv[3] : "d"));
+    std::string inFileName((argc > 1 ? argv[1] : "out"));
+    std::string supportFootName((argc > 2 ? argv[2] : "d"));
+    std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
 
     SUPPORT_FOOT supportFoot = SUPPORT_FOOT::SF_DOUBLE;
     if (supportFootName.compare("l") == 0)

@@ -92,7 +92,7 @@ public:
     return sensorName;
   }
 
-  bool isJointObservable(const JOINTS::JOINT &joint)
+  bool isJointObservable(const JOINTS::JOINT &joint) const
   {
     return observationMask[joint];
   }
@@ -115,7 +115,7 @@ public:
     observationMask[joint] = obs;
   }
 
-  void getSensitivity(const JOINTS::JOINT &joint, T &val, bool &obs)
+  void getSensitivity(const JOINTS::JOINT &joint, T &val, bool &obs) const
   {
     obs = observationMask[joint];
     if (obs)

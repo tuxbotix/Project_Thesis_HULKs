@@ -72,9 +72,9 @@ void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStrea
 
 int main(int argc, char **argv)
 {
+    std::string inFileName((argc > 1 ? argv[1] : "out"));
+    std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
 
-    std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
-    std::string inFileName((argc > 2 ? argv[2] : "out"));
     const std::string outFileName(inFileName + "_sensOut");
 
     TUHH tuhhInstance(confRoot);

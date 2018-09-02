@@ -80,10 +80,10 @@ inline void getLimits(const jointT &jointIndex, dataT &minLim, dataT &maxLim, co
         minLim = NaoProvider::minRangeRAnkleRoll(pose[JOINTS::R_ANKLE_PITCH]);
         maxLim = NaoProvider::maxRangeRAnkleRoll(pose[JOINTS::R_ANKLE_PITCH]);
     }
-    else if(jointIndex == JOINTS::L_HIP_PITCH || jointIndex == JOINTS::R_HIP_PITCH)
+    else if (jointIndex == JOINTS::L_HIP_PITCH || jointIndex == JOINTS::R_HIP_PITCH)
     {
         minLim = NaoProvider::minRange(jointIndex);
-        maxLim = NaoProvider::maxRange(jointIndex) ;
+        maxLim = NaoProvider::maxRange(jointIndex);
     }
     else
     {
@@ -125,13 +125,13 @@ inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, c
         // if (nextIndex == JOINT_COUNT)
         //     {
         iterCount++;
-// #if DEBUG_IN_THREAD
+        // #if DEBUG_IN_THREAD
         if (iterCount.load() % 100000 == 0)
         {
             std::lock_guard<std::mutex> lock(utils::mtx_cout_);
             std::cout << "Iterations: " << iterCount.load() << " g. poses " << poseCount.load() << std::endl; // "\r";
         }
-// #endif
+        // #endif
         // std::cout << "came to end" << std::endl;
         if (poseCallback(pose))
         {
@@ -182,23 +182,22 @@ inline void jointIterFuncWithLim(const jointT &jointIndex, const dataT &start, c
             {
                 jointIterFunc(nextIndex, incrementInRad, pose, poseList, defaultPose, outStream, true);
             }
-// #if DEBUG_IN_THREAD
+            // #if DEBUG_IN_THREAD
             /// If we get the "else", there is something wrong as end-of-list must be reached at above
             else
             {
                 std::lock_guard<std::mutex> lock(utils::mtx_cout_);
                 std::cout << "SOMETHING IS WRONG!!!" << jointIndex << std::endl; // "\r";
             }
-// #endif
+            // #endif
         }
     }
 }
 
 int main(int argc, char **argv)
 {
-
     std::string outFileName((argc > 1 ? argv[1] : "out"));
-    std::string confRoot((argc > 2 ? argv[2] : "/home/darshana/Documents/HULKs/nao/home/"));
+    std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
 
     TUHH tuhhInstance(confRoot);
 
@@ -232,7 +231,7 @@ int main(int argc, char **argv)
     /// populate poseList and poseAccum
     for (auto &i : accumList)
     {
-        i = Poses::getPose(Poses::READY);//oldPoseT(JOINT_COUNT);
+        i = Poses::getPose(Poses::READY); //oldPoseT(JOINT_COUNT);
     }
     // for (auto &i : poseListList)
     // {

@@ -34,66 +34,101 @@
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 static const int SENSOR_COUNT = 4;
 
-static const size_t maxPeakElemsPerList = 100;
-static const size_t maxPeakElemsPerListSortTrigger = 150;
+typedef std::array<float, JOINTS::JOINT::JOINTS_MAX> JointWeights;
+typedef std::array<float, SENSOR_COUNT> SensorWeights;
 
 typedef std::pair<int, std::string> SensMagAndPoseId; // Sensor Name should be maintained externally.
+typedef std::pair<double, std::string> PoseCost;      // Sensor Name should be maintained externally.
 
-typedef int16_t dataOutType;
+static const size_t maxPeakElemsPerList = 10E6;
+static const size_t maxPeakElemsPerListSortTrigger = 10E8;
 
-void sortDescAndTrimSensPeakVector(std::vector<SensMagAndPoseId> &vec, const size_t &elemLimit)
+void sortDescAndTrimPoseCostVector(std::vector<PoseCost> &vec, const size_t &elemLimit)
 {
-    // sort in desc. order
+    // sort in asc. order
     std::sort(vec.begin(),
-              vec.end(), [](const SensMagAndPoseId &l, const SensMagAndPoseId &r) {
-                  return l.first > r.first;
-              });
+              vec.end());
     // erase the excessive elements.
     if (vec.size() > elemLimit)
     {
         vec.erase(vec.begin() + elemLimit, vec.end());
     }
 }
+
 /**
- * This simply get the highest sensitive poses per joint per sensor.
- * No effort is made to cluster, nearest neighbour or etc..
+ * Cost function for ranking a given pose for a given sensor.
+ * Factors:
+ * 1. Sensitivity magnitude
+ * 2. Mutual orthogonality
+ * Weights:
+ * 1. w_sensor_mag - can be used to prioritize a given sensor's magnitudes
+ * 2. w_joint - can be used to prioritize a given joint (esp. useful when general optimization only favor some joints)
+ * 3. w_sensor_ortho - Orthogonality weight for a given sensor.
+ * 
+ * w_sensor_mag * w_joint and w_sensor_ortho * w_joint are used for magnitude and orthogonality weighting respectively.
+ */
+template <typename T>
+double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
+                          const JointWeights &wJoints, const float &wOrthoGeneric)
+{
+    double accum = 0;
+    for (int j = 0; j < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); j++)
+    {
+        const JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(j);
+        if (!p.isJointObservable(joint))
+        {
+            continue;
+        }
+        const float wMag = wSensorMag * wJoints[j];
+        const float wOrtho = wOrthoGeneric * wJoints[j];
+        T val;
+        bool obs;
+        p.getSensitivity(joint, val, obs);
+        // stage 1
+        accum -= wMag * val.norm();
+
+        for (int k = 0; k < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); k++)
+        {
+            const JOINTS::JOINT innerJoint = static_cast<JOINTS::JOINT>(k);
+            // skip own-joint and unobservable joints..
+            if (j == k || !p.isJointObservable(innerJoint))
+            {
+                continue;
+            }
+            T val2;
+            bool obs2;
+            p.getSensitivity(innerJoint, val2, obs2);
+            // second stage
+            accum += wOrtho * val.dot(val2);
+        }
+    }
+    return accum;
+}
+
+/**
+ * This runs the cost function :)
+ * @param poseCosts list of all cost minimas (local minimas).
  */
 void poseFilterFunc(std::istream &inputStream,
                     // std::ostream &outputStream,
-                    std::array<std::vector<std::vector<SensMagAndPoseId>>, SENSOR_COUNT> &sensPeaksPerSensorPerJoint,
-                    std::array<std::vector<SensMagAndPoseId>, SENSOR_COUNT> &maxSensMagnitudes,
-                    std::atomic<size_t> &iterations, bool lastPortion)
+                    std::vector<PoseCost> &poseCosts,
+                    const SensorWeights sensorMagnitudeWeights,
+                    const JointWeights jointWeights,
+                    const float orthogonalityWeight,
+                    std::atomic<size_t> &iterations)
 {
-    for (auto &s : sensPeaksPerSensorPerJoint)
-    {
-        s = std::vector<std::vector<SensMagAndPoseId>>(JOINTS::JOINT::JOINTS_MAX, std::vector<SensMagAndPoseId>());
-    }
-    std::vector<bool> direction[SENSOR_COUNT]; // just in case :P
-    for (auto &i : direction)
-    {
-        i = std::vector<bool>(JOINTS::JOINT::JOINTS_MAX, false);
-    }
-    std::vector<SensMagAndPoseId> previousSenseVals[SENSOR_COUNT];
-    for (auto &i : previousSenseVals)
-    {
-        i = std::vector<SensMagAndPoseId>(JOINTS::JOINT::JOINTS_MAX, SensMagAndPoseId(-32000, "-100"));
-    }
-    for (auto &i : maxSensMagnitudes)
-    {
-        i = std::vector<SensMagAndPoseId>(JOINTS::JOINT::JOINTS_MAX, SensMagAndPoseId(-32000, "-100"));
-    }
+    bool direction = false;
+    PoseCost previousCostVal(-10, "-100");
 
     // Per pose, multiple sensors are there,..
     std::string curPoseId = "-100";
     // if at least one sensor had observations at that pose. If not, drop that pose from this level.
     // bool anySensorObserved = false;
 
-    Vector3f val;
-    bool observable;
-
     PoseSensitivity<Vector3f> p;
-    int sensorAsId;
-    JOINTS::JOINT joint;
+    size_t sensorAsIndex;
+
+    double poseCostAccum = 0;
 
     while (utils::getNextDataEntry<PoseSensitivity<Vector3f>>(inputStream, p))
     {
@@ -103,67 +138,41 @@ void poseFilterFunc(std::istream &inputStream,
         {
             continue;
         }
-        curPoseId = p.getId();
-
-        sensorAsId = static_cast<int>(p.getSensorName());
-        bool anyPeaksForThisPose = false;
-        for (int j = 0; j < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); j++)
+        std::string tempId = p.getId();
+        // Things don't match up = new pose loaded.
+        if (curPoseId.compare(tempId))
         {
-            joint = static_cast<JOINTS::JOINT>(j);
-            p.getSensitivity(joint, val, observable);
-            float sensMagnitude = val.norm();
-            if (!observable || sensMagnitude < __FLT_EPSILON__)
+            // current pose's total cost is lesser than previous pose's total cost
+            bool curDir = (poseCostAccum < previousCostVal.first);
+            // falling edge - at a peak
+            if (!curDir && direction)
             {
-                continue;
+                poseCosts.emplace_back(poseCostAccum, curPoseId);
             }
-
-            SensMagAndPoseId prevVal = previousSenseVals[sensorAsId][j];
-            bool curDir = prevVal.first < sensMagnitude;
-            // falling edge = previous value is the local peak
-            if (!curDir && direction[sensorAsId][j])
+            if (poseCosts.size() > maxPeakElemsPerListSortTrigger)
             {
-                anyPeaksForThisPose = true;
-                sensPeaksPerSensorPerJoint[sensorAsId][j].push_back(prevVal);
-                size_t peakListSize = sensPeaksPerSensorPerJoint[sensorAsId][j].size();
-                if (peakListSize > maxPeakElemsPerListSortTrigger)
-                {
-                    sortDescAndTrimSensPeakVector(sensPeaksPerSensorPerJoint[sensorAsId][j], maxPeakElemsPerList);
-                }
+                sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
             }
-            // increasing
-            if (curDir && maxSensMagnitudes[sensorAsId][j].first < sensMagnitude)
-            {
-                // update glocal [global for this section of data]
-                maxSensMagnitudes[sensorAsId][j].first = sensMagnitude;
-                maxSensMagnitudes[sensorAsId][j].second = curPoseId;
-            }
-            direction[sensorAsId][j] = curDir;
-            // update history
-            previousSenseVals[sensorAsId][j].first = sensMagnitude;
-            previousSenseVals[sensorAsId][j].second = curPoseId;
+            previousCostVal.first = poseCostAccum;
+            previousCostVal.second = curPoseId;
+            poseCostAccum = 0; // reset the accum
+            curPoseId = tempId;
+            direction = curDir;
+            std::cout << "new sensor" << std::endl;
         }
+        sensorAsIndex = static_cast<int>(p.getSensorName());
+
+        poseCostAccum += poseFilterCostFunc<Vector3f>(
+            p,
+            sensorMagnitudeWeights[sensorAsIndex],
+            jointWeights,
+            orthogonalityWeight);
     }
 
     std::cout << "finishing" << std::endl;
-    // Now the list has ended, and if the magnitude was rising, we'll add this as a peak.
-    for (int s = 0; s < SENSOR_COUNT; s++)
-    {
-        for (int j = 0; j < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); j++)
-        {
-            if (lastPortion && direction[s][j])
-            {
-                sensPeaksPerSensorPerJoint[s][j].push_back(previousSenseVals[s][j]);
-            }
-            // sort DESC by magnitude and trim
-            sortDescAndTrimSensPeakVector(sensPeaksPerSensorPerJoint[sensorAsId][j], maxPeakElemsPerList);
-            // sort by ID ASC
-            std::sort(sensPeaksPerSensorPerJoint[sensorAsId][j].begin(),
-                      sensPeaksPerSensorPerJoint[sensorAsId][j].end(),
-                      [](const SensMagAndPoseId &l, const SensMagAndPoseId &r) {
-                          return l.second < r.second;
-                      });
-        }
-    }
+
+    // sort ASC by cost and trim
+    sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
 }
 
 int main(int argc, char **argv)
@@ -207,21 +216,34 @@ int main(int argc, char **argv)
         std::vector<std::atomic<size_t>> iterCount(usableThreads);
 
         // threads -> sensors -> joints -> peakList (PerJointPerSensorPerThread)
-        std::vector<std::array<std::vector<std::vector<SensMagAndPoseId>>, SENSOR_COUNT>> sensPeakPerSensorPerJointList(usableThreads);
-        std::vector<std::array<std::vector<SensMagAndPoseId>, SENSOR_COUNT>> maxPeaksPerSensorPerJoint(usableThreads);
+        std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
+        SensorWeights sensorMagnitudeWeights;
+        sensorMagnitudeWeights.fill(2);
+
+        // TODO change this as needed.
+        JointWeights jointWeights;
+        jointWeights.fill(1);
+
+        const float wOrthoGeneric = 1;
 
         for (unsigned int i = 0; i < usableThreads; i++)
         {
 
-            //          void poseFilterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream,
-            //                     std::array<std::vector<std::vector<SensMagAndPoseId>>, SENSOR_COUNT> &sensPeaksPerSensorPerJoint,
-            //                     std::array<std::vector<SensMagAndPoseId>, SENSOR_COUNT> &maxSensMagnitudes,
+            // void poseFilterFunc(std::istream &inputStream,
+            //                     // std::ostream &outputStream,
+            //                     std::vector<PoseCost> &poseCosts,
+            //                     const SensorWeights sensorMagnitudeWeights,
+            //                     const JointWeights jointWeights,
+            //                     const float orthogonalityWeight,
             //                     std::atomic<size_t> &iterations, bool lastPortion)
+
             threadList[i] = std::thread(poseFilterFunc, std::ref(inputPoseAndJointStreams[i]),
                                         // std::ref(outputFileList[i]),
-                                        std::ref(sensPeakPerSensorPerJointList[i]),
-                                        std::ref(maxPeaksPerSensorPerJoint[i]),
-                                        std::ref(iterCount[i]), (i + 1 >= usableThreads));
+                                        std::ref(poseCostListList[i]),
+                                        sensorMagnitudeWeights,
+                                        jointWeights,
+                                        wOrthoGeneric,
+                                        std::ref(iterCount[i]));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -274,30 +296,12 @@ int main(int argc, char **argv)
 #if DO_COMMIT
         for (size_t t = 0; t < usableThreads; t++) //per thread
         {
-            for (size_t s = 0; s < SENSOR_COUNT; s++) // per sensor
-            {
-                outputFile << "sensor " << s << std::endl;
-                for (size_t j = 0; j < sensPeakPerSensorPerJointList[t][s].size(); j++) // per joint
-                {
-                    if (sensPeakPerSensorPerJointList[t][s][j].size() <= 0)
-                    {
-                        continue;
-                    }
-                    outputFile << "joint " << j << std::endl;
-                    for (auto &sensPeak : sensPeakPerSensorPerJointList[t][s][j])
-                    {
-                        // pose ID and sens value
-                        outputFile << sensPeak.second << " " << sensPeak.first << std::endl;
-                    }
-                    outputFile << "jointEnd " << j << std::endl;
-                }
-                outputFile << "sensorEnd " << s << std::endl;
-            }
-            // outputFileList[t].close();
-            outputFile.close();
+            for (const auto &i : poseCostListList[t])
+                outputFile << "poseCost " << i.second << " " << i.first << std::endl;
         }
+        // outputFileList[t].close();
+        outputFile.close();
 #endif
     }
-
     return 0;
 }

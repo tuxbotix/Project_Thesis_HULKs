@@ -53,8 +53,8 @@ inline void recursiveIter(const jointT &joint, dataT start, dataT end, poseListT
 #if DEBUG_IN_THREAD
         if (joint == 0)
         {
-            std::lock_guard<std::mutex> lock(mtx_cout_);
-            std::cout << "iter " << inclusiveMax<< " "<<start<<" "<<end << std::endl;
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+            std::cout << "iter " << inclusiveMax << " " << start << " " << end << std::endl;
         }
 #endif
         accum[joint] = i;
@@ -74,7 +74,7 @@ inline void recursiveIter(const jointT &joint, dataT start, dataT end, poseListT
                         std::this_thread::sleep_for(std::chrono::milliseconds(20));
                     }
 #endif
-                    commitToStreamVec<rawPoseT>(poseList, outStream);
+                    utils::commitToStreamVec<rawPoseT>(poseList, outStream);
                 }
             }
         }
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
         std::cout << "flushing all " << std::endl;
         for (int i = 0; i < THREADS_USED; i++)
         {
-            commitToStreamVec<rawPoseT>(poseListList[i], outputFileList[i]);
+            utils::commitToStreamVec<rawPoseT>(poseListList[i], outputFileList[i]);
             outputFileList[i].close();
         }
     }
