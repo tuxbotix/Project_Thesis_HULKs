@@ -82,12 +82,12 @@ public:
   {
   }
 
-  std::string getId()
+  std::string getId() const
   {
     return id;
   }
 
-  SENSOR_NAME getSensorName()
+  SENSOR_NAME getSensorName() const
   {
     return sensorName;
   }
@@ -96,7 +96,7 @@ public:
   {
     return observationMask[joint];
   }
-  int getObservableCount()
+  int getObservableCount() const
   {
     int sum = 0;
     for (const auto &i : observationMask)

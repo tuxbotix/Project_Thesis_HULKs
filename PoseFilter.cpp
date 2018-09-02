@@ -69,9 +69,11 @@ void sortDescAndTrimPoseCostVector(std::vector<PoseCost> &vec, const size_t &ele
  */
 template <typename T>
 double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
-                          const JointWeights &wJoints, const float &wOrthoGeneric)
+                          const JointWeights &wJoints, const float &wOrthoGeneric,
+                          const float &observableJointCountWeight)
 {
-    double accum = 0;
+    double accum = observableJointCountWeight * p.getObservableCount();
+
     for (int j = 0; j < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); j++)
     {
         const JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(j);
@@ -85,8 +87,9 @@ double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
         bool obs;
         p.getSensitivity(joint, val, obs);
         // stage 1
-        accum -= wMag * val.norm();
+        accum += wMag * val.norm();
 
+        val.normalize();
         for (int k = 0; k < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); k++)
         {
             const JOINTS::JOINT innerJoint = static_cast<JOINTS::JOINT>(k);
@@ -98,11 +101,13 @@ double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
             T val2;
             bool obs2;
             p.getSensitivity(innerJoint, val2, obs2);
+
+            val2.normalize();
             // second stage
-            accum += wOrtho * val.dot(val2);
+            accum += wOrtho * std::fabs(acos(val.dot(val2)) / TO_RAD);
         }
     }
-    return accum;
+    return -accum;
 }
 
 /**
@@ -115,6 +120,7 @@ void poseFilterFunc(std::istream &inputStream,
                     const SensorWeights sensorMagnitudeWeights,
                     const JointWeights jointWeights,
                     const float orthogonalityWeight,
+                    const float observableJointCountWeight,
                     std::atomic<size_t> &iterations)
 {
     bool direction = false;
@@ -134,6 +140,7 @@ void poseFilterFunc(std::istream &inputStream,
     {
         iterations++;
         // if nothing to observe, skip :P
+        // TODO penalize poses that aren't much observable by sensors?
         if (p.getObservableCount() <= 0)
         {
             continue;
@@ -166,7 +173,8 @@ void poseFilterFunc(std::istream &inputStream,
             p,
             sensorMagnitudeWeights[sensorAsIndex],
             jointWeights,
-            orthogonalityWeight);
+            orthogonalityWeight,
+            observableJointCountWeight);
     }
 
     std::cout << "finishing" << std::endl;
@@ -225,6 +233,7 @@ int main(int argc, char **argv)
         jointWeights.fill(1);
 
         const float wOrthoGeneric = 1;
+        const float observableJointCountWeight = 1;
 
         for (unsigned int i = 0; i < usableThreads; i++)
         {
@@ -243,6 +252,7 @@ int main(int argc, char **argv)
                                         sensorMagnitudeWeights,
                                         jointWeights,
                                         wOrthoGeneric,
+                                        observableJointCountWeight,
                                         std::ref(iterCount[i]));
         }
 #if ENABLE_PROGRESS
