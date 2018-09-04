@@ -157,6 +157,20 @@ int main(int argc, char **argv)
 
     Vector2i imSize(640, 480);
 
+    CameraMatrix camMat;
+    camMat.fc = fc;
+    camMat.fc.x() *= imSize.x();
+    camMat.fc.y() *= imSize.y();
+    camMat.cc = cc;
+    camMat.cc.x() *= imSize.x();
+    camMat.cc.y() *= imSize.y();
+    camMat.fov = fov;
+
+    Vector2f point(0.4, 0.1);
+    Vector2i pixPoint(0,0);
+
+    std::cout << camMat.robotToPixel(point, pixPoint) << " " << pixPoint << std::endl;
+
     /**
      * Pose types streaming test
      */

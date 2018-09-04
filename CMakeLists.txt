@@ -23,7 +23,7 @@ add_subdirectory(lib)
 #poseGen
 
 set(target1 test1)
-add_executable(${target1} test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+add_executable(${target1} tests/test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target1} utils naoPose tuhh)
 
 set(target2 poseGen)
@@ -43,5 +43,15 @@ target_link_libraries(${target4} observability utils naoPose tuhh)
 
 # other tests
 set(target5 tests)
-add_executable(${target5} tests.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+add_executable(${target5} tests/tests.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target5} observability utils naoPose tuhh)
+
+# Pose2d test [ sort of ICP ]
+set(target6 icpTest)
+add_executable(${target6} tests/icpTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target6} observability utils naoPose tuhh)
+
+# Obs Tests
+set(target7 obsTest)
+add_executable(${target7} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${target7} observability utils naoPose tuhh)

@@ -30,7 +30,7 @@ target_include_directories(${libtuhh} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_
 target_link_libraries(${libtuhh} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
 
 add_library(naoPose src/NaoProjectionDataProvider.cpp src/Sensors.cpp inc/NaoStability.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoPoseInfo.hpp inc/Sensors.hpp)
-target_include_directories(naoPose SYSTEM PUBLIC inc hashidsxx)
+target_include_directories(naoPose SYSTEM PUBLIC inc external)
 target_link_libraries(naoPose tuhh)
 
 
