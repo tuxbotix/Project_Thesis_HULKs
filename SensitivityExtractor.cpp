@@ -88,7 +88,7 @@ int main(int argc, char **argv)
 
     Vector2i imSize(640, 480);
 
-    size_t maxGridPointsPerSide = 15;
+    size_t maxGridPointsPerSide = 25;
 
     std::cout << "init" << std::endl;
 
