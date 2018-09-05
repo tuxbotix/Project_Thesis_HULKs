@@ -318,7 +318,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
         // output.setSensitivity(i, p, observed);
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, gridSet,
-                                                               baseLinePointSet, sensorName, observed);
+                                                               std::vector<Vector2f>> (), sensorName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }
@@ -328,7 +328,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
       {
         // temp fix in injecting support foot as right always.
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, gridSet,
-                                                               baseLinePointSet, sensorName, observed);
+                                                               std::vector<Vector2f>> (), sensorName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }
