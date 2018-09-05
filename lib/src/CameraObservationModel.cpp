@@ -171,7 +171,8 @@ std::vector<std::pair<bool, Vector2f>> CameraObservationModel::robotToPixelMulti
   for (const auto &i : groundPoints)
   {
     val.first = camMat.robotToPixel(i, point);
-    if (!val.first || point.x() > imSize.x() || point.y() > imSize.y() || point.x() < 0 || point.y() < 0)
+    if (!val.first || point.x() > imSize.x() + imSize.x() || point.y() > imSize.y() + imSize.y() ||
+        point.x() < -imSize.x() || point.y() < -imSize.y())
     {
       val.first = false;
       val.second = Vector2f(0, 0);
@@ -207,23 +208,24 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
   if (baselinePoints.size())
   {
   }
+  updateState(jointAngles, sf, sensorName);
   std::vector<std::pair<bool, Vector2f>> newBaselinePointSet = robotToPixelMulti(grid);
   updateState(tempJoints, sf, sensorName);
   std::vector<std::pair<bool, Vector2f>> observedPointSet = robotToPixelMulti(grid);
 
   std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList;
-  //  = getFilteredCorrespondancePairs(baselinePoints, observedPointSet);
+  // = getFilteredCorrespondancePairs(baselinePoints, observedPointSet);
   for (size_t i = 0; i < newBaselinePointSet.size(); i++)
   {
     if (newBaselinePointSet[i].first && observedPointSet[i].first)
     {
       Vector2f val1 = newBaselinePointSet[i].second;
       Vector2f val2 = observedPointSet[i].second;
-      if (val1.x() > imSize.x() || val1.y() > imSize.y() || val1.x() < 0 || val1.y() < 0 ||
-          val2.x() > imSize.x() || val2.y() > imSize.y() || val2.x() < 0 || val2.y() < 0)
-      {
-        continue;
-      }
+      // if (val1.x() > imSize.x() || val1.y() > imSize.y() || val1.x() < 0 || val1.y() < 0 ||
+      // val2.x() > imSize.x() || val2.y() > imSize.y() || val2.x() < 0 || val2.y() < 0)
+      // {
+      // continue;
+      // }
       baselineToObsList.emplace_back(val1, val2);
     }
   }
@@ -318,7 +320,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
         // output.setSensitivity(i, p, observed);
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, gridSet,
-                                                               std::vector<Vector2f>> (), sensorName, observed);
+                                                               std::vector<Vector2f>(), sensorName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }
@@ -328,7 +330,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
       {
         // temp fix in injecting support foot as right always.
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, gridSet,
-                                                               std::vector<Vector2f>> (), sensorName, observed);
+                                                               std::vector<Vector2f>(), sensorName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }
