@@ -82,7 +82,6 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
   if (proceed)
   {
     proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) && robotCoords.norm() <= maxViewDist);
-    // std::cout << "CamCenterRayToGround: " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
   }
 #if DEBUG_CAM_OBS
   else
@@ -166,20 +165,20 @@ std::vector<std::pair<bool, Vector2f>> CameraObservationModel::robotToPixelMulti
   std::vector<std::pair<bool, Vector2f>> output;
   std::pair<bool, Vector2f> val;
 
-  Vector2i point(0.0, 0.0);
+  Vector2f point(0.0, 0.0);
 
   for (const auto &i : groundPoints)
   {
-    val.first = camMat.robotToPixel(i, point);
-    if (!val.first || point.x() > imSize.x() + imSize.x() || point.y() > imSize.y() + imSize.y() ||
-        point.x() < -imSize.x() || point.y() < -imSize.y())
+    val.first = robotToPixelFlt(i, point);
+    if (!val.first || point.x() > imSize.x() || point.y() > imSize.y() ||
+        point.x() < 0 || point.y() < 0)
     {
       val.first = false;
       val.second = Vector2f(0, 0);
     }
     else
     {
-      val.second = point.cast<float>();
+      val.second = point;
     }
     output.push_back(val);
   }
@@ -204,57 +203,19 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
     tempJoints[JOINTS::JOINT::L_HIP_YAW_PITCH] = tempJoints[joint];
     tempJoints[JOINTS::JOINT::R_HIP_YAW_PITCH] = tempJoints[joint];
   }
-  // TODO remove this.
-  if (baselinePoints.size())
-  {
-  }
-  updateState(jointAngles, sf, sensorName);
-  std::vector<std::pair<bool, Vector2f>> newBaselinePointSet = robotToPixelMulti(grid);
-  updateState(tempJoints, sf, sensorName);
-  std::vector<std::pair<bool, Vector2f>> observedPointSet = robotToPixelMulti(grid);
 
-  std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList;
-  // = getFilteredCorrespondancePairs(baselinePoints, observedPointSet);
-  for (size_t i = 0; i < newBaselinePointSet.size(); i++)
-  {
-    if (newBaselinePointSet[i].first && observedPointSet[i].first)
-    {
-      Vector2f val1 = newBaselinePointSet[i].second;
-      Vector2f val2 = observedPointSet[i].second;
-      // if (val1.x() > imSize.x() || val1.y() > imSize.y() || val1.x() < 0 || val1.y() < 0 ||
-      // val2.x() > imSize.x() || val2.y() > imSize.y() || val2.x() < 0 || val2.y() < 0)
-      // {
-      // continue;
-      // }
-      baselineToObsList.emplace_back(val1, val2);
-    }
-  }
+  updateState(tempJoints, sf, sensorName);
+
+  std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList = getFilteredCorrespondancePairs(baselinePoints, robotToPixelMulti(grid));
 
   int status = -2;
   if (baselineToObsList.size() > 4)
   {
     status = ObservationSolvers::get2dPose(baselineToObsList, output);
   }
-  observedPointSet.clear();
 
-  // simple check.
-  // observed = (Vector2f(output.x(), output.y()).norm() > 2 || abs(output.z()) > 3);
-
-  /* constrain output +-maxValPerDim and norm(output) <= abs(maxValPerDim)
-   * 1st scale each dimension to +- maxValPerDim
-   * 2nd Normalize and multiply by 1000 :P
-   * This is written in a strange way, to reduce loosing too much precision.
-   */
-  Vector3f outOrig = output;
-  output.x() = std::floor(output.x() * maxValPerDim / (float)imSize.x());
-  output.y() = std::floor(output.y() * maxValPerDim / (float)imSize.y());
-  output.z() = std::floor(maxValPerDim * utils::constrainAngle180(output.z()) / 180.0f);
-
-  // clamp, maxDim * 10 is absolute max. limit :P
-  // output.x() = clamp(output.x(), -(float)maxValPerDim * 10, (float)maxValPerDim * 10);
-  // output.y() = clamp(output.x(), -(float)maxValPerDim * 10, (float)maxValPerDim * 10);
-  //abs(outOrig.x()) > imSize.x() || abs(outOrig.y()) > imSize.y() ||
-  if (abs(outOrig.x()) > imSize.x() || abs(outOrig.y()) > imSize.y() || abs(utils::constrainAngle180(outOrig.z())) > 90)
+  if (abs(output.x()) > imSize.x() || abs(output.y()) > imSize.y() ||
+      abs(utils::constrainAngle180(output.z())) > 90)
   {
     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
     std::cout << "dimension Limit violation!!! j->" << joint << " " << sf << " " << sensorName;
@@ -266,9 +227,26 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
     std::cout << camMat.camera2ground.posV << "\n"
               << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
     std::cout << " stat " << status << "\n\n"
-              << outOrig << std::endl;
+              << output << std::endl;
   }
-  observed = true;
+
+  // if status is <= 0, then the solver failed or skipped = no observations.
+  // or if norm of output is smaller than epsilon, = no obs.
+  observed = (status > 0 && output.norm() > __FLT_EPSILON__);
+
+  /* constrain output +-maxValPerDim and norm(output) <= abs(maxValPerDim)
+   * 1st scale each dimension to +- maxValPerDim
+   * 2nd Normalize and multiply by 1000 :P
+   * This is written in a strange way, to reduce loosing too much precision.
+   */
+  // output.x() = std::floor(output.x() * maxValPerDim / (float)imSize.x());
+  // output.y() = std::floor(output.y() * maxValPerDim / (float)imSize.y());
+  output.z() = std::floor(maxValPerDim * utils::constrainAngle180(output.z()) / 180.0f);
+
+  // clamp, maxDim * 10 is absolute max. limit :P
+  output.x() = clamp(output.x(), -(float)maxValPerDim, (float)maxValPerDim);
+  output.y() = clamp(output.y(), -(float)maxValPerDim, (float)maxValPerDim);
+
   return output;
 }
 
@@ -283,34 +261,30 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
   }
 
   PoseSensitivity<Vector3f> output(sensorName);
-  // KinematicMatrix supportFoot2Torso = NaoSensorDataProvider::getSupportFootMatrix(jointAngles, sf);
 
   /// Make the basline set of points.
   updateState(jointAngles, sf, sensorName);
   bool success;
   std::vector<Vector2f> gridSet = getGroundGrid(success);
-  // std::cout << " success? " << success << std::endl;
+
   if (success)
   {
     std::vector<std::pair<bool, Vector2f>> baseLinePointSet = robotToPixelMulti(gridSet);
-    // std::vector<Vector2f> grid;
-    // // Use only gridPoints that made into camera plane.
-    // for (size_t i = 0; i < gridSet.size(); i++)
-    // {
-    //   if (baseLinePointSet[i].first)
-    //   {
-    //     grid.push_back(gridSet[i]);
-    //   }
-    // }
+    std::vector<Vector2f> baseLinePoints;
+    std::vector<Vector2f> grid;
+    // Use only gridPoints that made into camera plane.
+    for (size_t i = 0; i < gridSet.size(); i++)
+    {
+      if (baseLinePointSet[i].first)
+      {
+        grid.push_back(gridSet[i]);
+        baseLinePoints.push_back(baseLinePointSet[i].second);
+      }
+    }
     // const std::vector<Vector2f> baseLinePoints = filterRobot2PixelSets(baseLinePointSet);
-    // baseLinePointSet.clear();
-    // gridSet.clear();
+    baseLinePointSet.clear();
+    gridSet.clear();
 
-    /**
-     * TODO There is one major issue; The sensitivity is *ignored* based on which support foot!!!
-     * ie: if double or left sup, and right leg joints are tweaked, that's completely ignored..
-     * This only matters for double foot..
-     */
     bool observed = false;
     if (sf == SUPPORT_FOOT::SF_LEFT || sf == SUPPORT_FOOT::SF_DOUBLE)
     {
@@ -319,8 +293,8 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
         // Same as..
         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
         // output.setSensitivity(i, p, observed);
-        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, gridSet,
-                                                               std::vector<Vector2f>(), sensorName, observed);
+        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid,
+                                                               baseLinePoints, sensorName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }
@@ -329,8 +303,8 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
       for (const auto &i : Sensor::CAM_OBS_R_SUP_FOOT)
       {
         // temp fix in injecting support foot as right always.
-        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, gridSet,
-                                                               std::vector<Vector2f>(), sensorName, observed);
+        Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid,
+                                                               baseLinePoints, sensorName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }

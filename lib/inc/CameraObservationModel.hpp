@@ -41,6 +41,47 @@ private:
   // const Vector3f dimensionMax;
   CameraMatrix camMat;
 
+  /**
+   * @brief cameraToPixel transforms camera coordinates to pixel coordinates
+   * @param cameraCoordinates the camera coordinates
+   * @param pixel_coordinates the result is stored here
+   * @return whether the transformation was successful
+   */
+  bool cameraToPixelFlt(const Vector3f &cameraCoordinates, Vector2f &pixel_coordinates) const
+  {
+    // A position behind the camera cannot be transformed to pixel coordinates as it does not
+    // intersect the image plane.
+    if (cameraCoordinates.x() <= 0.f)
+    {
+      return false;
+    }
+    // pinhole projection
+    pixel_coordinates.x() = camMat.cc.x() - camMat.fc.x() * cameraCoordinates.y() / cameraCoordinates.x();
+    pixel_coordinates.y() = camMat.cc.y() - camMat.fc.y() * cameraCoordinates.z() / cameraCoordinates.x();
+    return true;
+  }
+
+  /**
+   * @brief robotToPixel calculates the pixel coordinates of a given point (on ground) in robot
+   * coordinates
+   * @param robotCoordinates coordinates in the plane
+   * @param pixel_coordinates the result is stored here
+   * @return whether the transformation was successful
+   */
+  bool robotToPixelFlt(const Vector2f &robotCoordinates, Vector2f &pixel_coordinates,
+                       const KinematicMatrix &cam2ground_inv) const
+  {
+    // calculate camera coordinates from robot coordinates
+    Vector3f cameraCoordinates(cam2ground_inv *
+                               Vector3f(robotCoordinates.x(), robotCoordinates.y(), 0));
+    // do pinhole projection
+    return cameraToPixelFlt(cameraCoordinates, pixel_coordinates);
+  }
+  bool robotToPixelFlt(const Vector2f &robotCoordinates, Vector2f &pixel_coordinates) const
+  {
+    return robotToPixelFlt(robotCoordinates, pixel_coordinates, camMat.camera2groundInv);
+  }
+
 public:
   ~CameraObservationModel() {}
   // friend class ObservationSensitivity;
