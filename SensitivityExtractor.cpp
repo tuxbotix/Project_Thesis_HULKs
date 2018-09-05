@@ -33,9 +33,11 @@
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
-void sensitivityTesterFunc(ObservationSensitivity &obs, std::istream &inputStream, std::ostream &outputStream,
+void sensitivityTesterFunc(const ObservationModelConfig cfg, std::istream &inputStream, std::ostream &outputStream,
                            std::atomic<size_t> &iterations)
 {
+    auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
+
     NaoPoseAndRawAngles<float> poseAndAngles;
     while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
     {
@@ -114,8 +116,11 @@ int main(int argc, char **argv)
         std::vector<std::thread> threadList(usableThreads);
         std::vector<std::atomic<size_t>> iterCount(usableThreads);
         std::vector<std::fstream> outputFileList(usableThreads);
-        std::vector<ObservationSensitivity> obsSensitivities =
-            ObservationSensitivityProvider::getSensitivityProviders(usableThreads, imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
+
+        const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05};
+
+        // std::vector<ObservationSensitivity> obsSensitivities =
+        //     ObservationSensitivityProvider::getSensitivityProviders(usableThreads, cfg);
         // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < usableThreads; i++)
         {
@@ -126,9 +131,11 @@ int main(int argc, char **argv)
                 break;
             }
 
-            threadList[i] = std::thread(sensitivityTesterFunc, std::ref(obsSensitivities[i]), std::ref(inputPoseAndJointStreams[i]),
+            threadList[i] = std::thread(sensitivityTesterFunc, cfg, std::ref(inputPoseAndJointStreams[i]),
                                         std::ref(outputFileList[i]), std::ref(iterCount[i]));
         }
+
+        /// Progress display
 #if ENABLE_PROGRESS
         bool continueTicker = true;
         std::thread tTick = std::thread([&]() {
@@ -156,7 +163,7 @@ int main(int argc, char **argv)
                     }
                 }
                 elapsed += interval;
-                std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
+                std::this_thread::sleep_for(std::chrono::seconds(interval));
             }
         });
 #endif
@@ -175,9 +182,9 @@ int main(int argc, char **argv)
             tTick.join();
         }
 #endif
+#if DO_COMMIT
         /// Write the remaining buffers to file
         std::cout << "flushing all " << std::endl;
-#if DO_COMMIT
         for (size_t i = 0; i < usableThreads; i++)
         {
             outputFileList[i].close();

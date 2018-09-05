@@ -26,7 +26,7 @@
 
 typedef std::vector<std::pair<int, std::vector<float>>> JointAndPoints;
 
-void weirdPointTest(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov)
+void weirdPointTest(const ObservationModelConfig cfg)
 {
     // joint 12, sensor 1
     JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(12);
@@ -37,8 +37,8 @@ void weirdPointTest(const Vector2i &imSize, const Vector2f &fc, const Vector2f &
                                       4.345030e-02, 1.251520e-01, -1.250350e+00, 9.796810e-01, 3.451760e-01, -1.220670e-01, 1.570800e+00,
                                       -2.000000e-01, -1.570800e+00, 8.726650e-03, 0.000000e+00, 0.000000e+00}; // stat 1;
 
-    CameraObservationModel cObs(imSize, fc, cc, fov,
-                                1000, 100, 0.05);
+    CameraObservationModel cObs(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
+                                cfg.dimensionExtremum, cfg.maxGridPointsPerSide, cfg.gridSpacing);
     SUPPORT_FOOT sf = SUPPORT_FOOT::SF_LEFT;
 
     cObs.updateState(jointAngles, sf, sensorName);
@@ -63,7 +63,7 @@ void weirdPointTest(const Vector2i &imSize, const Vector2f &fc, const Vector2f &
     }
 }
 
-void weirdPointTest2(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov)
+void weirdPointTest2(const ObservationModelConfig cfg)
 {
     /*
     dimension Limit violation!!! j->11 0 0.628319 0.244346 1.5708 0.2 1.5708 -0.00872665 0 0 0.0197297 0.530006 -0.18356 0.940766 -0.713433 -0.373344 0.0197297 0.231953 -0.15904 0.857232 -0.661697 -0.0743088 1.5708 -0.2 -1.5708 0.00872665 0 0 stat 1
@@ -83,8 +83,8 @@ void weirdPointTest2(const Vector2i &imSize, const Vector2f &fc, const Vector2f 
         return;
     }
 
-    CameraObservationModel cObs(imSize, fc, cc, fov,
-                                1000, 100, 0.05);
+    CameraObservationModel cObs(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
+                                cfg.dimensionExtremum, cfg.maxGridPointsPerSide, cfg.gridSpacing);
     SUPPORT_FOOT sf = SUPPORT_FOOT::SF_LEFT;
 
     std::vector<PoseSensitivity<Vector3f>> senses = cObs.getSensitivities(jointAngles, sf, {sensorName});
@@ -105,10 +105,9 @@ void weirdPointTest2(const Vector2i &imSize, const Vector2f &fc, const Vector2f 
     }
 }
 
-void weirdPointTest2ObsProvider(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov)
+void weirdPointTest2ObsProvider(const ObservationModelConfig cfg)
 {
-    auto obs = ObservationSensitivityProvider::getSensitivityProvider(imSize, fc, cc, fov,
-                                                                      1000, 100, 0.05);
+    auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
     JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(9);
     SENSOR_NAME sensorName = static_cast<SENSOR_NAME>(1);
 
@@ -191,12 +190,14 @@ int main(int argc, char *argv[])
     camMat.cc.y() *= imSize.y();
     camMat.fov = fov;
 
+    const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, 25, 0.05};
+
     // weirdPointTest(imSize, fc, cc, fov);
 
-    weirdPointTest2(imSize, fc, cc, fov);
+    weirdPointTest2(cfg);
     std::cout << "end test Cam Obs" << std::endl;
 
-    weirdPointTest2ObsProvider(imSize, fc, cc, fov);
+    weirdPointTest2ObsProvider(cfg);
 
     std::cout << "end test obs provider" << std::endl;
     // std::string line;

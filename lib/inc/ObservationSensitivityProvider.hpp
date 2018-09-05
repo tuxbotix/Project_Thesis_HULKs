@@ -16,7 +16,7 @@
  */
 class ObservationSensitivity
 {
-// public:
+  // public:
 private:
   // TODO make this public later
   // class CameraObservationModel;
@@ -54,6 +54,17 @@ public:
   }
 };
 
+struct ObservationModelConfig
+{
+  Vector2i imSize;
+  Vector2f fc;
+  Vector2f cc;
+  Vector2f fov;
+  uint64_t dimensionExtremum;
+  size_t maxGridPointsPerSide;
+  float gridSpacing;
+};
+
 class ObservationSensitivityProvider
 {
 public:
@@ -62,23 +73,19 @@ public:
      * @param threadCount allows automatic initializing of enough camera matrices..
      */
 
-  static std::vector<ObservationSensitivity> getSensitivityProviders(const size_t &threadCount, const Vector2i &imSize,
-                                                                     const Vector2f &fc, const Vector2f &cc,
-                                                                     const Vector2f &fov,
-                                                                     const uint64_t dimensionExtremum,
-                                                                     const size_t &maxGridPointsPerSide, const float &gridSpacing)
+  static std::vector<ObservationSensitivity> getSensitivityProviders(const size_t threadCount, const ObservationModelConfig cfg)
   {
 
-    return std::vector<ObservationSensitivity>(threadCount, ObservationSensitivity(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing));
+    return std::vector<ObservationSensitivity>(threadCount, ObservationSensitivity(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
+                                                                                   cfg.dimensionExtremum, cfg.maxGridPointsPerSide,
+                                                                                   cfg.gridSpacing));
   }
 
-  static ObservationSensitivity getSensitivityProvider(const Vector2i imSize,
-                                                       const Vector2f fc, const Vector2f cc,
-                                                       const Vector2f fov,
-                                                       const uint64_t dimensionExtremum,
-                                                       const size_t maxGridPointsPerSide, const float gridSpacing)
+  static ObservationSensitivity getSensitivityProvider(const ObservationModelConfig cfg)
   {
-    return ObservationSensitivity(imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide, gridSpacing);
+    return ObservationSensitivity(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
+                                  cfg.dimensionExtremum, cfg.maxGridPointsPerSide,
+                                  cfg.gridSpacing);
   }
 };
 

@@ -52,15 +52,16 @@ int main(int argc, char *argv[])
     std::cout << (20 * TO_RAD) << std::endl;
     Eigen::Rotation2D<float> rot2(60 * TO_RAD);
     Eigen::Translation<float, 2> trans(500, -4500);
-
+    Eigen::UniformScaling<float> scale(1.8);
     std::string line;
 
     size_t iters = 0;
-    while (getline(inFile, line) && iters < 20)
+    while (getline(inFile, line))
     {
         std::istringstream ss(line);
         Eigen::Vector2f orig;
         Eigen::Vector2f transformed;
+
         ss >> orig.x() >> orig.y();
 
         transformed = trans * rot2 * orig;

@@ -96,13 +96,12 @@ bool poseStreamingTest()
     return success;
 }
 
-bool camObserverIterTest(const Vector2f &fc, const Vector2f &cc, const Vector2f &fov, const Vector2i &imSize,
+bool camObserverIterTest(const ObservationModelConfig cfg,
                          std::vector<float> joints, SUPPORT_FOOT supFoot)
 {
     size_t maxGridPointsPerSide = 5;
 
-    ObservationSensitivity obs = ObservationSensitivityProvider::getSensitivityProvider(
-        imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05);
+    ObservationSensitivity obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
 
     std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
         obs.getSensitivities(joints, supFoot, {SENSOR_NAME::BOTTOM_CAMERA});
@@ -167,7 +166,9 @@ int main(int argc, char **argv)
     camMat.fov = fov;
 
     Vector2f point(0.4, 0.1);
-    Vector2i pixPoint(0,0);
+    Vector2i pixPoint(0, 0);
+
+    const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, 5, 0.05};
 
     std::cout << camMat.robotToPixel(point, pixPoint) << " " << pixPoint << std::endl;
 
@@ -187,7 +188,7 @@ int main(int argc, char **argv)
     std::vector<float> jointAngles(JOINTS::JOINT::JOINTS_MAX, 0.0);
     jointAngles[JOINTS::JOINT::HEAD_PITCH] = 20 * TO_RAD;
 
-    camObserverIterTest(fc, cc, fov, imSize, std::vector<float>(jointAngles), supportFoot);
+    camObserverIterTest(cfg, std::vector<float>(jointAngles), supportFoot);
 
     return 0;
 }
