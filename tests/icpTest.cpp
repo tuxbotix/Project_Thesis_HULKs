@@ -65,8 +65,8 @@ int main(int argc, char *argv[])
         ss >> orig.x() >> orig.y();
 
         transformed = trans * rot2 * orig;
-        values.emplace_back(orig, transformed);
-
+        values.emplace_back(Vector2f(std::floor(orig.x()), std::floor(orig.y())),
+                            Vector2f(std::floor(transformed.x()), std::floor(transformed.y())));
         iters++;
     }
 
