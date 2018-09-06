@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <numeric>
 #include <limits>
+#include <cmath>
 
 #include <Data/CameraMatrix.hpp>
 #include <Modules/NaoProvider.h>
@@ -27,7 +28,7 @@
 #define WRITE_PARALLEL 1
 #define DEBUG_FILE_COMMIT 1
 #define DEBUG_IN_THREAD 1
-#define ENABLE_PROGRESS 0
+#define ENABLE_PROGRESS 1
 
 #include "utils.hpp"
 
@@ -40,8 +41,8 @@ typedef std::array<float, SENSOR_COUNT> SensorWeights;
 typedef std::pair<int, std::string> SensMagAndPoseId; // Sensor Name should be maintained externally.
 typedef std::pair<double, std::string> PoseCost;      // Sensor Name should be maintained externally.
 
-static const size_t maxPeakElemsPerList = 10E6;
-static const size_t maxPeakElemsPerListSortTrigger = 10E8;
+static const size_t maxPeakElemsPerList = 10E15;
+static const size_t maxPeakElemsPerListSortTrigger = 10E18;
 
 void sortDescAndTrimPoseCostVector(std::vector<PoseCost> &vec, const size_t &elemLimit)
 {
@@ -73,7 +74,12 @@ double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
                           const float &observableJointCountWeight)
 {
     double accum = observableJointCountWeight * p.getObservableCount();
-
+    if (std::isnan(accum))
+    {
+        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+        std::cout << p.getId() << " is NAN 0 stage" << std::endl;
+        return std::numeric_limits<double>::max();
+    }
     for (int j = 0; j < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); j++)
     {
         const JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(j);
@@ -88,8 +94,14 @@ double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
         p.getSensitivity(joint, val, obs);
         // stage 1
         accum += wMag * val.norm();
+        if (std::isnan(val.norm()) || std::isnan(accum))
+        {
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+            std::cout << p.getId() << " is NAN 1st stage joint: " << j << " val " << val.norm() << std::endl;
+            continue;
+        }
 
-        val.normalize();
+        double v1Norm = val.norm();
         for (int k = 0; k < static_cast<int>(JOINTS::JOINT::JOINTS_MAX); k++)
         {
             const JOINTS::JOINT innerJoint = static_cast<JOINTS::JOINT>(k);
@@ -102,9 +114,25 @@ double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
             bool obs2;
             p.getSensitivity(innerJoint, val2, obs2);
 
-            val2.normalize();
+            double v2Norm = val2.norm();
             // second stage
-            accum += wOrtho * std::fabs(acos(val.dot(val2)) / TO_RAD);
+            double dot = std::fabs((double)val.dot(val2) / (v1Norm * v2Norm));
+            // We trust in the dot product :P
+            if (dot > 1.0)
+            {
+                dot = 1.0;
+            }
+            else if (dot < -1.0)
+            {
+                dot = -1.0;
+            }
+            accum += wOrtho * std::fabs(std::acos(dot) / TO_RAD);
+            if (dot > (double)1.0 || dot < (double)-1.0 || std::isnan(dot) || std::isnan(accum))
+            {
+                std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+                std::cout << p.getId() << " is NAN 2nd stage [domain err] " << j << " " << k << " dot " << dot << " aco " << std::acos(dot) << " wOrtho " << wOrtho << " fabs " << std::fabs(std::acos(dot) / TO_RAD) << std::endl;
+                continue;
+            }
         }
     }
     return -accum;
@@ -165,7 +193,7 @@ void poseFilterFunc(std::istream &inputStream,
             poseCostAccum = 0; // reset the accum
             curPoseId = tempId;
             direction = curDir;
-            std::cout << "new sensor" << std::endl;
+            // std::cout << "new sensor" << std::endl;
         }
         sensorAsIndex = static_cast<int>(p.getSensorName());
 
@@ -177,7 +205,7 @@ void poseFilterFunc(std::istream &inputStream,
             observableJointCountWeight);
     }
 
-    std::cout << "finishing" << std::endl;
+    // std::cout << "finishing" << std::endl;
 
     // sort ASC by cost and trim
     sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
@@ -304,11 +332,21 @@ int main(int argc, char **argv)
         /// Write the remaining buffers to file
         std::cout << "flushing all " << std::endl;
 #if DO_COMMIT
-        for (size_t t = 0; t < usableThreads; t++) //per thread
+        // first join all
+        for (size_t t = 1; t < usableThreads; t++) //per thread
         {
-            for (const auto &i : poseCostListList[t])
-                outputFile << "poseCost " << i.second << " " << i.first << std::endl;
+            poseCostListList[0].insert(poseCostListList[0].end(),
+                                       std::make_move_iterator(poseCostListList[t].begin()),
+                                       std::make_move_iterator(poseCostListList[t].end()));
         }
+        // sort the results
+        std::sort(poseCostListList[0].begin(),
+                  poseCostListList[0].end());
+        for (const auto &i : poseCostListList[0])
+        {
+            outputFile << "poseCost " << i.second << " " << i.first << std::endl;
+        }
+
         // outputFileList[t].close();
         outputFile.close();
 #endif
