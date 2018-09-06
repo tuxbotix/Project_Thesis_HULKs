@@ -117,7 +117,7 @@ int main(int argc, char **argv)
         std::vector<std::atomic<size_t>> iterCount(usableThreads);
         std::vector<std::fstream> outputFileList(usableThreads);
 
-        const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.05};
+        const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.08};
 
         // std::vector<ObservationSensitivity> obsSensitivities =
         //     ObservationSensitivityProvider::getSensitivityProviders(usableThreads, cfg);
