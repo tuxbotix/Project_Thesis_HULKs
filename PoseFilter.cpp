@@ -214,9 +214,16 @@ void poseFilterFunc(std::istream &inputStream,
 int main(int argc, char **argv)
 {
     std::string inFileName((argc > 1 ? argv[1] : "out"));
-    std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
+    std::string favouredJoint((argc > 2 ? argv[2] : "-1"));
+    std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
 
-    const std::string outFileName(inFileName + "_PoseFilterOut");
+    int jointNum = std::stoi(favouredJoint);
+    if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
+    {
+        jointNum = -1;
+    }
+
+    const std::string outFileName(inFileName + "_PoseFilterOut_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
     TUHH tuhhInstance(confRoot);
 
@@ -259,8 +266,12 @@ int main(int argc, char **argv)
         // TODO change this as needed.
         JointWeights jointWeights;
         jointWeights.fill(1);
+        if (jointNum > 0 && jointNum < static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
+        {
+            jointWeights[jointNum] = 4;
+        }
 
-        const float wOrthoGeneric = 1;
+        const float wOrthoGeneric = 3;
         const float observableJointCountWeight = 1;
 
         for (unsigned int i = 0; i < usableThreads; i++)

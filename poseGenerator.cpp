@@ -50,15 +50,17 @@ std::atomic<size_t> poseCount(0);
 /**
  * Called at end of each update of joint angle
  */
-inline bool poseCallback(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
+inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
 {
     /// Where would the com be after setting these angles?
     KinematicMatrix com2torso = KinematicMatrix(Com::getCom(poseByAngles));
 
-    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(rawPoseT(&poseByAngles[JOINTS::L_HIP_YAW_PITCH], &poseByAngles[JOINTS::L_ANKLE_ROLL]));
-    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(rawPoseT(&poseByAngles[JOINTS::R_HIP_YAW_PITCH], &poseByAngles[JOINTS::R_ANKLE_ROLL]));
-
-    bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso, supFoot);
+    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(rawPoseT(poseByAngles.begin() + JOINTS::L_HIP_YAW_PITCH,
+                                                                       poseByAngles.begin() + JOINTS::L_ANKLE_ROLL + 1));
+    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(rawPoseT(poseByAngles.begin() + JOINTS::R_HIP_YAW_PITCH,
+                                                                       poseByAngles.begin() + JOINTS::R_ANKLE_ROLL + 1));
+    float com2CentroidDist = 0;
+    bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso, com2CentroidDist, supFoot);
     return isStable;
 }
 
@@ -245,7 +247,7 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                         {
                             jointAngles[JOINTS::HEAD_YAW] = headYawPitchList[iter].yaw * TO_RAD;
                             jointAngles[JOINTS::HEAD_PITCH] = headYawPitchList[iter].pitch * TO_RAD;
-                            if (poseCallback(jointAngles, supFoot, supportPoly))
+                            if (poseValidator(jointAngles, supFoot, supportPoly))
                             {
                                 poseCount++;
 #if DO_COMMIT

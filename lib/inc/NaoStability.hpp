@@ -13,6 +13,7 @@ class NaoFoot
     Vector3f footBR;
     Vector3f footBL;
     Vector3f footTR;
+    Vector3f centroid;
 
   public:
     NaoFoot(Vector3f tl, Vector3f tr, Vector3f bl, Vector3f br) : footTL(tl),
@@ -23,7 +24,8 @@ class NaoFoot
     NaoFoot(Vector3f tl, Vector3f br) : footTL(tl),
                                         footBR(br),
                                         footBL(Vector3f(br.x(), tl.y(), tl.z())),
-                                        footTR(Vector3f(tl.x(), br.y(), br.z())) {}
+                                        footTR(Vector3f(tl.x(), br.y(), br.z())),
+                                        centroid((footTL + footBR + footBL + footTR) / 4) {}
 
     const Vector3f tl()
     {
@@ -54,8 +56,9 @@ class NaoFoot
     {
         return NaoFoot(transform * footTL, transform * footTR, transform * footBL, transform * footBR);
     }
-    inline bool isWithinFoot(float &x, float &y)
+    inline bool isWithinFoot(float &x, float &y, float &comDistToSupPolyCentroid)
     {
+        comDistToSupPolyCentroid = (centroid - Vector3f(x, y, 0)).norm();
         return (x < footTL.x() && x > footBR.x() && y < footTL.y() && y > footBR.y());
     }
 };
@@ -72,7 +75,8 @@ class SupportPolygon
     }
 
   private:
-    inline bool isComWithinSupportDoubleFoot(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com) const
+    inline bool isComWithinSupportDoubleFoot(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose,
+                                             const KinematicMatrix &com, float &comDistToSupPolyCentroid) const
     {
         KinematicMatrix rFoot2LeftFoot = lFootPose.invert() * rFootPose;
         bool leftFootForward = rFoot2LeftFoot.posV.x() < 0;
@@ -87,6 +91,8 @@ class SupportPolygon
 
         if (leftFootForward)
         {
+            Vector3f centroid = (lFoot.tl() + lFoot.bl() + lFoot.tr() + rFootInLFoot.bl() + rFootInLFoot.tr() + rFootInLFoot.br()) / 6;
+            comDistToSupPolyCentroid = (centroid - Vector3f(comX, comY, 0)).norm();
             // if in the bounding box
             if (lFoot.tl().x() > comX && rFootInLFoot.br().x() < comX &&
                 lFoot.tl().y() > comY && rFootInLFoot.br().y() < comY)
@@ -118,6 +124,8 @@ class SupportPolygon
         }
         else // right foot forward
         {
+            Vector3f centroid = (lFoot.tl() + lFoot.bl() + lFoot.br() + rFootInLFoot.tl() + rFootInLFoot.tr() + rFootInLFoot.br()) / 6;
+            comDistToSupPolyCentroid = (centroid - Vector3f(comX, comY, 0)).norm();
             // if in the bounding box
             if (rFootInLFoot.tr().x() > comX && lFoot.bl().x() < comX &&
                 rFootInLFoot.tr().y() < comY && lFoot.bl().y() > comY)
@@ -158,7 +166,8 @@ class SupportPolygon
      * @return if COM within support polygon
      * 
      */
-    inline bool isComWithinSupport(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com, const SUPPORT_FOOT &supFoot = SUPPORT_FOOT::SF_DOUBLE) const
+    inline bool isComWithinSupport(const KinematicMatrix &lFootPose, const KinematicMatrix &rFootPose, const KinematicMatrix &com,
+                                   float &comDistToSupPolyCentroid, const SUPPORT_FOOT &supFoot = SUPPORT_FOOT::SF_DOUBLE) const
     {
         if (supFoot == SUPPORT_FOOT::SF_LEFT)
         {
@@ -166,7 +175,7 @@ class SupportPolygon
             NaoFoot supFoot = leftFoot;
             float comX = comInLeftFoot.posV.x();
             float comY = comInLeftFoot.posV.y();
-            return supFoot.isWithinFoot(comX, comY);
+            return supFoot.isWithinFoot(comX, comY, comDistToSupPolyCentroid);
         }
         else if (supFoot == SUPPORT_FOOT::SF_RIGHT)
         {
@@ -174,14 +183,15 @@ class SupportPolygon
             NaoFoot supFoot = rightFoot;
             float comX = comInRight.posV.x();
             float comY = comInRight.posV.y();
-            return supFoot.isWithinFoot(comX, comY);
+            return supFoot.isWithinFoot(comX, comY, comDistToSupPolyCentroid);
         }
         else if (supFoot == SUPPORT_FOOT::SF_DOUBLE)
         {
-            return isComWithinSupportDoubleFoot(lFootPose, rFootPose, com);
+            return isComWithinSupportDoubleFoot(lFootPose, rFootPose, com, comDistToSupPolyCentroid);
         }
         else
         {
+            comDistToSupPolyCentroid = NAN;
             return false;
         }
     }

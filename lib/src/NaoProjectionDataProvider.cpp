@@ -33,11 +33,13 @@ KinematicMatrix NaoSensorDataProvider::getSupportFootMatrix(const std::vector<fl
     }
     if (sf == SUPPORT_FOOT::SF_RIGHT)
     {
-        supFoot2Torso = ForwardKinematics::getRFoot(rawPoseT(angles.begin() + JOINTS::R_HIP_YAW_PITCH, angles.begin() + JOINTS::R_ANKLE_ROLL + 1));
+        supFoot2Torso = ForwardKinematics::getRFoot(rawPoseT(angles.begin() + JOINTS::R_HIP_YAW_PITCH,
+                                                             angles.begin() + JOINTS::R_ANKLE_ROLL + 1));
     }
     else
     {
-        supFoot2Torso = ForwardKinematics::getLFoot(rawPoseT(angles.begin() + JOINTS::L_HIP_YAW_PITCH, angles.begin() + JOINTS::L_ANKLE_ROLL + 1));
+        supFoot2Torso = ForwardKinematics::getLFoot(rawPoseT(angles.begin() + JOINTS::L_HIP_YAW_PITCH,
+                                                             angles.begin() + JOINTS::L_ANKLE_ROLL + 1));
     }
 
     return supFoot2Torso;

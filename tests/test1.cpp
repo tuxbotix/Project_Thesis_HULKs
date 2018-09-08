@@ -48,10 +48,12 @@ inline bool poseCallback(oldPoseT &pose)
     /// Where would the com be after setting these angles?
     KinematicMatrix com2torso = KinematicMatrix(Com::getCom(pose));
 
-    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(oldPoseT(&pose[JOINTS::L_HIP_YAW_PITCH], &pose[JOINTS::L_ANKLE_ROLL]));
-    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(oldPoseT(&pose[JOINTS::R_HIP_YAW_PITCH], &pose[JOINTS::R_ANKLE_ROLL]));
-
-    bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso);
+    KinematicMatrix lFoot2torso = ForwardKinematics::getLFoot(oldPoseT(pose.begin() + JOINTS::L_HIP_YAW_PITCH,
+                                                                       pose.begin() + JOINTS::L_ANKLE_ROLL + 1));
+    KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(oldPoseT(pose.begin() + JOINTS::R_HIP_YAW_PITCH,
+                                                                       pose.begin() + JOINTS::R_ANKLE_ROLL + 1));
+    float com2CentroidDist = 0;
+    bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso, com2CentroidDist);
     return isStable;
 }
 
