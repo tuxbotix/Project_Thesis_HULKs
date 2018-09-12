@@ -3,6 +3,7 @@
 #include <thread>
 #include <algorithm>
 #include <numeric>
+#include <cstdio>
 
 #include <Data/CameraMatrix.hpp>
 #include <Modules/NaoProvider.h>
@@ -50,7 +51,7 @@ std::atomic<size_t> poseCount(0);
 /**
  * Called at end of each update of joint angle
  */
-inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot, const SupportPolygon &supportPoly)
+inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot, float &com2CentroidDist, const SupportPolygon &supportPoly)
 {
     /// Where would the com be after setting these angles?
     KinematicMatrix com2torso = KinematicMatrix(Com::getCom(poseByAngles));
@@ -59,7 +60,7 @@ inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot,
                                                                        poseByAngles.begin() + JOINTS::L_ANKLE_ROLL + 1));
     KinematicMatrix rFoot2torso = ForwardKinematics::getRFoot(rawPoseT(poseByAngles.begin() + JOINTS::R_HIP_YAW_PITCH,
                                                                        poseByAngles.begin() + JOINTS::R_ANKLE_ROLL + 1));
-    float com2CentroidDist = 0;
+    com2CentroidDist = 0;
     bool isStable = supportPoly.isComWithinSupport(lFoot2torso, rFoot2torso, com2torso, com2CentroidDist, supFoot);
     return isStable;
 }
@@ -113,7 +114,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     {
         minLim = -0.1;
         maxLim = 0.1;
-        increment = 0.02; // 2cm increment - 11
+        increment = 0.015; // 2cm increment - 11
         break;
     }
     case PARAMS::P_TORSO_POS_Z:
@@ -121,7 +122,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     {
         minLim = 0.2;
         maxLim = 0.45;
-        increment = 0.025; // 2cm increment - 11
+        increment = 0.02; // 2cm increment - 11
         break;
     }
     case PARAMS::P_TORSO_ROT_X:
@@ -143,7 +144,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     {
         minLim = -0.10;
         maxLim = 0.10;
-        increment = 0.02; // 2cm increment
+        increment = 0.015; // 2cm increment
         break;
     }
     // keep origin of other foot always equal or upper than support foot.
@@ -159,7 +160,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
             minLim = 0.0;
             maxLim = 0.1;
         }
-        increment = 0.04; // 2cm increment
+        increment = 0.02; // 2cm increment
         break;
     }
     case PARAMS::P_O_FOOT_POS_Y:
@@ -174,7 +175,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
             minLim = -0.15;
             maxLim = 0; //0.0;
         }
-        increment = 0.02; // 2cm increment
+        increment = 0.015; // 2cm increment
         break;
     }
     case PARAMS::P_O_FOOT_ROT_X:
@@ -247,12 +248,13 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                         {
                             jointAngles[JOINTS::HEAD_YAW] = headYawPitchList[iter].yaw * TO_RAD;
                             jointAngles[JOINTS::HEAD_PITCH] = headYawPitchList[iter].pitch * TO_RAD;
-                            if (poseValidator(jointAngles, supFoot, supportPoly))
+                            float com2CentroidDist = 0;
+                            if (poseValidator(jointAngles, supFoot, com2CentroidDist, supportPoly))
                             {
                                 poseCount++;
 #if DO_COMMIT
-                                poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, headYawPitchList[iter], torsoPos, torsoRot,
-                                                            OFootPos, OFootRot),
+                                poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, com2CentroidDist, headYawPitchList[iter],
+                                                            torsoPos, torsoRot, OFootPos, OFootRot),
                                                       jointAngles);
                                 if (poseList.size() > BUFFER_SIZE)
                                 {
@@ -378,7 +380,7 @@ int main(int argc, char **argv)
         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
-            poseAndAnglesFiles[i] = std::fstream((outFileName + "_" + std::to_string(i) + ".txt"), std::ios::out);
+            poseAndAnglesFiles[i] = std::fstream((outFileName + "_TempGeneratedPoses_" + std::to_string(i) + ".txt"), std::ios::out);
 
             if (!poseAndAnglesFiles[i].is_open())
             {
@@ -451,13 +453,58 @@ int main(int argc, char **argv)
         }
 #endif
         /// Write the remaining buffers to file
-        std::cout << "flushing all " << std::endl;
+
 #if DO_COMMIT
+        std::cout << "flushing all " << std::endl;
         for (size_t i = 0; i < THREADS_USED; i++)
         {
             utils::commitToStream<NaoPoseAndRawAngles<dataT>>(poseAndAnglesListList[i], poseAndAnglesFiles[i]);
             poseAndAnglesFiles[i].close();
         }
+        std::cout << "Redistributing data" << std::endl;
+        // redistribute the written lines.
+        {
+            const size_t linesPerFile = poseCount / (size_t)THREADS_USED;
+            size_t outFileNum = 0;
+            std::fstream inStream;
+            std::fstream outStream = std::fstream((outFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"), std::ios::out);
+            std::cout << "Write to file: " << outFileNum << std::endl;
+            size_t counter;
+            size_t totalCounter;
+
+            for (size_t i = 0; i < THREADS_USED; i++)
+            {
+                std::cout << "Read file: " << i << std::endl;
+                inStream.open((outFileName + "_TempGeneratedPoses_" + std::to_string(i) + ".txt"), std::ios::in);
+                if (!inStream)
+                {
+                    continue;
+                }
+                std::string s;
+                while (std::getline(inStream, s))
+                {
+                    outStream << s;
+                    counter++;
+                    totalCounter++;
+                    if (counter > linesPerFile && (outFileNum + 1) < THREADS_USED) // if last file, keep appending to the same file.
+                    {
+                        outStream.close();
+                        outStream.clear();
+                        std::cout << "Finished writing to file: " << outFileNum << " written: " << counter << std::endl;
+                        counter = 0;
+                        outFileNum++;
+                        std::cout << "Open write to file: " << outFileNum << std::endl;
+                        outStream.open((outFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"), std::ios::out);
+                    }
+                }
+                inStream.close();
+                inStream.clear();
+                // deleting the temp file.
+                std::remove((outFileName + "_TempGeneratedPoses_" + std::to_string(i) + ".txt").c_str());
+            }
+            std::cout << "Total redistributed lines: " << totalCounter << std::endl;
+        }
+
 #endif
     }
 

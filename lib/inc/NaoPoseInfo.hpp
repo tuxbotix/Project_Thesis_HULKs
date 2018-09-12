@@ -286,24 +286,27 @@ private:
 public:
   std::string id;
   SUPPORT_FOOT supportFoot;
+  float com2CentroidDist;
   HeadYawPitch headYawPitch;
   Vector3<T> torsoPosV;
   Vector3<T> torsoRotV;
   Vector3<T> otherFootPosV;
   Vector3<T> otherFootRotV;
 
-  inline NaoPose(const std::string &id, SUPPORT_FOOT sf, HeadYawPitch hyp, Vector3<T> tPosV, Vector3<T> tRotV, Vector3<T> OFPosV, Vector3<T> OFRotV)
-      : id(id), supportFoot(sf), headYawPitch(hyp), torsoPosV(tPosV), torsoRotV(tRotV), otherFootPosV(OFPosV),
+  inline NaoPose(const std::string &id, SUPPORT_FOOT sf, float com2CentroidDist,
+                 HeadYawPitch hyp, Vector3<T> tPosV, Vector3<T> tRotV, Vector3<T> OFPosV, Vector3<T> OFRotV)
+      : id(id), supportFoot(sf), com2CentroidDist(com2CentroidDist), headYawPitch(hyp), torsoPosV(tPosV), torsoRotV(tRotV), otherFootPosV(OFPosV),
         otherFootRotV(OFRotV)
   {
   }
-  inline NaoPose() : id("noId"), supportFoot(SUPPORT_FOOT::SF_NONE), headYawPitch(0, 0), torsoPosV(), torsoRotV(), otherFootPosV(),
-                     otherFootRotV()
+  inline NaoPose() : id("noId"), supportFoot(SUPPORT_FOOT::SF_NONE), com2CentroidDist(0), headYawPitch(0, 0),
+                     torsoPosV(), torsoRotV(), otherFootPosV(), otherFootRotV()
   {
   }
   inline friend std::ostream &operator<<(std::ostream &out, const NaoPose &p)
   {
-    out << className << " " << p.id << " " << p.supportFoot << " " << p.headYawPitch.yaw << " " << p.headYawPitch.pitch << " "
+    out << className << " " << p.id << " " << p.supportFoot << " " << p.com2CentroidDist << " "
+        << p.headYawPitch.yaw << " " << p.headYawPitch.pitch << " "
         << p.torsoPosV.x() << " " << p.torsoPosV.y() << " " << p.torsoPosV.z() << " "
         << p.torsoRotV.x() << " " << p.torsoRotV.y() << " " << p.torsoRotV.z() << " "
         << p.otherFootPosV.x() << " " << p.otherFootPosV.y() << " " << p.otherFootPosV.z()
@@ -318,7 +321,7 @@ public:
     in >> name;
     if (name.compare(className) == 0)
     {
-      in >> p.id >> i >> p.headYawPitch.yaw >> p.headYawPitch.pitch >>
+      in >> p.id >> i >> p.com2CentroidDist >> p.headYawPitch.yaw >> p.headYawPitch.pitch >>
           p.torsoPosV.x() >> p.torsoPosV.y() >> p.torsoPosV.z() >>
           p.torsoRotV.x() >> p.torsoRotV.y() >> p.torsoRotV.z() >>
           p.otherFootPosV.x() >> p.otherFootPosV.y() >> p.otherFootPosV.z() >>
@@ -415,7 +418,7 @@ typedef std::vector<Vector3<dataT>> vector3ListT;
 template <typename T>
 const std::string PoseSensitivity<T>::className = "SENS";
 template <typename T>
-const std::string NaoPose<T>::className = "NaoPose";
+const std::string NaoPose<T>::className = "NaoPoseV1"; // updated version
 
 template <typename T>
 const std::string NaoPoseAndRawAngles<T>::className = "NaoPoseAndRawAngles";

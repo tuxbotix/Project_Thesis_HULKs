@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     std::string inFileName((argc > 1 ? argv[1] : "out"));
     std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
 
-    const std::string outFileName(inFileName + "_sensOut");
+    const std::string outFileName(inFileName + "_ExtractedSensitivities");
 
     TUHH tuhhInstance(confRoot);
 
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     std::vector<std::fstream> inputPoseAndJointStreams;
     for (size_t i = 0; i < MAX_THREADS; i++)
     {
-        std::string fileName = inFileName + "_" + std::to_string(i) + ".txt";
+        std::string fileName = inFileName + "_GeneratedPoses_" + std::to_string(i) + ".txt";
         if (std::ifstream(fileName))
         {
             inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);

@@ -223,7 +223,7 @@ int main(int argc, char **argv)
         jointNum = -1;
     }
 
-    const std::string outFileName(inFileName + "_PoseFilterOut_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
+    const std::string outFileName(inFileName + "_FilteredPoses_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
     TUHH tuhhInstance(confRoot);
 
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
     std::vector<std::fstream> inputPoseAndJointStreams;
     for (size_t i = 0; i < MAX_THREADS; i++)
     {
-        std::string fileName = inFileName + "_sensOut_" + std::to_string(i) + ".txt";
+        std::string fileName = inFileName + "_ExtractedSensitivities_" + std::to_string(i) + ".txt";
         if (std::ifstream(fileName))
         {
             inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
