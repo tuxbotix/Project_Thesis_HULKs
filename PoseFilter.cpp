@@ -43,6 +43,7 @@ typedef std::pair<double, std::string> PoseCost;      // Sensor Name should be m
 
 static const size_t maxPeakElemsPerList = 10E15;
 static const size_t maxPeakElemsPerListSortTrigger = 10E18;
+static const size_t finalPoseFilteringLimit = 1000;
 
 void sortDescAndTrimPoseCostVector(std::vector<PoseCost> &vec, const size_t &elemLimit)
 {
@@ -350,12 +351,14 @@ int main(int argc, char **argv)
                                        std::make_move_iterator(poseCostListList[t].begin()),
                                        std::make_move_iterator(poseCostListList[t].end()));
         }
+        std::vector<PoseCost> &sortedPoseCostVec = poseCostListList[0];
         // sort the results
-        std::sort(poseCostListList[0].begin(),
-                  poseCostListList[0].end());
-        for (const auto &i : poseCostListList[0])
+        std::sort(sortedPoseCostVec.begin(),
+                  sortedPoseCostVec.end());
+
+        for (size_t i = 0; i < std::min(finalPoseFilteringLimit, sortedPoseCostVec.size()); i++)
         {
-            outputFile << "poseCost " << i.second << " " << i.first << std::endl;
+            outputFile << "poseCost " << sortedPoseCostVec[i].second << " " << sortedPoseCostVec[i].first << std::endl;
         }
 
         // outputFileList[t].close();
