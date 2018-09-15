@@ -110,6 +110,16 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     {
     // torsoPosVector
     case PARAMS::P_TORSO_POS_X:
+    {
+        // if not double foot, restrict. else fallthrough to posY limits
+        if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
+        {
+            minLim = -0.05;
+            maxLim = 0.05;
+            increment = 0.01; // 2cm increment - 11
+            break;
+        }
+    }
     case PARAMS::P_TORSO_POS_Y:
     {
         minLim = -0.1;
@@ -126,10 +136,16 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
         break;
     }
     case PARAMS::P_TORSO_ROT_X:
+    {
+        minLim = -10;
+        maxLim = 10;
+        increment = 3; // 2 deg increment - 5
+        break;
+    }
     case PARAMS::P_TORSO_ROT_Y:
     {
-        minLim = -12;
-        maxLim = 12;
+        minLim = -20;
+        maxLim = 20;
         increment = 3; // 2 deg increment - 5
         break;
     }
