@@ -67,10 +67,13 @@ class SupportPolygon
 {
     const NaoFoot leftFoot;
     const NaoFoot rightFoot;
+    // shall be a positive value, inflate the com by this amount on each axis
+    const float safetyVal;
 
   public:
     SupportPolygon() : leftFoot(NaoFoot(Vector3f(100, 45, 0), Vector3f(-57, -31, 0))),
-                       rightFoot(NaoFoot(Vector3f(100, 31, 0), Vector3f(-57, -45, 0)))
+                       rightFoot(NaoFoot(Vector3f(100, 31, 0), Vector3f(-57, -45, 0))),
+                       safetyVal(15)
     {
     }
 
@@ -85,6 +88,8 @@ class SupportPolygon
         NaoFoot rFootInLFoot = rightFoot.getTransformedFoot(rFoot2LeftFoot);
         NaoFoot lFoot = leftFoot;
         KinematicMatrix comInLeftFoot = lFootPose.invert() * com;
+
+        comInLeftFoot.posV = comInLeftFoot.posV.normalized() * (comInLeftFoot.posV.norm() + safetyVal);
 
         const float comX = comInLeftFoot.posV.x();
         const float comY = comInLeftFoot.posV.y();
@@ -172,6 +177,8 @@ class SupportPolygon
         if (supFoot == SUPPORT_FOOT::SF_LEFT)
         {
             KinematicMatrix comInLeftFoot = lFootPose.invert() * com;
+            comInLeftFoot.posV = comInLeftFoot.posV.normalized() * (comInLeftFoot.posV.norm() + safetyVal);
+
             NaoFoot supFoot = leftFoot;
             float comX = comInLeftFoot.posV.x();
             float comY = comInLeftFoot.posV.y();
@@ -180,6 +187,7 @@ class SupportPolygon
         else if (supFoot == SUPPORT_FOOT::SF_RIGHT)
         {
             KinematicMatrix comInRight = rFootPose.invert() * com;
+            comInRight.posV = comInRight.posV.normalized() * (comInRight.posV.norm() + safetyVal);
             NaoFoot supFoot = rightFoot;
             float comX = comInRight.posV.x();
             float comY = comInRight.posV.y();
