@@ -485,8 +485,8 @@ int main(int argc, char **argv)
             std::fstream inStream;
             std::fstream outStream = std::fstream((outFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"), std::ios::out);
             std::cout << "Write to file: " << outFileNum << std::endl;
-            size_t counter;
-            size_t totalCounter;
+            size_t counter = 0;
+            size_t totalCounter = 0;
 
             for (size_t i = 0; i < THREADS_USED; i++)
             {
@@ -499,7 +499,7 @@ int main(int argc, char **argv)
                 std::string s;
                 while (std::getline(inStream, s))
                 {
-                    outStream << s;
+                    outStream << s << std::endl;
                     counter++;
                     totalCounter++;
                     if (counter > linesPerFile && (outFileNum + 1) < THREADS_USED) // if last file, keep appending to the same file.

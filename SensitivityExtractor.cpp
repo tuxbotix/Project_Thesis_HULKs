@@ -42,7 +42,6 @@ void sensitivityTesterFunc(const ObservationModelConfig cfg, std::istream &input
     while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
     {
         iterations++;
-        // std::cout << poseAndAngles << std::endl;
         std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
             obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA});
         // std::cout << sensitivityOutput.size() << " got this much?" << std::endl;

@@ -49,12 +49,7 @@ void commitToStream(std::vector<T> &poseList, std::ostream &outStream)
     for (const auto &p : poseList)
     {
 #if USE_STRINGSTREAM
-        buffer << p;
-#else
-        outStream << p;
-#endif
-#if USE_STRINGSTREAM
-        buffer << "\n";
+        buffer << p << "\n";
         if (buffer.tellg() > 4E6)
         { // write each 4MB :P
             std::cout << "buf write";
@@ -63,7 +58,7 @@ void commitToStream(std::vector<T> &poseList, std::ostream &outStream)
             buffer.clear();
         }
 #else
-        outStream << "\n";
+        outStream << p << std::endl;
 #endif
     }
 #if USE_STRINGSTREAM
