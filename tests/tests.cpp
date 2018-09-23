@@ -21,6 +21,9 @@
 #include <Hardware/RobotInterface.hpp>
 
 #include "TUHHMin.hpp"
+
+#define PRINT_EXCEPT 1
+
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
@@ -77,7 +80,7 @@ bool poseSensitivityStreamingTest()
 bool poseStreamingTest()
 {
     NaoPoseAndRawAngles<float> poseAndAngles1;
-    std::string p = "NaoPoseAndRawAngles NaoPose someIdlalala 0 -72 0 -0.1 -0.1 0.225 6 -12 0 -0.04 -0.1 0 0 0 0 -1.25664 0 "
+    std::string p = "NaoPoseAndRawAngles NaoPoseV1 123456 0 -72 10 0 -0.1 -0.1 0.225 6 -12 0 -0.04 -0.1 0 0 0 0 -1.25664 0 "
                     "1.5708 0.2 1.5708 -0.00872665 0 0 0.0895838 0.274045 -1.33344 1.64128 -0.157236 -0.384673 0.0895838 0.277598 "
                     "-1.30291 2.00971 -0.543341 -0.365134 1.5708 -0.2 -1.5708 0.00872665 0 0";
     std::stringstream ss(p);

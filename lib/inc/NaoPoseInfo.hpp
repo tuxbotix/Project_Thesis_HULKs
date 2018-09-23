@@ -10,6 +10,10 @@
 #include <Modules/NaoProvider.h>
 
 #include "Sensors.hpp"
+
+#ifndef PRINT_EXCEPT
+#define PRINT_EXCEPT 0
+#endif
 /**
  * This file define data types, classes related to poses
  * Raw poses are just joint angles
@@ -186,6 +190,9 @@ public:
     }
     else
     {
+#if PRINT_EXCEPT
+      std::cerr << "Cannot deserialize this stream to NaoPose, Header mismatch!!! expected:" << className << " found:" << name << std::endl;
+#endif
       throw "Cannot deserialize this stream to NaoPose, Header mismatch!!!";
     }
     return in;
@@ -331,6 +338,9 @@ public:
     }
     else
     {
+#if PRINT_EXCEPT
+      std::cerr << "Cannot deserialize this stream to NaoPose, Header mismatch!! expected:" << className << " found:" << name << std::endl;
+#endif
       throw "Cannot deserialize this stream to NaoPose, Header mismatch!!!";
     }
 
@@ -398,7 +408,9 @@ public:
     }
     else
     {
-      std::cerr << "NaoPoseAndRawAngle deserialize issue." << std::endl;
+#if PRINT_EXCEPT
+      std::cerr << "NaoPoseAndRawAngle deserialize issue. expected:" << className << " found:" << name << std::endl;
+#endif
       throw "Cannot deserialize this stream to NaoPoseAndRawAngles, Header mismatch!!!";
     }
     return in;
