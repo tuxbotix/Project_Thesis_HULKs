@@ -20,7 +20,7 @@ class NaoTorsoPose
 
   private:
     // static const float angleTol = 2*TO_RAD;
-    static constexpr float distTol = 0.008; //5 mm
+    static constexpr float distTol = 8; //5 mm
     /**
      * @brief compute body angles
      * @param bodyAngles - output
@@ -76,8 +76,8 @@ class NaoTorsoPose
         if (supportFoot == SUPPORT_FOOT::SF_LEFT || supportFoot == SUPPORT_FOOT::SF_DOUBLE)
         {
             lLegAngles = InverseKinematics::getLLegAngles(supFoot2targetPose);
-            // KinematicMatrix mat = ForwardKinematics::getLFoot(lLegAngles);
             rLegAngles = InverseKinematics::getFixedRLegAngles(otherFoot2targetTorso, lLegAngles[0]);
+
             genTorso2SupFoot = ForwardKinematics::getLFoot(lLegAngles).invert();
             errFootPos = (genTorso2SupFoot * ForwardKinematics::getRFoot(rLegAngles)).posV;
         }
@@ -85,6 +85,7 @@ class NaoTorsoPose
         {
             rLegAngles = InverseKinematics::getRLegAngles(supFoot2targetPose);
             lLegAngles = InverseKinematics::getFixedLLegAngles(otherFoot2targetTorso, rLegAngles[0]);
+
             genTorso2SupFoot = ForwardKinematics::getRFoot(rLegAngles).invert();
             errFootPos = (genTorso2SupFoot * ForwardKinematics::getLFoot(lLegAngles)).posV;
         }
