@@ -109,7 +109,6 @@ void weirdPointTest2ObsProvider(const ObservationModelConfig cfg)
 {
     auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
     JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(9);
-    SENSOR_NAME sensorName = static_cast<SENSOR_NAME>(1);
 
     std::vector<float> jointAngles = {6.283190e-01, 3.839720e-01, 1.570800e+00, 2.000000e-01, 1.570800e+00, -8.726650e-03, 0.000000e+00, 0.000000e+00, -8.133260e-02, 2.935800e-01, -1.429230e+00, 1.255460e+00, 1.528070e-02, -3.516450e-01, -8.133260e-02, -5.249380e-04, -1.471790e+00, 9.030850e-01, 4.139150e-01, -4.027070e-02, 1.570800e+00, -2.000000e-01, -1.570800e+00, 8.726650e-03, 0.000000e+00, 0.000000e+00};
     if (jointAngles.size() != static_cast<size_t>(JOINTS::JOINT::JOINTS_MAX))
@@ -120,7 +119,7 @@ void weirdPointTest2ObsProvider(const ObservationModelConfig cfg)
 
     SUPPORT_FOOT sf = SUPPORT_FOOT::SF_LEFT;
 
-    std::vector<PoseSensitivity<Vector3f>> senses = obs.getSensitivities(jointAngles, sf, {sensorName});
+    std::vector<PoseSensitivity<Vector3f>> senses = obs.getSensitivities(jointAngles, sf);
 
     for (auto &i : senses)
     {
@@ -190,7 +189,7 @@ int main(int argc, char *argv[])
     camMat.cc.y() *= imSize.y();
     camMat.fov = fov;
 
-    const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, 25, 0.05};
+    const ObservationModelConfig cfg = {imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA}, 1000, 25, 0.05};
 
     // weirdPointTest(imSize, fc, cc, fov);
 

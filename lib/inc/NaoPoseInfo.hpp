@@ -14,6 +14,7 @@
 #ifndef PRINT_EXCEPT
 #define PRINT_EXCEPT 0
 #endif
+
 /**
  * This file define data types, classes related to poses
  * Raw poses are just joint angles
@@ -89,6 +90,11 @@ public:
   std::string getId() const
   {
     return id;
+  }
+
+  void setId(const std::string &id)
+  {
+    this->id = id;
   }
 
   SENSOR_NAME getSensorName() const

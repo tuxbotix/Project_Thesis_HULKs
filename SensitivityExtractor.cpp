@@ -31,45 +31,40 @@
 
 #include "utils.hpp"
 
+static const size_t maxMemBuf = 5e9;
+static std::atomic<size_t> maxBufSize(1);
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
 void sensitivityTesterFunc(const ObservationModelConfig cfg, std::istream &inputStream, std::ostream &outputStream,
                            std::atomic<size_t> &iterations, std::atomic<size_t> &sensitivityCount)
 {
     auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
-
+    std::vector<PoseSensitivity<Vector3f>> sensitivityBuf;
     NaoPoseAndRawAngles<float> poseAndAngles;
+
     while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
     {
         iterations++;
         std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-            obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA});
-        // std::cout << sensitivityOutput.size() << " got this much?" << std::endl;
+            obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot);
         for (auto &i : sensitivityOutput)
         {
-            Vector3f val;
-            bool obs;
             if (i.getObservableCount() <= 0)
             {
                 continue;
             }
-            outputStream << "SENS " << poseAndAngles.pose.id << " " << i.getSensorName() << " " << i.getDimensionCount() << " ";
-            for (int j = 0; j < JOINTS::JOINT::JOINTS_MAX; j++)
-            {
-                i.getSensitivity(static_cast<JOINTS::JOINT>(j), val, obs);
-                if (obs && val.norm() > __FLT_EPSILON__)
-                {
-                    outputStream << j << " ";
-                    for (int k = 0; k < i.getDimensionCount(); k++)
-                    {
-                        outputStream << val(k) << " ";
-                    }
-                }
-            }
-            outputStream << std::endl;
+            i.setId(poseAndAngles.pose.id);
+            sensitivityBuf.push_back(i); // change for moving?
             sensitivityCount++;
         }
+        /// if buffer is "well full", commit to output stream.
+        if (sensitivityBuf.size() > maxBufSize)
+        {
+            utils::commitToStream(sensitivityBuf, outputStream);
+        }
     }
+    // flushing rest of the buffer
+    utils::commitToStream(sensitivityBuf, outputStream);
 }
 
 int main(int argc, char **argv)
@@ -90,7 +85,7 @@ int main(int argc, char **argv)
 
     Vector2i imSize(640, 480);
 
-    size_t maxGridPointsPerSide = 25;
+    size_t maxGridPointsPerSide = 20;
 
     std::cout << "init" << std::endl;
 
@@ -111,6 +106,9 @@ int main(int argc, char **argv)
         }
     }
 
+    // Update the buffer size per thread
+    maxBufSize = maxMemBuf / (usableThreads * 500);
+    std::cout << "Elem buf size per thread: " << maxBufSize << " of total mem: " << maxMemBuf << std::endl;
     /// Start the real threading..
     {
         std::vector<std::thread> threadList(usableThreads);
@@ -118,11 +116,9 @@ int main(int argc, char **argv)
         std::vector<std::atomic<size_t>> sensitivityCount(usableThreads);
         std::vector<std::fstream> outputFileList(usableThreads);
 
-        const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, maxGridPointsPerSide, 0.08};
+        const ObservationModelConfig cfg = {
+            imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA}, 1000, maxGridPointsPerSide, 0.08};
 
-        // std::vector<ObservationSensitivity> obsSensitivities =
-        //     ObservationSensitivityProvider::getSensitivityProviders(usableThreads, cfg);
-        // bool resumeFlags[THREADS_USED];
         for (unsigned int i = 0; i < usableThreads; i++)
         {
             outputFileList[i] = std::fstream((outFileName + "Temp_" + std::to_string(i) + ".txt"), std::ios::out);
