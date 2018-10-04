@@ -42,34 +42,84 @@ inline void doLog(const std::string &value)
     }
 }
 
-struct MinMaxInc
+class MinMaxInc
 {
+  public:
+    Vector2f minHeadYawPitch;
+    Vector2f maxHeadYawPitch;
+    Vector2f incHeadYawPitch;
     std::array<Vector3f, 4> min;
     std::array<Vector3f, 4> max;
     std::array<Vector3f, 4> inc;
+
+    inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) const // 8
+    {
+        // Instead of the full range, i'll limit..
+        minLim = minHeadYawPitch[0];
+        maxLim = maxHeadYawPitch[0];
+        increment = incHeadYawPitch[0];
+    }
+    inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim, dataT &maxLim, dataT &increment) const // 19
+    {
+        minLim = std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD), 0.0f) / TO_RAD;
+        maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
+        increment = incHeadYawPitch[1];
+    }
+
+    inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment) const
+    {
+        if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
+        {
+            minLim = 0;
+            maxLim = 0;
+            increment = 0;
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+            std::cout << "param index out of bounds" << std::endl;
+            return;
+        }
+        else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
+        {
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+            std::cout << "SOMETHING IS WRONG, This method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
+            return;
+        }
+        paramNameT paramIdxCopy = static_cast<PARAMS>(paramIndex - PARAMS::P_TORSO_POS_X);
+
+        // first array index
+        uint8_t initialBlock = paramIdxCopy / 3;
+        // second array index
+        uint8_t subIdx = paramIdxCopy % 3;
+
+        minLim = min[initialBlock][subIdx];
+        maxLim = max[initialBlock][subIdx];
+        increment = inc[initialBlock][subIdx];
+    }
+
+    static MinMaxInc populateMinMaxInc(const Uni::Value &val)
+    {
+        MinMaxInc minMaxIncObj;
+
+        val["min_headYawPitch"] >> minMaxIncObj.minHeadYawPitch;
+        val["min_torsoPos"] >> minMaxIncObj.min[0];
+        val["min_torsoRot"] >> minMaxIncObj.min[1];
+        val["min_oFootPos"] >> minMaxIncObj.min[2];
+        val["min_oFootRot"] >> minMaxIncObj.min[3];
+
+        val["max_headYawPitch"] >> minMaxIncObj.maxHeadYawPitch;
+        val["max_torsoPos"] >> minMaxIncObj.max[0];
+        val["max_torsoRot"] >> minMaxIncObj.max[1];
+        val["max_oFootPos"] >> minMaxIncObj.max[2];
+        val["max_oFootRot"] >> minMaxIncObj.max[3];
+
+        val["inc_headYawPitch"] >> minMaxIncObj.incHeadYawPitch;
+        val["inc_torsoPos"] >> minMaxIncObj.inc[0];
+        val["inc_torsoRot"] >> minMaxIncObj.inc[1];
+        val["inc_oFootPos"] >> minMaxIncObj.inc[2];
+        val["inc_oFootRot"] >> minMaxIncObj.inc[3];
+
+        return minMaxIncObj;
+    }
 };
-
-MinMaxInc populateMinMaxInc(const Uni::Value &val)
-{
-    MinMaxInc minMaxIncObj;
-
-    val["min_torsoPos"] >> minMaxIncObj.min[0];
-    val["min_torsoRot"] >> minMaxIncObj.min[1];
-    val["min_oFootPos"] >> minMaxIncObj.min[2];
-    val["min_oFootRot"] >> minMaxIncObj.min[3];
-
-    val["max_torsoPos"] >> minMaxIncObj.max[0];
-    val["max_torsoRot"] >> minMaxIncObj.max[1];
-    val["max_oFootPos"] >> minMaxIncObj.max[2];
-    val["max_oFootRot"] >> minMaxIncObj.max[3];
-
-    val["inc_torsoPos"] >> minMaxIncObj.inc[0];
-    val["inc_torsoRot"] >> minMaxIncObj.inc[1];
-    val["inc_oFootPos"] >> minMaxIncObj.inc[2];
-    val["inc_oFootRot"] >> minMaxIncObj.inc[3];
-
-    return minMaxIncObj;
-}
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
@@ -100,178 +150,178 @@ inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot,
  * Get limits for each tuning param
  */
 
-inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) // 8
-{
-    // Instead of the full range, i'll limit..
-    minLim = -60;
-    maxLim = 60;
-    increment = 10;
-    // minLim = -1;
-    // maxLim = 1;
-    // increment = 1;
-    return;
-}
-inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim, dataT &maxLim, dataT &increment) // 19
-{
-    minLim = std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD), 0.0f) / TO_RAD;
-    maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
-    // minLim = 0;
-    // maxLim = 2;
-    increment = 1.5;
-    return;
-}
-inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment)
-{
-    if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
-    {
-        minLim = 0;
-        maxLim = 0;
-        increment = 0;
-        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-        std::cout << "param index out of bounds" << std::endl;
-        return;
-    }
-    else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
-    {
-        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-        std::cout << "SOMETHING IS WRONG, This method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
-        return;
-    }
+// inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) // 8
+// {
+//     // Instead of the full range, i'll limit..
+//     minLim = -60;
+//     maxLim = 60;
+//     increment = 10;
+//     // minLim = -1;
+//     // maxLim = 1;
+//     // increment = 1;
+//     return;
+// }
+// inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim, dataT &maxLim, dataT &increment) // 19
+// {
+//     minLim = std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD), 0.0f) / TO_RAD;
+//     maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
+//     // minLim = 0;
+//     // maxLim = 2;
+//     increment = 1.5;
+//     return;
+// }
+// inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment)
+// {
+//     if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
+//     {
+//         minLim = 0;
+//         maxLim = 0;
+//         increment = 0;
+//         std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+//         std::cout << "param index out of bounds" << std::endl;
+//         return;
+//     }
+//     else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
+//     {
+//         std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+//         std::cout << "SOMETHING IS WRONG, This method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
+//         return;
+//     }
 
-    switch (paramIndex)
-    {
-    // torsoPosVector
-    case PARAMS::P_TORSO_POS_X:
-    {
-        // if not double foot, restrict. else fallthrough to posY limits
-        if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
-        {
-            minLim = -0.05;
-            maxLim = 0.05;
-            increment = 0.01; // 2cm increment - 11
-            break;
-        }
-    }
-    case PARAMS::P_TORSO_POS_Y:
-    {
-        if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
-        {
-            // these are relative to left foot...
-            minLim = -0.15;
-            maxLim = 0.0;
-        }
-        else if (supFoot != SUPPORT_FOOT::SF_LEFT)
-        {
-            minLim = -0.1;
-            maxLim = 0.05;
-        }
-        else
-        {
-            minLim = 0.1;
-            maxLim = -0.05;
-        }
-        increment = 0.01; // 2cm increment - 11
-        break;
-    }
-    case PARAMS::P_TORSO_POS_Z:
+//     switch (paramIndex)
+//     {
+//     // torsoPosVector
+//     case PARAMS::P_TORSO_POS_X:
+//     {
+//         // if not double foot, restrict. else fallthrough to posY limits
+//         if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
+//         {
+//             minLim = -0.05;
+//             maxLim = 0.05;
+//             increment = 0.01; // 2cm increment - 11
+//             break;
+//         }
+//     }
+//     case PARAMS::P_TORSO_POS_Y:
+//     {
+//         if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
+//         {
+//             // these are relative to left foot...
+//             minLim = -0.15;
+//             maxLim = 0.0;
+//         }
+//         else if (supFoot != SUPPORT_FOOT::SF_LEFT)
+//         {
+//             minLim = -0.1;
+//             maxLim = 0.05;
+//         }
+//         else
+//         {
+//             minLim = 0.1;
+//             maxLim = -0.05;
+//         }
+//         increment = 0.01; // 2cm increment - 11
+//         break;
+//     }
+//     case PARAMS::P_TORSO_POS_Z:
 
-    {
-        minLim = 0.2;
-        maxLim = 0.32;
-        increment = 0.02; // 2cm increment - 11
-        break;
-    }
-    case PARAMS::P_TORSO_ROT_X:
-    {
-        minLim = -10;
-        maxLim = 10;
-        increment = 5; // 2 deg increment - 5
-        break;
-    }
-    case PARAMS::P_TORSO_ROT_Y:
-    {
-        minLim = -20;
-        maxLim = 20;
-        increment = 5; // 2 deg increment - 5
-        break;
-    }
-    case PARAMS::P_TORSO_ROT_Z:
-    {
-        minLim = 0;
-        maxLim = 0;
-        increment = 5; // 2 deg increment - 5
-        break;
-    }
-    case PARAMS::P_O_FOOT_POS_X:
-    {
-        // minLim = -0.05;
-        // maxLim = 0.05;
-        // increment = 0.0125; // 2cm increment
-        minLim = 0;
-        maxLim = 0;
-        increment = 0.01; // 2cm increment
-        break;
-    }
-    // keep origin of other foot always equal or upper than support foot.
-    case PARAMS::P_O_FOOT_POS_Z:
-    {
-        if (supFoot == SUPPORT_FOOT::SF_DOUBLE) // 1
-        {
-            minLim = 0.0;
-            maxLim = 0.0;
-        }
-        else // 5
-        {
-            minLim = 0.1;
-            maxLim = 0.4;
-        }
-        increment = 0.01; // 2cm increment
-        break;
-    }
-    case PARAMS::P_O_FOOT_POS_Y:
-    {
-        if (supFoot == SUPPORT_FOOT::SF_RIGHT) // 5
-        {
-            minLim = 0.090;
-            maxLim = 0.150;
-        }
-        else // 5
-        {
-            minLim = -0.150;
-            maxLim = -0.090; //0.0;
-        }
-        increment = 0.02; // 2cm increment
-        break;
-    }
-    case PARAMS::P_O_FOOT_ROT_X:
-    case PARAMS::P_O_FOOT_ROT_Y:
-    case PARAMS::P_O_FOOT_ROT_Z:
-    {
-        minLim = 0;
-        maxLim = 0;
-        increment = 5; // 2 deg increment - 5
-        break;
-    }
-    default:
-    {
-        {
-            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-            std::cout << "Default should not be reached.. method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
-        }
-        minLim = 0;
-        maxLim = 0;
-        increment = 0.1;
-        break;
-    }
-    };
-}
+//     {
+//         minLim = 0.2;
+//         maxLim = 0.32;
+//         increment = 0.02; // 2cm increment - 11
+//         break;
+//     }
+//     case PARAMS::P_TORSO_ROT_X:
+//     {
+//         minLim = -10;
+//         maxLim = 10;
+//         increment = 5; // 2 deg increment - 5
+//         break;
+//     }
+//     case PARAMS::P_TORSO_ROT_Y:
+//     {
+//         minLim = -20;
+//         maxLim = 20;
+//         increment = 5; // 2 deg increment - 5
+//         break;
+//     }
+//     case PARAMS::P_TORSO_ROT_Z:
+//     {
+//         minLim = 0;
+//         maxLim = 0;
+//         increment = 5; // 2 deg increment - 5
+//         break;
+//     }
+//     case PARAMS::P_O_FOOT_POS_X:
+//     {
+//         // minLim = -0.05;
+//         // maxLim = 0.05;
+//         // increment = 0.0125; // 2cm increment
+//         minLim = 0;
+//         maxLim = 0;
+//         increment = 0.01; // 2cm increment
+//         break;
+//     }
+//     // keep origin of other foot always equal or upper than support foot.
+//     case PARAMS::P_O_FOOT_POS_Z:
+//     {
+//         if (supFoot == SUPPORT_FOOT::SF_DOUBLE) // 1
+//         {
+//             minLim = 0.0;
+//             maxLim = 0.0;
+//         }
+//         else // 5
+//         {
+//             minLim = 0.1;
+//             maxLim = 0.4;
+//         }
+//         increment = 0.01; // 2cm increment
+//         break;
+//     }
+//     case PARAMS::P_O_FOOT_POS_Y:
+//     {
+//         if (supFoot == SUPPORT_FOOT::SF_RIGHT) // 5
+//         {
+//             minLim = 0.090;
+//             maxLim = 0.150;
+//         }
+//         else // 5
+//         {
+//             minLim = -0.150;
+//             maxLim = -0.090; //0.0;
+//         }
+//         increment = 0.02; // 2cm increment
+//         break;
+//     }
+//     case PARAMS::P_O_FOOT_ROT_X:
+//     case PARAMS::P_O_FOOT_ROT_Y:
+//     case PARAMS::P_O_FOOT_ROT_Z:
+//     {
+//         minLim = 0;
+//         maxLim = 0;
+//         increment = 5; // 2 deg increment - 5
+//         break;
+//     }
+//     default:
+//     {
+//         {
+//             std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+//             std::cout << "Default should not be reached.. method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
+//         }
+//         minLim = 0;
+//         maxLim = 0;
+//         increment = 0.1;
+//         break;
+//     }
+//     };
+// }
 
 void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd,
                           const SUPPORT_FOOT supFoot, const std::vector<HeadYawPitch> headYawPitchList,
                           const vector3ListT torsoPosList, const vector3ListT torsoRotList,
                           const vector3ListT OFootPosList, const vector3ListT OFootRotList,
                           poseAndRawAngleListT &poseList, std::ostream &poseOutStream,
-                          const SupportPolygon &supportPoly, Collision::CollisionModel &collisionModel,
+                          const SupportPolygon &supportPoly /*, Collision::CollisionModel &collisionModel*/,
                           std::atomic<size_t> &iterCount, const std::string &id_prefix)
 {
     const rawAnglesT defaultPose = Poses::getPose(Poses::READY);
@@ -369,7 +419,7 @@ int main(int argc, char **argv)
     ///
     Uni::Value confValue;
     MiniConfigHandle::mountFile("limits_" + supportFootName + ".json", confValue);
-    const MinMaxInc minMaxInobj = populateMinMaxInc(confValue);
+    const MinMaxInc minMaxInobj = MinMaxInc::populateMinMaxInc(confValue);
 
     // const std::string dateTimeString = getISOTimeString();
     /// Pose Gen
@@ -385,7 +435,7 @@ int main(int argc, char **argv)
     {
         size_t count = 0;
         dataT minLimit, maxLimit, increment;
-        getHeadYawLimits(minLimit, maxLimit, increment);
+        minMaxInobj.getHeadYawLimits(minLimit, maxLimit, increment);
         for (dataT yaw = minLimit; yaw <= maxLimit; yaw += increment)
         {
             if (std::abs(yaw) < increment)
@@ -393,7 +443,7 @@ int main(int argc, char **argv)
                 yaw = 0;
             }
             dataT minPitch, maxPitch, pitchIncr;
-            getHeadPitchLimits(yaw, minPitch, maxPitch, pitchIncr);
+            minMaxInobj.getHeadPitchLimits(yaw, minPitch, maxPitch, pitchIncr);
             for (dataT pitch = minPitch; pitch <= maxPitch; pitch += pitchIncr)
             {
                 if (std::abs(pitch) < pitchIncr)
@@ -412,9 +462,9 @@ int main(int argc, char **argv)
         Vector3<dataT> minLimit, maxLimit, increment;
         for (int i = static_cast<int>(paramNameT::P_TORSO_POS_X); i < static_cast<int>(paramNameT::P_MAX); i += 3)
         {
-            getLimits(static_cast<paramNameT>(i), supportFoot, minLimit.x(), maxLimit.x(), increment.x());
-            getLimits(static_cast<paramNameT>(i + 1), supportFoot, minLimit.y(), maxLimit.y(), increment.y());
-            getLimits(static_cast<paramNameT>(i + 2), supportFoot, minLimit.z(), maxLimit.z(), increment.z());
+            minMaxInobj.getLimits(static_cast<paramNameT>(i), supportFoot, minLimit.x(), maxLimit.x(), increment.x());
+            minMaxInobj.getLimits(static_cast<paramNameT>(i + 1), supportFoot, minLimit.y(), maxLimit.y(), increment.y());
+            minMaxInobj.getLimits(static_cast<paramNameT>(i + 2), supportFoot, minLimit.z(), maxLimit.z(), increment.z());
             switch (i)
             {
             case static_cast<int>(paramNameT::P_TORSO_POS_X):
@@ -456,7 +506,7 @@ int main(int argc, char **argv)
         std::vector<std::thread> threadList(THREADS_USED);
         std::vector<std::fstream> poseAndAnglesFiles(THREADS_USED);
         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
-        std::vector<Collision::CollisionModel> collisionModelList(THREADS_USED);
+        // std::vector<Collision::CollisionModel> collisionModelList(THREADS_USED);
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
             poseAndAnglesFiles[i] = std::fstream((outFileName + "_TempGeneratedPoses_" + std::to_string(i) + ".txt"), std::ios::out);
@@ -481,7 +531,7 @@ int main(int argc, char **argv)
             threadList[i] = std::thread(jointIterFuncWithLim, start, end, supportFoot,
                                         headYawPitchList, torsoPosList, torsoRotList, OtherFootPosList, OtherFootRotList,
                                         std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]),
-                                        std::ref(supportPolyList[i]), std::ref(collisionModelList[i]), std::ref(iterCount[i]),
+                                        std::ref(supportPolyList[i]), /* std::ref(collisionModelList[i]), */ std::ref(iterCount[i]),
                                         std::string(timestamp + std::to_string(i)));
         }
 #if ENABLE_PROGRESS
