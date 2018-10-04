@@ -1,0 +1,19 @@
+{
+    "min_headYawPitch":[0,0],
+    "min_torsoPos": [0,0,0],
+    "min_torsoRot": [0,0,0],
+    "min_oFootPos": [0,0,0],
+    "min_oFootRot": [0,0,0],
+
+    "max_headYawPitch":[0,0],
+    "max_torsoPos": [0,0,0],
+    "max_torsoRot": [0,0,0],
+    "max_oFootPos": [0,0,0],
+    "max_oFootRot": [0,0,0],
+
+    "inc_headYawPitch":[0,0],
+    "inc_torsoPos": [0,0,0],
+    "inc_torsoRot": [0,0,0],
+    "inc_oFootPos": [0,0,0],
+    "inc_oFootRot": [0,0,0]
+}

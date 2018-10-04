@@ -27,7 +27,7 @@ add_executable(${target1} tests/test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target1} utils naoPose tuhh)
 
 set(target2 poseGen)
-add_executable(${target2} poseGenerator.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+add_executable(${target2} poseGenerator.cpp lib/inc/MiniConfigHandle.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target2} observability utils naoPose tuhh)
 
 # Get sensitivities by digesting the poses :P
@@ -43,7 +43,7 @@ target_link_libraries(${target4} observability utils naoPose tuhh)
 
 # other tests
 set(target5 tests)
-add_executable(${target5} tests/tests.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+add_executable(${target5} tests/tests.cpp lib/inc/MiniConfigHandle.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target5} observability utils naoPose tuhh)
 
 # Pose2d test [ sort of ICP ]
@@ -55,3 +55,10 @@ target_link_libraries(${target6} observability utils naoPose tuhh)
 set(target7 obsTest)
 add_executable(${target7} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target7} observability utils naoPose tuhh)
+
+# Copy Configs
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/configuration)
+configure_file(configuration/limits_d.json configuration/)
+configure_file(configuration/limits_l.json configuration/)
+configure_file(configuration/limits_r.json configuration/)

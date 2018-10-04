@@ -24,11 +24,41 @@
 
 #define PRINT_EXCEPT 1
 
+#include "MiniConfigHandle.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
 #define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
+
+struct MinMaxInc
+{
+    std::array<Vector3f, 4> min;
+    std::array<Vector3f, 4> max;
+    std::array<Vector3f, 4> inc;
+};
+
+MinMaxInc populateMinMaxInc(const Uni::Value &val)
+{
+    MinMaxInc minMaxIncObj;
+
+    val["min_torsoPos"] >> minMaxIncObj.min[0];
+    val["min_torsoRot"] >> minMaxIncObj.min[1];
+    val["min_oFootPos"] >> minMaxIncObj.min[2];
+    val["min_oFootRot"] >> minMaxIncObj.min[3];
+
+    val["max_torsoPos"] >> minMaxIncObj.max[0];
+    val["max_torsoRot"] >> minMaxIncObj.max[1];
+    val["max_oFootPos"] >> minMaxIncObj.max[2];
+    val["max_oFootRot"] >> minMaxIncObj.max[3];
+
+    val["inc_torsoPos"] >> minMaxIncObj.inc[0];
+    val["inc_torsoRot"] >> minMaxIncObj.inc[1];
+    val["inc_oFootPos"] >> minMaxIncObj.inc[2];
+    val["inc_oFootRot"] >> minMaxIncObj.inc[3];
+
+    return minMaxIncObj;
+}
 
 bool poseSensitivityStreamingTest()
 {
@@ -107,7 +137,7 @@ bool camObserverIterTest(const ObservationModelConfig cfg,
     ObservationSensitivity obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
 
     std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-        obs.getSensitivities(joints, supFoot, {SENSOR_NAME::BOTTOM_CAMERA});
+        obs.getSensitivities(joints, supFoot);
 
     for (auto &i : sensitivityOutput)
     {
@@ -146,6 +176,7 @@ int main(int argc, char **argv)
     else
     {
         std::cout << "Going for double foot." << std::endl;
+        supportFootName = "d";
     }
 
     TUHH tuhhInstance(confRoot);
@@ -156,6 +187,37 @@ int main(int argc, char **argv)
     tuhhInstance.config_.get("Projection", "top_fc") >> fc;
     tuhhInstance.config_.get("Projection", "top_cc") >> cc;
     tuhhInstance.config_.get("Projection", "fov") >> fov;
+
+    /**
+     * MinMaxIncTest
+     */
+    Uni::Value confValue;
+    if (!MiniConfigHandle::mountFile("configuration/limits_" + supportFootName + ".json", confValue))
+    {
+        std::cout << "couldn't open the conf file" << std::endl;
+        exit(1);
+    }
+    const MinMaxInc minMaxInobj = populateMinMaxInc(confValue);
+
+    std::cout << "minMaxIncTest" << std::endl;
+    for (const auto &i : minMaxInobj.min)
+    {
+        std::cout << i.transpose() << " ";
+    }
+    std::cout << std::endl;
+    for (const auto &i : minMaxInobj.max)
+    {
+        std::cout << i.transpose() << " ";
+    }
+    std::cout << std::endl;
+    for (const auto &i : minMaxInobj.inc)
+    {
+        std::cout << i.transpose() << " ";
+    }
+    std::cout << std::endl;
+    /**
+     * End MinMaxIncTest
+     */
 
     Vector2i imSize(640, 480);
 
@@ -171,7 +233,7 @@ int main(int argc, char **argv)
     Vector2f point(0.4, 0.1);
     Vector2i pixPoint(0, 0);
 
-    const ObservationModelConfig cfg = {imSize, fc, cc, fov, 1000, 5, 0.05};
+    const ObservationModelConfig cfg = {imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA}, 1000, 5, 0.05};
 
     std::cout << camMat.robotToPixel(point, pixPoint) << " " << pixPoint << std::endl;
 

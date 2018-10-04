@@ -17,9 +17,11 @@
 #include <Hardware/RobotInterface.hpp>
 
 #include "TUHHMin.hpp"
+#include "MiniConfigHandle.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
+// #include "NaoCollision.hpp"
 // #include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
@@ -40,10 +42,39 @@ inline void doLog(const std::string &value)
     }
 }
 
+struct MinMaxInc
+{
+    std::array<Vector3f, 4> min;
+    std::array<Vector3f, 4> max;
+    std::array<Vector3f, 4> inc;
+};
+
+MinMaxInc populateMinMaxInc(const Uni::Value &val)
+{
+    MinMaxInc minMaxIncObj;
+
+    val["min_torsoPos"] >> minMaxIncObj.min[0];
+    val["min_torsoRot"] >> minMaxIncObj.min[1];
+    val["min_oFootPos"] >> minMaxIncObj.min[2];
+    val["min_oFootRot"] >> minMaxIncObj.min[3];
+
+    val["max_torsoPos"] >> minMaxIncObj.max[0];
+    val["max_torsoRot"] >> minMaxIncObj.max[1];
+    val["max_oFootPos"] >> minMaxIncObj.max[2];
+    val["max_oFootRot"] >> minMaxIncObj.max[3];
+
+    val["inc_torsoPos"] >> minMaxIncObj.inc[0];
+    val["inc_torsoRot"] >> minMaxIncObj.inc[1];
+    val["inc_oFootPos"] >> minMaxIncObj.inc[2];
+    val["inc_oFootRot"] >> minMaxIncObj.inc[3];
+
+    return minMaxIncObj;
+}
+
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
 //2000MB(approx)  total buffer usage = BUFFER_SIZE *sizeof(int) * JOINT_COUNT * MAX_THREADS
-const size_t totalBufferSizeInBytes = 200E6;
+const size_t totalBufferSizeInBytes = 2E9;
 const size_t BUFFER_SIZE = totalBufferSizeInBytes / (sizeof(dataT) * static_cast<size_t>(PARAMS::P_MAX) * MAX_THREADS);
 
 std::atomic<size_t> poseCount(0);
@@ -72,9 +103,9 @@ inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot,
 inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) // 8
 {
     // Instead of the full range, i'll limit..
-    minLim = -72;
-    maxLim = 72;
-    increment = 18;
+    minLim = -60;
+    maxLim = 60;
+    increment = 10;
     // minLim = -1;
     // maxLim = 1;
     // increment = 1;
@@ -86,7 +117,7 @@ inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim, dataT &maxLi
     maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
     // minLim = 0;
     // maxLim = 2;
-    increment = 1;
+    increment = 1.5;
     return;
 }
 inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment)
@@ -96,6 +127,7 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
         minLim = 0;
         maxLim = 0;
         increment = 0;
+        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
         std::cout << "param index out of bounds" << std::endl;
         return;
     }
@@ -122,16 +154,30 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     }
     case PARAMS::P_TORSO_POS_Y:
     {
-        minLim = -0.1;
-        maxLim = 0.1;
-        increment = 0.015; // 2cm increment - 11
+        if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
+        {
+            // these are relative to left foot...
+            minLim = -0.15;
+            maxLim = 0.0;
+        }
+        else if (supFoot != SUPPORT_FOOT::SF_LEFT)
+        {
+            minLim = -0.1;
+            maxLim = 0.05;
+        }
+        else
+        {
+            minLim = 0.1;
+            maxLim = -0.05;
+        }
+        increment = 0.01; // 2cm increment - 11
         break;
     }
     case PARAMS::P_TORSO_POS_Z:
 
     {
         minLim = 0.2;
-        maxLim = 0.45;
+        maxLim = 0.32;
         increment = 0.02; // 2cm increment - 11
         break;
     }
@@ -139,14 +185,14 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     {
         minLim = -10;
         maxLim = 10;
-        increment = 3; // 2 deg increment - 5
+        increment = 5; // 2 deg increment - 5
         break;
     }
     case PARAMS::P_TORSO_ROT_Y:
     {
         minLim = -20;
         maxLim = 20;
-        increment = 3; // 2 deg increment - 5
+        increment = 5; // 2 deg increment - 5
         break;
     }
     case PARAMS::P_TORSO_ROT_Z:
@@ -158,9 +204,12 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     }
     case PARAMS::P_O_FOOT_POS_X:
     {
-        minLim = -0.10;
-        maxLim = 0.10;
-        increment = 0.015; // 2cm increment
+        // minLim = -0.05;
+        // maxLim = 0.05;
+        // increment = 0.0125; // 2cm increment
+        minLim = 0;
+        maxLim = 0;
+        increment = 0.01; // 2cm increment
         break;
     }
     // keep origin of other foot always equal or upper than support foot.
@@ -173,25 +222,25 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
         }
         else // 5
         {
-            minLim = 0.0;
-            maxLim = 0.1;
+            minLim = 0.1;
+            maxLim = 0.4;
         }
-        increment = 0.02; // 2cm increment
+        increment = 0.01; // 2cm increment
         break;
     }
     case PARAMS::P_O_FOOT_POS_Y:
     {
         if (supFoot == SUPPORT_FOOT::SF_RIGHT) // 5
         {
-            minLim = 0.0;
-            maxLim = 0.15;
+            minLim = 0.090;
+            maxLim = 0.150;
         }
         else // 5
         {
-            minLim = -0.15;
-            maxLim = 0; //0.0;
+            minLim = -0.150;
+            maxLim = -0.090; //0.0;
         }
-        increment = 0.015; // 2cm increment
+        increment = 0.02; // 2cm increment
         break;
     }
     case PARAMS::P_O_FOOT_ROT_X:
@@ -217,16 +266,20 @@ inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot,
     };
 }
 
-void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, const SUPPORT_FOOT supFoot,
-                          const std::vector<HeadYawPitch> &headYawPitchList, const vector3ListT torsoPosList, const vector3ListT torsoRotList,
-                          const vector3ListT OFootPosList,
-                          const vector3ListT OFootRotList, poseAndRawAngleListT &poseList, std::ostream &poseOutStream,
-                          const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount, const std::string &id_prefix)
+void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd,
+                          const SUPPORT_FOOT supFoot, const std::vector<HeadYawPitch> headYawPitchList,
+                          const vector3ListT torsoPosList, const vector3ListT torsoRotList,
+                          const vector3ListT OFootPosList, const vector3ListT OFootRotList,
+                          poseAndRawAngleListT &poseList, std::ostream &poseOutStream,
+                          const SupportPolygon &supportPoly, Collision::CollisionModel &collisionModel,
+                          std::atomic<size_t> &iterCount, const std::string &id_prefix)
 {
     const rawAnglesT defaultPose = Poses::getPose(Poses::READY);
-    for (size_t iter = torsoPosBegin; iter < torsoPosEnd; ++iter)
+
+    const auto begin = torsoPosList.begin() + torsoPosBegin;
+    const auto end = torsoPosList.begin() + torsoPosEnd;
+    for (auto torsoPos = begin; torsoPos != end; ++torsoPos)
     {
-        Vector3<dataT> torsoPos(torsoPosList[iter]);
         for (auto torsoRot : torsoRotList)
         {
             for (auto OFootPos : OFootPosList)
@@ -241,36 +294,37 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd, 
                 for (auto OFootRot : OFootRotList)
                 {
                     iterCount += headYawPitchList.size();
-                    /// Prefiltering.. Check for collisions and others here. :)
+                    /// Prefiltering..
                     /// First check, double foot..
                     if (supFoot == SUPPORT_FOOT::SF_DOUBLE && (OFootRot.x() > __FLT_EPSILON__ ||
                                                                OFootRot.x() > __FLT_EPSILON__))
                     {
                         continue;
                     }
-                    // TODO insert more checks here
 
                     rawAnglesT jointAngles = defaultPose;
                     bool poseGenSuccess = NaoTorsoPose::getPose(jointAngles,
-                                                                torsoPos,
+                                                                *torsoPos,
                                                                 torsoRot * TO_RAD,
                                                                 OFootPos,
                                                                 OFootRot * TO_RAD,
                                                                 supFoot);
                     // if pose gen success and pose is statically stable
+                    // and if the pose doesn't cause collisions
+                    // if (poseGenSuccess && collisionModel.updateAndTest(jointAngles))
                     if (poseGenSuccess)
                     {
-                        for (size_t iter = 0; iter < headYawPitchList.size(); iter++)
+                        for (const auto &headYawPitch : headYawPitchList)
                         {
-                            jointAngles[JOINTS::HEAD_YAW] = headYawPitchList[iter].yaw * TO_RAD;
-                            jointAngles[JOINTS::HEAD_PITCH] = headYawPitchList[iter].pitch * TO_RAD;
+                            jointAngles[JOINTS::HEAD_YAW] = headYawPitch.yaw * TO_RAD;
+                            jointAngles[JOINTS::HEAD_PITCH] = headYawPitch.pitch * TO_RAD;
                             float com2CentroidDist = 0;
                             if (poseValidator(jointAngles, supFoot, com2CentroidDist, supportPoly))
                             {
                                 poseCount++;
 #if DO_COMMIT
-                                poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, com2CentroidDist, headYawPitchList[iter],
-                                                            torsoPos, torsoRot, OFootPos, OFootRot),
+                                poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, com2CentroidDist, headYawPitch,
+                                                            *torsoPos, torsoRot, OFootPos, OFootRot),
                                                       jointAngles);
                                 if (poseList.size() > BUFFER_SIZE)
                                 {
@@ -304,11 +358,19 @@ int main(int argc, char **argv)
     else
     {
         std::cout << "Going for double foot." << std::endl;
+        supportFootName = "d";
     }
 
     const std::string timestamp = utils::getMilliSecondsString();
 
     TUHH tuhhInstance(confRoot);
+    tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);
+
+    ///
+    Uni::Value confValue;
+    MiniConfigHandle::mountFile("limits_" + supportFootName + ".json", confValue);
+    const MinMaxInc minMaxInobj = populateMinMaxInc(confValue);
+
     // const std::string dateTimeString = getISOTimeString();
     /// Pose Gen
     std::cout << "# Init for pose generation" << std::endl;
@@ -394,6 +456,7 @@ int main(int argc, char **argv)
         std::vector<std::thread> threadList(THREADS_USED);
         std::vector<std::fstream> poseAndAnglesFiles(THREADS_USED);
         std::vector<SupportPolygon> supportPolyList(THREADS_USED);
+        std::vector<Collision::CollisionModel> collisionModelList(THREADS_USED);
         for (unsigned int i = 0; i < THREADS_USED; i++)
         {
             poseAndAnglesFiles[i] = std::fstream((outFileName + "_TempGeneratedPoses_" + std::to_string(i) + ".txt"), std::ios::out);
@@ -416,10 +479,10 @@ int main(int argc, char **argv)
             //                           const vector3ListT OFootRotList, poseListT &poseList, std::ostream &poseOutStream,
             //                           const SupportPolygon &supportPoly, std::atomic<size_t> &iterCount)
             threadList[i] = std::thread(jointIterFuncWithLim, start, end, supportFoot,
-                                        std::ref(headYawPitchList), std::ref(torsoPosList), std::ref(torsoRotList),
-                                        std::ref(OtherFootPosList),
-                                        std::ref(OtherFootRotList), std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]),
-                                        std::ref(supportPolyList[i]), std::ref(iterCount[i]), std::string(timestamp + std::to_string(i)));
+                                        headYawPitchList, torsoPosList, torsoRotList, OtherFootPosList, OtherFootRotList,
+                                        std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]),
+                                        std::ref(supportPolyList[i]), std::ref(collisionModelList[i]), std::ref(iterCount[i]),
+                                        std::string(timestamp + std::to_string(i)));
         }
 #if ENABLE_PROGRESS
         bool continueTicker = true;
@@ -432,7 +495,7 @@ int main(int argc, char **argv)
                 if (elapsed % 100)
                 {
                     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << (iterSum / maxIterCount)
+                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << ((double)iterSum * 100 / maxIterCount)
                               << "% g. poses " << (long double)poseCount.load() << std::endl; // "\r";
                 }
                 else
