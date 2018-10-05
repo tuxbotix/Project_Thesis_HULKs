@@ -204,21 +204,21 @@ inline bool poseValidator(rawAnglesT &poseByAngles, const SUPPORT_FOOT &supFoot,
 //     }
 //     case PARAMS::P_TORSO_POS_Y:
 //     {
-//         if (supFoot != SUPPORT_FOOT::SF_DOUBLE)
+//         if (supFoot == SUPPORT_FOOT::SF_DOUBLE)
 //         {
 //             // these are relative to left foot...
 //             minLim = -0.15;
 //             maxLim = 0.0;
 //         }
-//         else if (supFoot != SUPPORT_FOOT::SF_LEFT)
+//         else if (supFoot == SUPPORT_FOOT::SF_LEFT)
 //         {
 //             minLim = -0.1;
 //             maxLim = 0.05;
 //         }
 //         else
 //         {
-//             minLim = 0.1;
-//             maxLim = -0.05;
+//             minLim = -0.05;
+//             maxLim = 0.1;
 //         }
 //         increment = 0.01; // 2cm increment - 11
 //         break;
