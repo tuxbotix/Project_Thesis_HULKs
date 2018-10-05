@@ -1,19 +1,19 @@
 {
-    "min_headYawPitch":[0,0],
-    "min_torsoPos": [0,0,0],
-    "min_torsoRot": [0,0,0],
-    "min_oFootPos": [0,0,0],
-    "min_oFootRot": [0,0,0],
+    "min_headYawPitch":[-60, 0],
+    "min_torsoPos": [-0.05, -0.1, 0.2],
+    "min_torsoRot": [-10, -20, -5],
+    "min_oFootPos": [-0.02, -0.15, 0.1],
+    "min_oFootRot": [0, 0, 0],
 
-    "max_headYawPitch":[0,0],
-    "max_torsoPos": [0,0,0],
-    "max_torsoRot": [0,0,0],
-    "max_oFootPos": [0,0,0],
-    "max_oFootRot": [0,0,0],
+    "max_headYawPitch":[60, 0],
+    "max_torsoPos": [0.05, 0.05, 0.32],
+    "max_torsoRot": [10, 20, 5],
+    "max_oFootPos": [0.02, -0.09, 0.4],
+    "max_oFootRot": [0, 0, 0],
 
-    "inc_headYawPitch":[0,0],
-    "inc_torsoPos": [0,0,0],
-    "inc_torsoRot": [0,0,0],
-    "inc_oFootPos": [0,0,0],
-    "inc_oFootRot": [0,0,0]
+    "inc_headYawPitch":[10, 1.5],
+    "inc_torsoPos": [0.01, 0.01, 0.02],
+    "inc_torsoRot": [5, 5, 2.5],
+    "inc_oFootPos": [0.01, 0.02, 0.01],
+    "inc_oFootRot": [5, 5, 5]
 }

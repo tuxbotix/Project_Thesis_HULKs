@@ -31,34 +31,84 @@
 #define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
 
-struct MinMaxInc
+class MinMaxInc
 {
+  public:
+    Vector2f minHeadYawPitch;
+    Vector2f maxHeadYawPitch;
+    Vector2f incHeadYawPitch;
     std::array<Vector3f, 4> min;
     std::array<Vector3f, 4> max;
     std::array<Vector3f, 4> inc;
+
+    inline void getHeadYawLimits(dataT &minLim, dataT &maxLim, dataT &increment) const // 8
+    {
+        // Instead of the full range, i'll limit..
+        minLim = minHeadYawPitch[0];
+        maxLim = maxHeadYawPitch[0];
+        increment = incHeadYawPitch[0];
+    }
+    inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim, dataT &maxLim, dataT &increment) const // 19
+    {
+        minLim = std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD), 0.0f) / TO_RAD;
+        maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
+        increment = incHeadYawPitch[1];
+    }
+
+    inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment) const
+    {
+        if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
+        {
+            minLim = 0;
+            maxLim = 0;
+            increment = 0;
+
+            std::cout << "param index out of bounds" << std::endl;
+            return;
+        }
+        else if (paramIndex == PARAMS::P_SUPPORT_FOOT)
+        {
+
+            std::cout << "SOMETHING IS WRONG, This method should not call head or support foot!!!" << paramIndex << std::endl; // "\r";
+            return;
+        }
+        paramNameT paramIdxCopy = static_cast<PARAMS>(paramIndex - PARAMS::P_TORSO_POS_X);
+
+        // first array index
+        uint8_t initialBlock = paramIdxCopy / 3;
+        // second array index
+        uint8_t subIdx = paramIdxCopy % 3;
+
+        minLim = min[initialBlock][subIdx];
+        maxLim = max[initialBlock][subIdx];
+        increment = inc[initialBlock][subIdx];
+    }
+
+    static MinMaxInc populateMinMaxInc(const Uni::Value &val)
+    {
+        MinMaxInc minMaxIncObj;
+
+        val["min_headYawPitch"] >> minMaxIncObj.minHeadYawPitch;
+        val["min_torsoPos"] >> minMaxIncObj.min[0];
+        val["min_torsoRot"] >> minMaxIncObj.min[1];
+        val["min_oFootPos"] >> minMaxIncObj.min[2];
+        val["min_oFootRot"] >> minMaxIncObj.min[3];
+
+        val["max_headYawPitch"] >> minMaxIncObj.maxHeadYawPitch;
+        val["max_torsoPos"] >> minMaxIncObj.max[0];
+        val["max_torsoRot"] >> minMaxIncObj.max[1];
+        val["max_oFootPos"] >> minMaxIncObj.max[2];
+        val["max_oFootRot"] >> minMaxIncObj.max[3];
+
+        val["inc_headYawPitch"] >> minMaxIncObj.incHeadYawPitch;
+        val["inc_torsoPos"] >> minMaxIncObj.inc[0];
+        val["inc_torsoRot"] >> minMaxIncObj.inc[1];
+        val["inc_oFootPos"] >> minMaxIncObj.inc[2];
+        val["inc_oFootRot"] >> minMaxIncObj.inc[3];
+
+        return minMaxIncObj;
+    }
 };
-
-MinMaxInc populateMinMaxInc(const Uni::Value &val)
-{
-    MinMaxInc minMaxIncObj;
-
-    val["min_torsoPos"] >> minMaxIncObj.min[0];
-    val["min_torsoRot"] >> minMaxIncObj.min[1];
-    val["min_oFootPos"] >> minMaxIncObj.min[2];
-    val["min_oFootRot"] >> minMaxIncObj.min[3];
-
-    val["max_torsoPos"] >> minMaxIncObj.max[0];
-    val["max_torsoRot"] >> minMaxIncObj.max[1];
-    val["max_oFootPos"] >> minMaxIncObj.max[2];
-    val["max_oFootRot"] >> minMaxIncObj.max[3];
-
-    val["inc_torsoPos"] >> minMaxIncObj.inc[0];
-    val["inc_torsoRot"] >> minMaxIncObj.inc[1];
-    val["inc_oFootPos"] >> minMaxIncObj.inc[2];
-    val["inc_oFootRot"] >> minMaxIncObj.inc[3];
-
-    return minMaxIncObj;
-}
 
 bool poseSensitivityStreamingTest()
 {
@@ -197,24 +247,32 @@ int main(int argc, char **argv)
         std::cout << "couldn't open the conf file" << std::endl;
         exit(1);
     }
-    const MinMaxInc minMaxInobj = populateMinMaxInc(confValue);
+    const MinMaxInc minMaxInobj = MinMaxInc::populateMinMaxInc(confValue);
 
     std::cout << "minMaxIncTest" << std::endl;
     for (const auto &i : minMaxInobj.min)
     {
-        std::cout << i.transpose() << " ";
+        std::cout << i.transpose() << " * ";
     }
     std::cout << std::endl;
     for (const auto &i : minMaxInobj.max)
     {
-        std::cout << i.transpose() << " ";
+        std::cout << i.transpose() << " * ";
     }
     std::cout << std::endl;
     for (const auto &i : minMaxInobj.inc)
     {
-        std::cout << i.transpose() << " ";
+        std::cout << i.transpose() << " * ";
     }
     std::cout << std::endl;
+
+    for (int i = static_cast<PARAMS>(PARAMS::P_TORSO_POS_X);
+         i < static_cast<PARAMS>(PARAMS::P_MAX); i++)
+    {
+        float min, max, inc;
+        minMaxInobj.getLimits(static_cast<PARAMS>(i), supportFoot, min, max, inc);
+        std::cout << i << " " << min << " " << max << " " << inc << std::endl;
+    }
     /**
      * End MinMaxIncTest
      */
