@@ -98,7 +98,7 @@ class MinMaxInc
     static MinMaxInc populateMinMaxInc(const Uni::Value &val)
     {
         MinMaxInc minMaxIncObj;
-
+        
         val["min_headYawPitch"] >> minMaxIncObj.minHeadYawPitch;
         val["min_torsoPos"] >> minMaxIncObj.min[0];
         val["min_torsoRot"] >> minMaxIncObj.min[1];
@@ -248,9 +248,12 @@ int main(int argc, char **argv)
 
     ///
     Uni::Value confValue;
-    MiniConfigHandle::mountFile("limits_" + supportFootName + ".json", confValue);
+    if (!MiniConfigHandle::mountFile("configuration/limits_" + supportFootName + ".json", confValue))
+    {
+        std::cout << "couldn't open the conf file" << std::endl;
+        exit(1);
+    }
     const MinMaxInc minMaxInobj = MinMaxInc::populateMinMaxInc(confValue);
-
     // const std::string dateTimeString = getISOTimeString();
     /// Pose Gen
     std::cout << "# Init for pose generation" << std::endl;
