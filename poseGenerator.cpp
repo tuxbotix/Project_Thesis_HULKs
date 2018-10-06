@@ -66,7 +66,7 @@ class MinMaxInc
         increment = incHeadYawPitch[1];
     }
 
-    inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment) const
+    inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim, dataT &increment) const
     {
         if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
         {
@@ -98,7 +98,7 @@ class MinMaxInc
     static MinMaxInc populateMinMaxInc(const Uni::Value &val)
     {
         MinMaxInc minMaxIncObj;
-        
+
         val["min_headYawPitch"] >> minMaxIncObj.minHeadYawPitch;
         val["min_torsoPos"] >> minMaxIncObj.min[0];
         val["min_torsoRot"] >> minMaxIncObj.min[1];
@@ -295,9 +295,9 @@ int main(int argc, char **argv)
         Vector3<dataT> minLimit, maxLimit, increment;
         for (int i = static_cast<int>(paramNameT::P_TORSO_POS_X); i < static_cast<int>(paramNameT::P_MAX); i += 3)
         {
-            minMaxInobj.getLimits(static_cast<paramNameT>(i), supportFoot, minLimit.x(), maxLimit.x(), increment.x());
-            minMaxInobj.getLimits(static_cast<paramNameT>(i + 1), supportFoot, minLimit.y(), maxLimit.y(), increment.y());
-            minMaxInobj.getLimits(static_cast<paramNameT>(i + 2), supportFoot, minLimit.z(), maxLimit.z(), increment.z());
+            minMaxInobj.getLimits(static_cast<paramNameT>(i), minLimit.x(), maxLimit.x(), increment.x());
+            minMaxInobj.getLimits(static_cast<paramNameT>(i + 1), minLimit.y(), maxLimit.y(), increment.y());
+            minMaxInobj.getLimits(static_cast<paramNameT>(i + 2), minLimit.z(), maxLimit.z(), increment.z());
             switch (i)
             {
             case static_cast<int>(paramNameT::P_TORSO_POS_X):

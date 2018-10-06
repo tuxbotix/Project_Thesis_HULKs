@@ -73,7 +73,6 @@ void weirdPointTest2(const ObservationModelConfig cfg)
 95.9851
 */
     // joint 12, sensor 1
-    JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(9);
     SENSOR_NAME sensorName = static_cast<SENSOR_NAME>(1);
 
     std::vector<float> jointAngles = {6.283190e-01, 3.839720e-01, 1.570800e+00, 2.000000e-01, 1.570800e+00, -8.726650e-03, 0.000000e+00, 0.000000e+00, -8.133260e-02, 2.935800e-01, -1.429230e+00, 1.255460e+00, 1.528070e-02, -3.516450e-01, -8.133260e-02, -5.249380e-04, -1.471790e+00, 9.030850e-01, 4.139150e-01, -4.027070e-02, 1.570800e+00, -2.000000e-01, -1.570800e+00, 8.726650e-03, 0.000000e+00, 0.000000e+00};
@@ -108,7 +107,6 @@ void weirdPointTest2(const ObservationModelConfig cfg)
 void weirdPointTest2ObsProvider(const ObservationModelConfig cfg)
 {
     auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
-    JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(9);
 
     std::vector<float> jointAngles = {6.283190e-01, 3.839720e-01, 1.570800e+00, 2.000000e-01, 1.570800e+00, -8.726650e-03, 0.000000e+00, 0.000000e+00, -8.133260e-02, 2.935800e-01, -1.429230e+00, 1.255460e+00, 1.528070e-02, -3.516450e-01, -8.133260e-02, -5.249380e-04, -1.471790e+00, 9.030850e-01, 4.139150e-01, -4.027070e-02, 1.570800e+00, -2.000000e-01, -1.570800e+00, 8.726650e-03, 0.000000e+00, 0.000000e+00};
     if (jointAngles.size() != static_cast<size_t>(JOINTS::JOINT::JOINTS_MAX))
@@ -150,24 +148,24 @@ int main(int argc, char *argv[])
     //     return -1;
     // }
 
-    std::string supportFootName((argc > 2 ? argv[2] : "d"));
-    std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
+    // std::string supportFootName((argc > 2 ? argv[2] : "d"));
+    std::string confRoot((argc > 1 ? argv[1] : "../../nao/home/"));
 
-    SUPPORT_FOOT supportFoot = SUPPORT_FOOT::SF_DOUBLE;
-    if (supportFootName.compare("l") == 0)
-    {
-        supportFoot = SUPPORT_FOOT::SF_LEFT;
-        std::cout << "Left Support foot." << std::endl;
-    }
-    else if (supportFootName.compare("r") == 0)
-    {
-        supportFoot = SUPPORT_FOOT::SF_RIGHT;
-        std::cout << "Right Support foot." << std::endl;
-    }
-    else
-    {
-        std::cout << "Going for double foot." << std::endl;
-    }
+    // SUPPORT_FOOT supportFoot = SUPPORT_FOOT::SF_DOUBLE;
+    // if (supportFootName.compare("l") == 0)
+    // {
+    //     supportFoot = SUPPORT_FOOT::SF_LEFT;
+    //     std::cout << "Left Support foot." << std::endl;
+    // }
+    // else if (supportFootName.compare("r") == 0)
+    // {
+    //     supportFoot = SUPPORT_FOOT::SF_RIGHT;
+    //     std::cout << "Right Support foot." << std::endl;
+    // }
+    // else
+    // {
+    //     std::cout << "Going for double foot." << std::endl;
+    // }
 
     TUHH tuhhInstance(confRoot);
 

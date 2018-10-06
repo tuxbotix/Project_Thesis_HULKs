@@ -55,7 +55,7 @@ class MinMaxInc
         increment = incHeadYawPitch[1];
     }
 
-    inline void getLimits(const paramNameT &paramIndex, const SUPPORT_FOOT &supFoot, dataT &minLim, dataT &maxLim, dataT &increment) const
+    inline void getLimits(const paramNameT &paramIndex, dataT &minLim, dataT &maxLim, dataT &increment) const
     {
         if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0)
         {
@@ -182,7 +182,6 @@ bool poseStreamingTest()
 bool camObserverIterTest(const ObservationModelConfig cfg,
                          std::vector<float> joints, SUPPORT_FOOT supFoot)
 {
-    size_t maxGridPointsPerSide = 5;
 
     ObservationSensitivity obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
 
@@ -270,7 +269,7 @@ int main(int argc, char **argv)
          i < static_cast<PARAMS>(PARAMS::P_MAX); i++)
     {
         float min, max, inc;
-        minMaxInobj.getLimits(static_cast<PARAMS>(i), supportFoot, min, max, inc);
+        minMaxInobj.getLimits(static_cast<PARAMS>(i), min, max, inc);
         std::cout << i << " " << min << " " << max << " " << inc << std::endl;
     }
     /**
