@@ -1,0 +1,250 @@
+\documentclass[english, printversion, nomenclature, notitle]{tuvisionthesis} % TUVISION template
+\usepackage{amsmath}
+\usepackage{tikz}
+
+% use other format for captions
+\usepackage[labelfont=bf,textfont=it]{caption}
+
+\usepackage{pgfplots}
+\pgfplotsset{compat=newest}
+\pgfplotsset{plot coordinates/math parser=false}
+\usetikzlibrary{arrows}
+\usetikzlibrary{plotmarks}
+\usepgfplotslibrary{external}
+\tikzexternalize
+
+\usepackage{xargs}
+\usepackage[colorinlistoftodos,prependcaption,textsize=tiny]{todonotes}
+%% Due to conflicts..
+\usepackage{letltxmacro}
+\LetLtxMacro{\oldtodo}{\todo}
+\renewcommandx{\todo}[2][1=]{\tikzexternaldisable\oldtodo[#1]{#2}\tikzexternalenable}
+\newcommandx{\unsure}[2][1=]{\todo[linecolor=red,backgroundcolor=red!25,bordercolor=red,#1]{#2}}
+\newcommandx{\change}[2][1=]{\todo[linecolor=blue,backgroundcolor=blue!25,bordercolor=blue,#1]{#2}}
+\newcommandx{\info}[2][1=]{\todo[linecolor=OliveGreen,backgroundcolor=OliveGreen!25,bordercolor=OliveGreen,#1]{#2}}
+\newcommandx{\improvement}[2][1=]{\todo[linecolor=Plum,backgroundcolor=Plum!25,bordercolor=Plum,#1]{#2}}
+\newcommandx{\thiswillnotshow}[2][1=]{\todo[disable,#1]{#2}}
+
+% correct appearance of calligraphic letters
+\DeclareMathAlphabet{\mathcal}{OMS}{cmsy}{m}{n}
+
+% Information that appears on title page
+\author{Adikari Appuhamillage Darshana Sanjeewan Adikari}
+\title{Joint and Camera Calibration for Nao Robot}
+\category{Project Thesis}
+\preamblefile{Preamble}
+
+% Main document
+\begin{document}
+% Title page
+\hypersetup{
+	pdfauthor=\@author\relax,
+	pdftitle=\@title\relax
+}
+\tuvisionheading
+\hypersetup{pageanchor=true}
+\clearpage{\thispagestyle{empty}\cleardoublepage}
+
+% Chapters
+\chapter{Introduction}
+\section{Problem Specification}
+\begin{itemize}
+	\item Joint offsets and errors, (caused by Joint wear, etc)
+	\item Camera extrinsic calibration is also affected by joint errors due to dependency of the kinematic chain.
+	\item Manual methods not reliable/ not repeatable.
+	\subitem It is demonstrated in multiple occasions that manual extrinsic calibration is time consuming.
+	\subitem In addition, determining joint errors by manual inspection is error prone.
+	\item It is not known in a deterministic manner whether onboard sensors are sufficient for joint and camera calibration of this scale.
+\end{itemize}
+
+\section{Requirements}  %% part of intro?
+\begin{itemize}
+	\item Investigate current approaches and determine issues with them
+	\item Derive a process to determine suitability of a sensors, poses, input data, etc.
+	-> also observer model
+	\item Investigate the suitability of onboard sensors based on the above mentioned process. (at least some joints must be calibrate-able)
+	\item Determine the effect of backlash and offsets, level of observation and other factors.
+\end{itemize}
+
+\section{Scope}  %% part of intro?
+
+\begin{itemize}
+	\item Only on-board sensors are evaluated in this thesis
+	
+	\item Primary testing will be with different levels simulations.
+	
+	\item Once simulation based testing proves feasibility, use real robots.
+\end{itemize}
+
+The goal of this thesis is to provide a foundation on observer models, deriving them and a process to determine suitability, Not to calibrate robots to perfection as end result.
+
+\chapter{State of the art}
+
+\section{Nao robot, joints, sensors}
+\subsection{Software framework}
+
+\section{Camera calibration (extrinsic)}
+\subsection{Method of HULKs}
+
+\subsection{Others}
+\subsection{Calibration features}
+Patterns: 
+
+\section{Joint calibration}
+\subsection{Joint error types}
+\subsection{Direct measurement}
+\subsection{Indirect measurement}
+In practical scenarios, indirect measurement based methods are more useful as they involve in less specialized sensors or eliminate need to measure each sensor individually.
+
+\section{B-Human paper - joint calib} %% and more?
+They don't specifically investigate observability of error of a given joint or derive optimal set of poses for the task.
+
+\section{Observation Models}
+\section{Ambiguities of observations}
+\section{Computing a pose for a robot}
+\subsection{Forward Kinematics}
+\subsection{Inverse Kinematics}
+
+\section{Cost functions, Optimization, clustering}
+\subsection{Cost functions and role in this regard}
+\subsection{Optimization approaches and clustering}
+\subsection{Curse of dimensionality}
+
+\chapter{Proposed Workflow}
+
+\section{Initial work}
+\begin{enumerate}
+	\item Determine which type of errors affect the accuracy of the robot.
+	\subitem Joint backlash might be observable from joint angle sensors.
+	\subitem Joint offsets cannot be directly observed from onboard sensors.
+	\item Determine which poses the robot frequently use and how the errors affect.
+	\item If backlash is not directly observed, a model is needed.
+	\subitem Else; It can be assumed only joint offsets affect the kinematic chain.
+\end{enumerate}
+\section{Observation model and calibration poses}
+\begin{enumerate}
+	\item Define and observation model/ framework for joint and camera extrinsic error space.
+	\subitem Some abstraction for obs. models are needed in order for transparent expansion with different sensors in future.
+	\item Derive "poses" in which the calibration will take place. Due to trillions of possible joint configurations, a small subset of optimal poses has to be determined.
+	\begin{itemize}
+		\item Poses must be similar/ stimulate joints in similar manner to poses seen/ used during SPL games. Thus, stable, standing poses are preferred.
+		\item Apply the observation model to each possible pose and obtain information such as magnitude and direction vector of observation space.
+		\item Using above observation information and other weights, a cost function will be evaluated and "best" poses are chosen.
+	\end{itemize}
+\end{enumerate}
+\section{Calibration Process}
+\begin{enumerate}
+	\item Make the robot reach each calibration pose, capture sensor values. (Cameras, joint angles, etc).
+	\subitem the uniqueness of observation direction for each joint at a given pose highly influence quality/ possibility of observing joint error without much ambiguity. This will be further discussed in *state of art* and *methodology*
+	\item Global optimization to determine joint errors and camera extrinsic values.
+	\item Based on results of simulation, real world tests can be done.
+\end{enumerate}
+
+\section{Testing and evaluation of calibration poses and process}
+
+\chapter{Methodology}
+\section{Initial work}
+\section{Generation of Calibration poses}
+This phase became a major segment of this project due to the importance of finding out the poses that could get best results as calibration data captures. About 80\% of the implementation was dedicated for this matter.
+
+\subsection{Software implementation}
+\subsection{Pose Generation and initial filtering}
+
+Initially, the forward kinematics approach was considered. \todo{tag the section}However due to billions of possible joint angle configurations and the lack of "direct understanding" about a given pose (position of feet, torso, etc), this approach was further disadvantagous to use.
+
+Inverse kinematics base approach accepts the following parameters:
+\begin{itemize}
+	\item Support foot - left, right or double foot
+	\item Torso pose relative to support foot (position \& rotations)
+	\item Pose of the other foot relative to support foot
+	\item Head yaw and pitch angles
+\end{itemize}
+This approach is somewhat complicated by the need to use inverse kinematics and it was observed a given pose is not achieved by inverse kinematics (as opposed to generating a pose directly from joint angles). Thus further checks were needed to verify the generated pose is actually similar to the desired pose.
+
+In either of the approaches, the final output is joint angles. Then these angles are used to verify whether the robot is in a stable stand-up posture.
+
+This is done by checking if robot's COM projection to ground plane is within the support polygon. Thus in case of single foot support (support foot on the ground, and other foot raised), the support polygon is the polygon comprised of portion of Nao's foot touching the ground. In case of double foot, it's the polygon containing both feet and the region between them. \todo{refer support poly. literature}
+
+Another verification added later was to confirm that the two legs does not collide with each other. The logic is based on Softbank's implementation of self-collision avoidance as explained in \todo{reference to softbank self-collision}.
+
+If a pose pass both these checks, then it'll be appended into a file in a predefined format which is (de)serializable from the C++ program. \todo{refer to appendix?}
+
+\subsection{Observation Model}
+In context of this project, the most important criteria of selecting a pose is based on the observability of small joint movements by the available sensors. Each of these sensors are modelled as an observation model, thus it is possible to examine the strength and direction of observable dimensions of each sensor at a given pose by reaching that particular pose and inducing small joint movements (mimicing possible joint errors).
+
+For the scope of this project, only the two cameras onboard the Nao robot were modelled. In addition, assumptions were made regarding the placement of calibration patterns.
+
+\subsubsection{Camera observation model}
+\todo{diagram of grid projection, etc stuff}
+
+This model is comprised of following elements, it's state is updated whenever a new pose is submitted.
+\begin{itemize}
+	\item CameraMatrix object (\todo{refer nao architecture?}).
+	\subitem This stores intrinsic as well as camera-to-ground matrix.
+	\item Ground grid. This is a grid of points on the ground plane.
+	\subitem The grid moves so that it is observable by each camera when the model is updated.
+	\item Support foot, observable joints (for each camera and at each support foot). \todo{explain why single leg support is useful.}
+	\item The observation space of small movement by the camera's sensor (2D) is assumed to be X, Y translations and Z rotations.
+	\subitem Although six degrees of freedom is possible to be observed by a camera using two images or point-to-point correspondance sets, in practice, only x, y translations and z- rotation was dominant. \todo{how did I determine this? :P } Thus this is a simplification of the actual system.
+\end{itemize}
+
+The process of obtaining observability of a given pose for each joint is as follows: \todo{write as psuedocode?}
+\begin{itemize}
+	\item The CameraMatrix is updated based on the set of joint angles and support foot (Mentioned as "Raw Pose" in the code).
+	\item Translate + Rotate the ground grid so that the camera can see the grid.
+	\item Obtain projection of the ground grid in Camera image plane (2D). This is referred as "baseline points".
+	\item For-each joint, add a \(\delta\theta\) angle and obtain projection of the ground points in Camera image plane (2D).
+	\subitem Using correspondance of the baseline points and latter obtained points, the movement of camera sensor plane (x, y, rotation in Z axis) is obtained using an optimization method and stored.
+	\item At the end of evaluation, an object comprising of observation values as well as whether movement of a joint was observed is returned.
+\end{itemize}
+
+\todo{Nao camera chain from ground..}
+
+\subsubsection{Extending Observation model}
+
+Based on the technique employed for the camera model, it is possible to model other sensors as well. The inputs would be joint angles, support foot and information of observable joints by the given sensor.
+Output would be similar to camera observation output, in fact the same type of object can be returned albeit a possible different number of observed dimensions. Usage of C++ templates made this possible without unnessesary usage of inheritance traits. \todo{ rewrite clearly}
+
+Once the sensitivities for a pose is returned for each sensor under consideration, they are written to a file with pose ID (generated in the previous step), sensitivity values for each joint. 
+\subsection{Criteria for evaluating observability}
+
+When a series of measurements is organized in the form of a vector, it gives the possibility to understand if two sets of measurements are "nearby", or at same direction, etc. \todo{maybe move this to lit-review?}
+
+By applying this ability, it is possible to conclude if two observations are "similar". Thus if two (or more) observations for different joint movements at the same base pose is similar, there exist an ambiguity, as it isn't possible to seperately identify which joint caused the particular observation. Thus avoiding poses with such similar observations for multiple joints is beneficial as the solving the equations by means of iterative solver needs as much as orthogonality between observation vectors as possible.
+\todo{ Back up this with facts? dummy dtaa set? }
+
+\subsection{Extracting optimal poses}
+
+Considering the above mentioned need for dissimilar observation vectors for each joint observation for a given pose, and other factors, it was evident that filtering the poses with a cost function would be beneficial.
+
+\subsubsection{Cost function \& weights}
+
+\todo{define the cost function and other info}
+\todo{ Explain the situation of angle}
+
+\subsubsection{Determining calibration pattern position}
+\todo{Not implemented yet}
+
+\section{Calibration Process}
+A modified version of the RC2017 calibration tool is used for this step. In exact terms, the ability to feed poses, workflow and internals of the calibration pipeline was altered.
+
+%%\section{Testing and evaluation of calibration poses and process}
+
+\chapter{Testing and Evaluation}
+\section{Tests for code quality}
+\todo{Mention unit tests, etc}
+\section{Calibration tests}
+\subsection{Simulation: Entire ground plane as a calibration pattern}
+\todo{Explain why}
+\todo{Data, randomly induced errors, individually induced errors}
+\subsection{Simulation: Actual calibration process}
+\todo{Explain why}
+\todo{Data, randomly induced errors, individually induced errors}
+\subsection{Real?: Actual calibration process}
+\todo{if above succeed, try on real robots}
+
+\chapter{Conclusion and future work}
+
+%%% include your text here %%%
+
+\end{document}
