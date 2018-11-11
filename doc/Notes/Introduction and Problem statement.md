@@ -53,5 +53,96 @@ Due to the vast number of possible avenues and requirements, this thesis is cons
 * Primary testing will be with different levels simulations.
 * Once simulation based testing proves feasibility, use real robots.
 
+# Literature Review
 
+## Nao Hardware
+
+
+
+## HULKs NAO framework
+
+This is the software framework developed by HULKs to control the NAO for playing in RoboCup SPL written in C++. The framework also supports debugging and configuration via the Debug tool "MATE" - also developed by HULKs. Further information is present in the Team Research Report.
+
+## Camera calibration
+
+Camera calibration is a well researched topic as it is a primary dependancy for obtaining good results with camera systems. In this thesis, these standard methods & tools for intrinsic calibration is employed, while discussion about extrinsic calibration approaches will be given higher regard.
+
+### Method of HULKs
+
+The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. The method of operation and usage is explained in detail in the team research report. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (LM).
+
+### Others
+
+The team B-Human employs a method combined with joint calibration. \todo{Cite paper BHUMAN} HTWK-Lepzig employs a method based on the center circle, their robots gather enough feature points in several poses to solve the non linear equation. Berlin United also employs a similar approach but they do this with the robots in a sit down (unstiffed) pose and they can use all the lines of the entire field as features.
+
+### Calibration features
+
+#### Patterns:
+
+Charuco - a hybridization of the classic chessboard and AR markers to achieve fast detection and obtaining 3D points for partially visible patterns. ( Traditional implementations using chessboard relies on having complete visibility of the chessboard).
+
+## Joint calibration
+
+### Joint error types
+
+### Direct measurement
+
+### Indirect measurement
+
+In practical scenarios, indirect measurement based methods are more useful as they
+involve in less specialized sensors or eliminate need to measure each sensor individually.
+
+### Previous work?
+
+There are several experiments done in context of the Nao Robot for indirect joint calibration. Some involves fixing a calibration pattern in the form of a sticker [].. One of the experiment by the team B-Human involves "sandles" worn by the Nao, but untimately their results were less than satisfactory. A few possible causes include the robot taking measurements while lying on its back which is not a typical pose during robocup games. \todo{add citation, add table with results}
+
+However, they currently have a working joint calibration method based on manual observations. First, the robot is put to a specific pose (ie: standing), lifted to observe foot offsets and adjustments are done so that both feet are at same level and orientation. Next, the robot is placed on the ground and the distance to hip or another known joint origin is measured. This allows to measure the length of the kinematic chain of each leg. Any deviations are compensated by means of inverse kinematic values and finally the robot's leaning \todo{clarify} towards ground is also adjusted. While this appears to be a practical method, the disadvantage of manual measurements is time consuming and can be erroneous.
+
+There isn't significant amount of previous research regarding the observability of joint errors with on board sensors alone. Therefore one of the key components of this thesis would be devising an observation model for joint errors and deriving most suitable poses. This should assist to explain the quality of calibration at each joint.
+
+## Observation Models
+
+### Ambiguities of observations
+
+...
+
+Cosing similarity,,
+
+## Computing a pose for a robot
+
+### Forward Kinematics
+
+### Inverse Kinematics
+
+## Cost functions, Optimization, clustering
+
+### Cost functions and role in this regard
+
+### Optimization approaches and clustering
+
+### Curse of dimensionality
+
+# Methodology
+
+## Workflow
+
+The below workflow was followed during this thesis. Each component is explained in detail in the upcoming sections.
+
+
+
+Here a given joint set is taken, and camera2ground matrix is built. then a grid of points ("vector<Vector2f> grid" in source) in robot coordinates is transformed to camera sensor plane.
+This will be called "vector<Vector2f> baselinePoints" in the source code.
+
+Next, for each joint:
+
+- A small variation is applied, camera2ground matrix is updated and "observedPoints" are calculated by transforming the "grid".
+  Now there are two grids in camera plane.
+- In theory, it is possible to observe almost complete 6 DOF movement of the camera with the camera sensor, but it's not that notceable for some movements.
+  Therefore it is simplified to assume only x, y translations and z-rotation is observed. It should be noted that these 3 dimensions are orthogonal.
+- Based on this assumption, pose2D (x,y translations and z rotation) is calculated using baselineGrid and observedGrid.
+- The output is a Vector3f with x, y and z rotation values. They are not scaled.
+
+At the end of this loop, a PoseSensitivity object is created which holds the observed sensitivity per each joint at the given pose.
+
+Now this can be used for the clustering and further analysis.
 
