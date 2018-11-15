@@ -235,10 +235,10 @@ public:
   }
 
   template <typename T>
-  static std::vector<Vector3<T>> getVector3List(const Vector3<T> &minVec, const Vector3<T> &maxVec, const Vector3<T> &iterator)
+  static VecVector3<T> getVector3List(const Vector3<T> &minVec, const Vector3<T> &maxVec, const Vector3<T> &iterator)
   {
     Vector3<T> diff = maxVec - minVec;
-    std::vector<Vector3<T>> outputList;
+    VecVector3<T> outputList;
     for (T i = minVec.x(); i <= maxVec.x(); i += iterator.x())
     {
       if (std::abs(i) < iterator.x())
@@ -431,7 +431,7 @@ typedef NaoPose<dataT> poseT;
 typedef std::vector<poseT> poseListT;
 typedef std::vector<angleT> rawPoseT;
 typedef std::vector<rawPoseT> rawPoseListT;
-typedef std::vector<Vector3<dataT>> vector3ListT;
+typedef VecVector3<dataT> vector3ListT;
 
 template <typename T>
 const std::string PoseSensitivity<T>::className = "SENS";

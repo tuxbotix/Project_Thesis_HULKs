@@ -27,17 +27,13 @@ CameraObservationModel::CameraObservationModel(const Vector2i &imSize, const Vec
                                                uint64_t dimensionExtremum, const size_t &maxGridPointsPerSide, const float &gridSpacing)
     : // maxGridPointsPerSide(maxGridPointsPerSide),
       maxValPerDim(dimensionExtremum),
+      basicGrid(0),
       imSize(imSize),
+      deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD),
+      naoJointSensorModel(imSize, fc, cc, fov)
       // gridSpacing(gridSpacing),
-      deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0)
 {
-  camMat.fc = fc;
-  camMat.fc.x() *= imSize.x();
-  camMat.fc.y() *= imSize.y();
-  camMat.cc = cc;
-  camMat.cc.x() *= imSize.x();
-  camMat.cc.y() *= imSize.y();
-  camMat.fov = fov;
+  
   // Default state, ready pose and top camera with double foot.
   // updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT, SENSOR_NAME::TOP_CAMERA);
 
@@ -57,12 +53,9 @@ CameraObservationModel::CameraObservationModel(const Vector2i &imSize, const Vec
 /**
    * Update the state of the robot.
    */
-void CameraObservationModel::updateState(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const SENSOR_NAME &sensorNames)
+void CameraObservationModel::updateState(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const Camera &camName)
 {
-  Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
-  NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sf, camMat, camName);
-  // update default horizon
-  horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
+  naoJointSensorModel.setPoseCamUpdateOnly(jointAngles, sf, camName);
 }
 
 /**
@@ -71,17 +64,16 @@ void CameraObservationModel::updateState(const rawPoseT &jointAngles, const SUPP
  * 1. This has a hard range limit of 2m
  */
 // TODO  Make this private.
-std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
+VecVector2<float> CameraObservationModel::getGroundGrid(const Camera &camName, bool &success)
 {
-  std::vector<Vector2f> output;
+  VecVector2<float> output;
   Vector2f robotCoords;
 
   // Check if horizon line is above bottom of camera view.
-  bool proceed = horizon < (imSize.y() - 1);
-
+  bool proceed = naoJointSensorModel.isCameraAboveHorizon(camName);
   if (proceed)
   {
-    proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) && robotCoords.norm() <= maxViewDist);
+    proceed = naoJointSensorModel.projectCamCenterAxisToGround(camName, robotCoords) && robotCoords.norm() <= maxViewDist;
   }
 #if DEBUG_CAM_OBS
   else
@@ -117,7 +109,7 @@ std::vector<Vector2f> CameraObservationModel::getGroundGrid(bool &success)
   return output;
 }
 
-std::vector<std::pair<Vector2f, Vector2f>> CameraObservationModel::getFilteredCorrespondancePairs(const std::vector<Vector2f> &baseline,
+std::vector<std::pair<Vector2f, Vector2f>> CameraObservationModel::getFilteredCorrespondancePairs(const VecVector2<float> &baseline,
                                                                                                   const std::vector<std::pair<bool, Vector2f>> &meas) const
 {
   std::vector<std::pair<Vector2f, Vector2f>> output;
@@ -144,9 +136,9 @@ std::vector<std::pair<Vector2f, Vector2f>> CameraObservationModel::getFilteredCo
   return output;
 }
 
-std::vector<Vector2f> CameraObservationModel::filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec) const
+VecVector2<float> CameraObservationModel::filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec) const
 {
-  std::vector<Vector2f> output;
+  VecVector2<float> output;
   for (const auto &i : vec)
   {
     if (i.first)
@@ -157,40 +149,13 @@ std::vector<Vector2f> CameraObservationModel::filterRobot2PixelSets(const std::v
   return output;
 }
 
-/**
- * Robot to pixel, multiple point support
- */
-std::vector<std::pair<bool, Vector2f>> CameraObservationModel::robotToPixelMulti(const std::vector<Vector2f> &groundPoints) const
-{
-  std::vector<std::pair<bool, Vector2f>> output;
-  std::pair<bool, Vector2f> val;
-
-  Vector2f point(0.0, 0.0);
-
-  for (const auto &i : groundPoints)
-  {
-    val.first = robotToPixelFlt(i, point);
-    if (!val.first || point.x() > imSize.x() || point.y() > imSize.y() ||
-        point.x() < 0 || point.y() < 0)
-    {
-      val.first = false;
-      val.second = Vector2f(0, 0);
-    }
-    else
-    {
-      val.second = point;
-    }
-    output.push_back(val);
-  }
-  return output;
-}
 
 /**
  * Get observability (sensitivity?) of a given joint for a given camera at a given pose
  */
 Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
-                                                                 const std::vector<Vector2f> &grid, const std::vector<Vector2f> &baselinePoints,
-                                                                 const SENSOR_NAME &sensorName, bool &observed)
+                                                                 const VecVector2<float> &grid, const VecVector2<float> &baselinePoints,
+                                                                 const Camera &camName, bool &observed)
 {
   Vector3f output(0, 0, 0);
 
@@ -203,10 +168,10 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
     tempJoints[JOINTS::JOINT::L_HIP_YAW_PITCH] = tempJoints[joint];
     tempJoints[JOINTS::JOINT::R_HIP_YAW_PITCH] = tempJoints[joint];
   }
+  
+  updateState(tempJoints, sf, camName);
 
-  updateState(tempJoints, sf, sensorName);
-
-  std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList = getFilteredCorrespondancePairs(baselinePoints, robotToPixelMulti(grid));
+  std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList = getFilteredCorrespondancePairs(baselinePoints, naoJointSensorModel.robotToPixelMulti(camName, grid));
 
   int status = -2;
   if (baselineToObsList.size() > 4)
@@ -218,14 +183,14 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(const JOINTS::J
       abs(utils::constrainAngle180(output.z())) > 90)
   {
     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-    std::cout << "dimension Limit violation!!! j->" << joint << " " << sf << " " << sensorName;
+    std::cout << "dimension Limit violation!!! j->" << joint << " " << sf << " " << (int)camName;
     for (auto &i : jointAngles)
     {
       std::cout << " " << i;
     }
     std::cout << std::endl;
-    std::cout << camMat.camera2ground.posV << "\n"
-              << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
+    // std::cout << camMat.camera2ground.posV << "\n"
+    //           << camMat.camera2ground.rotM.toRotationMatrix() << std::endl;
     std::cout << " stat " << status << "\n\n"
               << output << std::endl;
   }
@@ -257,21 +222,23 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
 {
   if (sensorName != SENSOR_NAME::TOP_CAMERA && sensorName != SENSOR_NAME::BOTTOM_CAMERA)
   {
+    std::cerr<<"invalid sensor"<<std::endl;
     throw "Invalid sensor, not camera!";
   }
+  
+  Camera camName = sensorName == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
 
   PoseSensitivity<Vector3f> output(sensorName);
 
   /// Make the basline set of points.
-  updateState(jointAngles, sf, sensorName);
+  updateState(jointAngles, sf, camName);
   bool success;
-  std::vector<Vector2f> gridSet = getGroundGrid(success);
-
+  VecVector2<float> gridSet = getGroundGrid(camName, success);
   if (success)
   {
-    std::vector<std::pair<bool, Vector2f>> baseLinePointSet = robotToPixelMulti(gridSet);
-    std::vector<Vector2f> baseLinePoints;
-    std::vector<Vector2f> grid;
+    std::vector<std::pair<bool, Vector2f>> baseLinePointSet = naoJointSensorModel.robotToPixelMulti(camName, gridSet);
+    VecVector2<float> baseLinePoints;
+    VecVector2<float> grid;
     // Use only gridPoints that made into camera plane.
     for (size_t i = 0; i < gridSet.size(); i++)
     {
@@ -281,7 +248,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
         baseLinePoints.push_back(baseLinePointSet[i].second);
       }
     }
-    // const std::vector<Vector2f> baseLinePoints = filterRobot2PixelSets(baseLinePointSet);
+    // const VecVector2<float> baseLinePoints = filterRobot2PixelSets(baseLinePointSet);
     baseLinePointSet.clear();
     gridSet.clear();
 
@@ -294,7 +261,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
         // output.setSensitivity(i, p, observed);
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid,
-                                                               baseLinePoints, sensorName, observed);
+                                                               baseLinePoints, camName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }
@@ -304,7 +271,7 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(cons
       {
         // temp fix in injecting support foot as right always.
         Vector3f sensitivity = getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid,
-                                                               baseLinePoints, sensorName, observed);
+                                                               baseLinePoints, camName, observed);
         output.setSensitivity(i, sensitivity, observed);
       }
     }

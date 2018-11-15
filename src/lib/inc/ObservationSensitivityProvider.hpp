@@ -49,6 +49,7 @@ public:
       }
       else
       {
+        std::cout<<"Sensor Sensitivity Function not implemented."<<std::endl;
         throw "Sensor Sensitivity Function not implemented.";
       }
     }

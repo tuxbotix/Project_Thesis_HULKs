@@ -13,7 +13,7 @@
 //   static constexpr float maxViewDist = 3.0;
 //   const size_t maxGridPointsPerSide;
 
-//   std::vector<Vector2f> basicGrid;
+//   VecVector2<float> basicGrid;
 
 //   Vector2i imSize;
 //   // float gridSpacing;
@@ -84,9 +84,9 @@
 //  * 1. This has a hard range limit of 2m
 //  */
 //   // TODO  Make this private.
-//   std::vector<Vector2f> getGroundGrid()
+//   VecVector2<float> getGroundGrid()
 //   {
-//     std::vector<Vector2f> output;
+//     VecVector2<float> output;
 //     Vector2f robotCoords;
 
 //     // Check if horizon line is above bottom of camera view.
@@ -129,7 +129,7 @@
 //   /**
 //  * Robot to pixel, multiple point support
 //  */
-//   std::vector<float> robotToPixelMulti(const std::vector<Vector2f> &groundPoints)
+//   std::vector<float> robotToPixelMulti(const VecVector2<float> &groundPoints)
 //   {
 //     std::vector<float> output;
 //     Vector2i point;
@@ -146,7 +146,7 @@
 //  * Get observability (sensitivity?) of a given joint for a given camera at a given pose
 //  */
 //   Vector3f getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
-//                                            const std::vector<Vector2f> &grid, const std::vector<float> &baselinePoints,
+//                                            const VecVector2<float> &grid, const std::vector<float> &baselinePoints,
 //                                            const SENSOR_NAME &sensorName, bool &observed)
 //   {
 //     Vector3f output(0, 0, 0);
@@ -210,7 +210,7 @@
 //     /// Make the basline set of points.
 //     updateState(jointAngles, sf, sensorName);
 
-//     const std::vector<Vector2f> grid = getGroundGrid();
+//     const VecVector2<float> grid = getGroundGrid();
 //     const std::vector<float> baseLinePoints = robotToPixelMulti(grid);
 
 //     /**
