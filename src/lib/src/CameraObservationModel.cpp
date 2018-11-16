@@ -70,7 +70,7 @@ VecVector2<float> CameraObservationModel::getGroundGrid(const Camera &camName, b
   Vector2f robotCoords;
 
   // Check if horizon line is above bottom of camera view.
-  bool proceed = naoJointSensorModel.isCameraAboveHorizon(camName);
+  bool proceed = !naoJointSensorModel.isCameraAboveHorizon(camName);
   if (proceed)
   {
     proceed = naoJointSensorModel.projectCamCenterAxisToGround(camName, robotCoords) && robotCoords.norm() <= maxViewDist;
