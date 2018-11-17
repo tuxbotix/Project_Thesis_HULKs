@@ -470,8 +470,8 @@ int main(int argc, char **argv)
 #endif
     }
 
-    std::cout << "Tried " << std::scientific << (long double)std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0) << " poses!" << std::endl;
-    std::cout << "Found " << std::scientific << (long double)poseCount.load() << " good poses!" << std::endl;
+    std::cout << "Tried " << std::scientific << static_cast<long double>(std::accumulate(iterCount.begin(), iterCount.end(), static_cast<size_t>(0))) << " poses!" << std::endl;
+    std::cout << "Found " << std::scientific << static_cast<long double>(poseCount.load()) << " good poses!" << std::endl;
 
     return 0;
 }

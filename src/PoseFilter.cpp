@@ -17,6 +17,7 @@
 #include <Tools/Kinematics/KinematicMatrix.h>
 #include <Hardware/RobotInterface.hpp>
 
+#include "constants.hpp"
 #include "TUHHMin.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
@@ -39,7 +40,7 @@ typedef std::array<float, JOINTS::JOINT::JOINTS_MAX> JointWeights;
 typedef std::array<float, SENSOR_COUNT> SensorWeights;
 
 typedef std::pair<int, std::string> SensMagAndPoseId; // Sensor Name should be maintained externally.
-typedef std::pair<double, std::string> PoseCost;      // Sensor Name should be maintained externally.
+typedef std::pair<double, std::string> PoseCost;      // Pose cost and ID
 
 static const size_t maxPeakElemsPerList = 10E15;
 static const size_t maxPeakElemsPerListSortTrigger = 10E18;
@@ -185,10 +186,10 @@ void poseFilterFunc(std::istream &inputStream,
             {
                 poseCosts.emplace_back(poseCostAccum, curPoseId);
             }
-            if (poseCosts.size() > maxPeakElemsPerListSortTrigger)
-            {
-                sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
-            }
+//            if (poseCosts.size() > maxPeakElemsPerListSortTrigger)
+//            {
+//                sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
+//            }
             previousCostVal.first = poseCostAccum;
             previousCostVal.second = curPoseId;
             poseCostAccum = 0; // reset the accum
@@ -209,7 +210,7 @@ void poseFilterFunc(std::istream &inputStream,
     // std::cout << "finishing" << std::endl;
 
     // sort ASC by cost and trim
-    sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
+//    sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
 }
 
 int main(int argc, char **argv)
@@ -224,7 +225,8 @@ int main(int argc, char **argv)
         jointNum = -1;
     }
 
-    const std::string outFileName(inFileName + "_FilteredPoses_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
+    const std::string outCostsFileName(inFileName + "_" + constants::FilteredPoseCostsFileName + "_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
+    const std::string outFilteredPosesFileName(inFileName + "_" + constants::FilteredPosesFileName + "_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
     TUHH tuhhInstance(confRoot);
 
@@ -235,7 +237,7 @@ int main(int argc, char **argv)
     std::vector<std::fstream> inputPoseAndJointStreams;
     for (size_t i = 0; i < MAX_THREADS; i++)
     {
-        std::string fileName = inFileName + "_ExtractedSensitivities_" + std::to_string(i) + ".txt";
+        std::string fileName = inFileName + "_" + constants::ExtractedSensitivitiesFileName + "_" + std::to_string(i) + ".txt";
         if (std::ifstream(fileName))
         {
             inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
@@ -247,8 +249,10 @@ int main(int argc, char **argv)
         }
     }
     std::cout << "make outfiles. Usable threads -> " << usableThreads << std::endl;
-    std::fstream outputFile = std::fstream((outFileName + ".txt"), std::ios::out);
-    if (!outputFile.is_open())
+    std::fstream outCostsFile = std::fstream((outCostsFileName + ".txt"), std::ios::out);
+    std::fstream outFilteredPosesFile = std::fstream((outFilteredPosesFileName + ".txt"), std::ios::out);
+
+    if (!outCostsFile.is_open() || !outFilteredPosesFile.is_open())
     {
         std::cerr << "output file creation failed. Aborting!!!" << std::endl;
         exit(1);
@@ -345,24 +349,112 @@ int main(int argc, char **argv)
         std::cout << "flushing all " << std::endl;
 #if DO_COMMIT
         // first join all
+        std::cout<< poseCostListList[0].size()<< " ";
         for (size_t t = 1; t < usableThreads; t++) //per thread
         {
+            std::cout<< poseCostListList[t].size() <<" ";
             poseCostListList[0].insert(poseCostListList[0].end(),
                                        std::make_move_iterator(poseCostListList[t].begin()),
                                        std::make_move_iterator(poseCostListList[t].end()));
         }
+        std::cout<< std::endl;
         std::vector<PoseCost> &sortedPoseCostVec = poseCostListList[0];
-        // sort the results
+
+        std::cout<<"total filtered pose count " << sortedPoseCostVec.size() <<std::endl;
+// sort the results by ID. Will be expensive -_- But will save time in lookup.
+//        std::sort(sortedPoseCostVec.begin(), sortedPoseCostVec.end(), [](PoseCost & a, PoseCost & b) {
+//            return a.second < b.second;
+//        });
+
+//        /// Lookup the poses and get to memory.
+//        // actual poses here..
+        std::vector<poseAndRawAngleT> poseList(sortedPoseCostVec.size());
+//        std::map<std::string, poseAndRawAngleT>::iterator poseMapIter;
+
+        std::fstream genPoseListFile;
+
+        size_t outFileNum = 0;
+        std::cout<<"opening "<< outFileNum << std::endl;
+        genPoseListFile.open((inFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"), std::ios::in);
+
+//        size_t triedLines = 0;
+
+        for (size_t idx = 0; idx < sortedPoseCostVec.size(); idx++) //per thread
+        {
+            auto & elem = sortedPoseCostVec[idx];
+
+            std::string curString = "";
+            std::string dummy = "";
+            std::string id = "";
+            bool elementFound = false;
+
+            poseAndRawAngleT tempPose;
+
+            while(std::getline(genPoseListFile, curString)){
+//                triedLines ++;
+
+                std::stringstream curStream(curString);
+
+                curStream >> dummy >> dummy >> id;
+                if(elem.second.compare(id) == 0){
+                    elementFound = true;
+                    curStream.seekg (0, curStream.beg);
+                    curStream >> poseList[idx];
+                    break;
+                }
+            }
+
+            if(!genPoseListFile.good()){
+                genPoseListFile.close();
+                outFileNum++;
+                if(outFileNum < usableThreads){
+                    if(!elementFound){
+                        idx--; // go back one index
+                    }
+                    std::cout<<"opening "<< outFileNum << std::endl;
+                    genPoseListFile.open((inFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"), std::ios::in);
+                }else{
+                    if(idx + 1 < sortedPoseCostVec.size()){
+                        std::cout<<"No more files to read " << idx << " " << sortedPoseCostVec.size() <<std::endl;
+                    }
+                    break;
+                }
+            }else{
+                if(!elementFound){
+                    std::cout << "element not found"<< elem.second << std::endl;
+                }
+            }
+        }
+//        // close the file
+        genPoseListFile.close();
+
+//        /// Sort filtered poses in cost order and commit cost and pose seperately.
+//        // now sort the filtered poses in
         std::sort(sortedPoseCostVec.begin(),
                   sortedPoseCostVec.end());
 
-        for (size_t i = 0; i < std::min(finalPoseFilteringLimit, sortedPoseCostVec.size()); i++)
+        if(poseList.size() != sortedPoseCostVec.size()){
+            std::cerr << "PoseMap and PoseCostVec doesnt match in size" << poseList.size() << " " << sortedPoseCostVec.size() << std::endl;
+            return 1;
+        }
+
+        const size_t trimmedLen = std::min(finalPoseFilteringLimit, sortedPoseCostVec.size());
+
+        for (size_t i = 0; i < trimmedLen; i++)
         {
-            outputFile << "poseCost " << sortedPoseCostVec[i].second << " " << sortedPoseCostVec[i].first << std::endl;
+            try {
+                outFilteredPosesFile << poseList[i] << std::endl;
+                outCostsFile << "poseCost " << sortedPoseCostVec[i].second << " " << sortedPoseCostVec[i].first << std::endl;
+            } catch (std::exception e) {
+                std::cerr << e.what() << " " << sortedPoseCostVec[i].second << std::endl;
+                return 1;
+            }
+
         }
 
         // outputFileList[t].close();
-        outputFile.close();
+        outCostsFile.close();
+        outFilteredPosesFile.close();
 #endif
     }
     return 0;

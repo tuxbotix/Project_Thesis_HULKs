@@ -26,43 +26,43 @@
 
 typedef std::vector<std::pair<int, std::vector<float>>> JointAndPoints;
 
-void weirdPointTest(const ObservationModelConfig cfg)
-{
-    // joint 12, sensor 1
-    JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(12);
-    SENSOR_NAME sensorName = static_cast<SENSOR_NAME>(1);
-    Camera camName = sensorName == SENSOR_NAME::TOP_CAMERA? Camera::TOP: Camera::BOTTOM;
+//void weirdPointTest(const ObservationModelConfig cfg)
+//{
+//    // joint 12, sensor 1
+//    JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(12);
+//    SENSOR_NAME sensorName = static_cast<SENSOR_NAME>(1);
+//    Camera camName = sensorName == SENSOR_NAME::TOP_CAMERA? Camera::TOP: Camera::BOTTOM;
 
-    std::vector<float> jointAngles = {3.141590e-01, 1.396260e-01, 1.570800e+00, 2.000000e-01, 1.570800e+00, -8.726650e-03, 0.000000e+00,
-                                      0.000000e+00, 4.345030e-02, 3.923680e-01, -1.020720e+00, 1.700120e+00, -5.993040e-01, -3.939770e-01,
-                                      4.345030e-02, 1.251520e-01, -1.250350e+00, 9.796810e-01, 3.451760e-01, -1.220670e-01, 1.570800e+00,
-                                      -2.000000e-01, -1.570800e+00, 8.726650e-03, 0.000000e+00, 0.000000e+00}; // stat 1;
+//    std::vector<float> jointAngles = {3.141590e-01, 1.396260e-01, 1.570800e+00, 2.000000e-01, 1.570800e+00, -8.726650e-03, 0.000000e+00,
+//                                      0.000000e+00, 4.345030e-02, 3.923680e-01, -1.020720e+00, 1.700120e+00, -5.993040e-01, -3.939770e-01,
+//                                      4.345030e-02, 1.251520e-01, -1.250350e+00, 9.796810e-01, 3.451760e-01, -1.220670e-01, 1.570800e+00,
+//                                      -2.000000e-01, -1.570800e+00, 8.726650e-03, 0.000000e+00, 0.000000e+00}; // stat 1;
 
-    CameraObservationModel cObs(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
-                                cfg.dimensionExtremum, cfg.maxGridPointsPerSide, cfg.gridSpacing);
-    SUPPORT_FOOT sf = SUPPORT_FOOT::SF_LEFT;
+//    CameraObservationModel cObs(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
+//                                cfg.dimensionExtremum, cfg.maxGridPointsPerSide, cfg.gridSpacing);
+//    SUPPORT_FOOT sf = SUPPORT_FOOT::SF_LEFT;
 
-    cObs.updateState(jointAngles, sf, camName);
-    bool success;
-    VecVector2<float> gridSet = cObs.getGroundGrid(camName, success);
-    // std::cout << " success? " << success << std::endl;
-    if (success)
-    {
-        std::vector<std::pair<bool, Vector2f>> baseLinePointSet = cObs.naoJointSensorModel.robotToPixelMulti(camName, gridSet);
-        VecVector2<float> grid;
-        // Use only gridPoints that made into camera plane.
-        for (size_t i = 0; i < gridSet.size(); i++)
-        {
-            if (baseLinePointSet[i].first)
-            {
-                grid.push_back(gridSet[i]);
-            }
-        }
-        bool observed;
-        Vector3f sensitivity = cObs.getSensitivityForJointForCamera(joint, jointAngles, sf, grid, VecVector2<float>(0), camName, observed);
-        std::cout << sensitivity << std::endl;
-    }
-}
+//    cObs.updateState(jointAngles, sf, camName);
+//    bool success;
+//    VecVector2<float> gridSet = cObs.getGroundGrid(camName, success);
+//    // std::cout << " success? " << success << std::endl;
+//    if (success)
+//    {
+//        std::vector<std::pair<bool, Vector2f>> baseLinePointSet = cObs.naoJointSensorModel.robotToPixelMulti(camName, gridSet);
+//        VecVector2<float> grid;
+//        // Use only gridPoints that made into camera plane.
+//        for (size_t i = 0; i < gridSet.size(); i++)
+//        {
+//            if (baseLinePointSet[i].first)
+//            {
+//                grid.push_back(gridSet[i]);
+//            }
+//        }
+//        bool observed;
+//        Vector3f sensitivity = cObs.getSensitivityForJointForCamera(joint, jointAngles, sf, grid, VecVector2<float>(0), camName, observed);
+//        std::cout << sensitivity << std::endl;
+//    }
+//}
 
 void weirdPointTest2(const ObservationModelConfig cfg)
 {

@@ -19,14 +19,20 @@ private:
 
   Vector2i imSize;
   Vector2i horizon;
+  static constexpr float maxViewDist = 3.0;
+
+  // Default state, ready pose and top camera with double foot.
+  // updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT, SENSOR_NAME::TOP_CAMERA);
+  VecVector2<float> basicGrid;
 
 public:
   NaoJointAndSensorModel(const Vector2i &imSize, const Vector2f &fc,
-                         const Vector2f &cc, const Vector2f &fov)
+                         const Vector2f &cc, const Vector2f &fov,  const size_t &maxGridPointsPerSide, const float &gridSpacing)
       : imSize(imSize), 
       jointCalibOffsets(JOINTS::JOINT::JOINTS_MAX, 0.0),
       commandedPose(JOINTS::JOINT::JOINTS_MAX, 0.0),
-      realPose (JOINTS::JOINT::JOINTS_MAX, 0.0){
+      realPose (JOINTS::JOINT::JOINTS_MAX, 0.0),
+       basicGrid(0){
 
     topCamMat.fc = fc;
     topCamMat.fc.x() *= imSize.x();
@@ -42,6 +48,18 @@ public:
     botCamMat.cc.x() *= imSize.x();
     botCamMat.cc.y() *= imSize.y();
     botCamMat.fov = fov;
+
+    float x, y;
+    const int gridSizeHalf = maxGridPointsPerSide / 2;
+    for (size_t i = 0; i < maxGridPointsPerSide; i++)
+    {
+      x = ((int)i - gridSizeHalf) * gridSpacing;
+      for (size_t j = 0; j < maxGridPointsPerSide; j++)
+      {
+        y = ((int)j - gridSizeHalf) * gridSpacing;
+        basicGrid.emplace_back(x, y);
+      }
+    }
   }
   ~NaoJointAndSensorModel() {}
 
@@ -55,9 +73,11 @@ public:
 
     auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
     // update sensor model based on the REAL pose!!
-    NaoSensorDataProvider::updatedCameraMatrix(realPose, sf, camMat, camName);
+
+    // Always use supportFootOrigin policy
+    NaoSensorDataProvider::updatedCameraMatrix(realPose, sf, camMat, camName, false);
     // update default horizon
-    horizon[(int)camName] =
+    horizon[static_cast<int>(camName)] =
         std::min(std::min(camMat.getHorizonHeight(0),
                           camMat.getHorizonHeight(imSize.x() - 1)),
                  imSize.y() - 1);
@@ -167,6 +187,59 @@ public:
       }
       output.push_back(val);
     }
+    return output;
+  }
+
+
+  /**
+   * Get 3D grid with given grid spacing relative to robot's ground coord.
+   * Obviously, camera matrix must be updated before calling this.
+   * 1. This has a hard range limit of 2m
+   */
+  // TODO  Make this private.
+  VecVector2<float> getGroundGrid(const Camera &camName, bool &success)
+  {
+    VecVector2<float> output;
+    Vector2f robotCoords;
+
+    // Check if horizon line is above bottom of camera view.
+    bool proceed = !isCameraAboveHorizon(camName);
+    if (proceed)
+    {
+      proceed = projectCamCenterAxisToGround(camName, robotCoords) && robotCoords.norm() <= maxViewDist;
+    }
+  #if DEBUG_CAM_OBS
+    else
+    {
+      auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
+      std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB << std::endl;
+      std::cout << " Out of horizon!" << std::endl;
+      std::cout << camMat.pixelToRobot(Vector2i(0, 0), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
+      std::cout << camMat.pixelToRobot(Vector2i(imSize.x(), 0), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
+      std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
+      std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
+    }
+  #endif
+    if (proceed)
+    {
+      Vector2f tempCoord;
+      // Eigen::Translation<float, 2> trans(tempCoord.x(), tempCoord.y());
+      float theta = std::atan2(robotCoords.y(), robotCoords.x());
+      Eigen::Rotation2D<float> rot2(theta);
+      for (const auto &i : basicGrid)
+      {
+        tempCoord = robotCoords + (rot2 * i);
+        output.push_back(tempCoord);
+      }
+    }
+  #if DEBUG_CAM_OBS
+    else
+    {
+      std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
+      std::cout << "Too far view dist!" << std::endl;
+    }
+  #endif
+    success = proceed;
     return output;
   }
 };

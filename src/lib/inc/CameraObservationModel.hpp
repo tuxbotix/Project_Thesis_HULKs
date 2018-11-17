@@ -23,15 +23,13 @@ private:
  */
   typedef int16_t sensitivityOutputType;
   static const std::string name;
-  static constexpr float maxViewDist = 3.0;
+//  static constexpr float maxViewDist = 3.0;
   // we scale the output to a signed integer occupying the below byte count.
   // ie: to fit
   // static const uint8_t bytesPerDim = sizeof(sensitivityOutputType);
   const uint64_t maxValPerDim; // = std::numeric_limits<sensitivityOutputType>::max(); // max per side*, so - 38768
 
   // const size_t maxGridPointsPerSide;
-
-  VecVector2<float> basicGrid;
 
   Vector2i imSize;
   // float gridSpacing;
@@ -60,29 +58,13 @@ public:
    */
   void updateState(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const Camera &sensorNames);
 
-  /**
-   * Get 3D grid with given grid spacing relative to robot's ground coord.
-   * Obviously, camera matrix must be updated before calling this.
-   * 1. This has a hard range limit of 2m
-   */
-  // TODO  Make this private.
-  VecVector2<float> getGroundGrid(const Camera &camName, bool &success);
-
-  /**
-   * Filter correspondance pairs
-   */
-  std::vector<std::pair<Vector2f, Vector2f>> getFilteredCorrespondancePairs(const VecVector2<float> &baseline,
-                                                                            const std::vector<std::pair<bool, Vector2f>> &meas) const;
-
-  /**
-   * Filter out bad robot2Pixel converts
-   */
-  VecVector2<float> filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec) const;
-
-  /**
-   * Robot to pixel, multiple point support
-   */
-  std::vector<std::pair<bool, Vector2f>> robotToPixelMulti(const VecVector2<float> &groundPoints) const;
+//  /**
+//   * Get 3D grid with given grid spacing relative to robot's ground coord.
+//   * Obviously, camera matrix must be updated before calling this.
+//   * 1. This has a hard range limit of 2m
+//   */
+//  // TODO  Make this private.
+//  VecVector2<float> getGroundGrid(const Camera &camName, bool &success);
 
   /**
    * Get observability (sensitivity?) of a given joint for a given camera at a given pose

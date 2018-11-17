@@ -29,12 +29,13 @@ add_library(${libtuhh} ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_include_directories(${libtuhh} SYSTEM PUBLIC ${TUHHSDK_HOME} ${TUHH_DEPS_INCLUDE_DIRECTORIES})
 target_link_libraries(${libtuhh} ${TUHH_DEPS_LIBRARIES} ${TUHHSDK_LIBRARIES})
 
-add_library(naoPose src/NaoCollision.cpp src/NaoProjectionDataProvider.cpp src/Sensors.cpp inc/NaoStability.hpp inc/NaoCollision.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoPoseInfo.hpp inc/Sensors.hpp)
+add_library(naoPose src/NaoCollision.cpp src/NaoProjectionDataProvider.cpp src/Sensors.cpp inc/NaoStability.hpp
+    inc/NaoCollision.hpp inc/NaoTorsoPose.hpp inc/NaoProjectionDataProvider.hpp inc/NaoJointAndSensorModel.hpp inc/NaoPoseInfo.hpp inc/Sensors.hpp)
 target_include_directories(naoPose SYSTEM PUBLIC inc external)
 target_link_libraries(naoPose tuhh)
 
 
-add_library(utils src/utils.cpp inc/utils.hpp)
+add_library(utils src/utils.cpp inc/utils.hpp inc/constants.hpp)
 target_include_directories(utils SYSTEM PUBLIC inc)
 target_link_libraries(utils naoPose tuhh)
 

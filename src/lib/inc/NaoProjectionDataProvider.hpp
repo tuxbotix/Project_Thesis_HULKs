@@ -24,9 +24,22 @@ class NaoSensorDataProvider
 
   public:
     static KinematicMatrix getSupportFootMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf);
-    static void updatedCameraMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf, CameraMatrix &cameraMatrix_, const Camera &camera);
+    static void updatedCameraMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf, CameraMatrix &cameraMatrix_, const Camera &camera, const bool & useProjectedTorsoAsGroundOrigin = true);
     /**
+     * @param useProjectedTorsoAsGroundOrigin - if true will use standard hulks method of torso projection to ground. Else it'll take ground's origin as point of support foot on ground.
      * Derived from cycle() of Projection.cpp
      */
-    static void updatedCameraMatrix(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera);
+    static void updatedCameraMatrix(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera, const bool & useProjectedTorsoAsGroundOrigin = true);
+
+    /**
+     * Filter correspondance pairs
+     */
+    static std::vector<std::pair<Vector2f, Vector2f>> getFilteredCorrespondancePairs(const VecVector2<float> &baseline,
+                                                                              const std::vector<std::pair<bool, Vector2f>> &meas);
+
+    /**
+     * Filter out bad robot2Pixel converts
+     */
+    static VecVector2<float> filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec);
+
 };

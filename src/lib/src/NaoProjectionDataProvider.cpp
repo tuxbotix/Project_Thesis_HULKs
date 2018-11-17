@@ -45,14 +45,15 @@ KinematicMatrix NaoSensorDataProvider::getSupportFootMatrix(const std::vector<fl
     return supFoot2Torso;
 }
 
-void NaoSensorDataProvider::updatedCameraMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf, CameraMatrix &cameraMatrix_, const Camera &camera)
+void NaoSensorDataProvider::updatedCameraMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf, CameraMatrix &cameraMatrix_, const Camera &camera, const bool & useProjectedTorsoAsGroundOrigin)
 {
-    updatedCameraMatrix(angles, getSupportFootMatrix(angles, sf), cameraMatrix_, camera);
+    updatedCameraMatrix(angles, getSupportFootMatrix(angles, sf), cameraMatrix_, camera, useProjectedTorsoAsGroundOrigin);
 }
-/**
+    /**
+     * @param
      * Derived from cycle() of Projection.cpp
      */
-void NaoSensorDataProvider::updatedCameraMatrix(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera)
+void NaoSensorDataProvider::updatedCameraMatrix(const std::vector<float> &angles, const KinematicMatrix &supFoot2torso, CameraMatrix &cameraMatrix_, const Camera &camera, const bool & useProjectedTorsoAsGroundOrigin)
 {
     KinematicMatrix camera2head_uncalib;
     switch (camera)
@@ -65,7 +66,13 @@ void NaoSensorDataProvider::updatedCameraMatrix(const std::vector<float> &angles
         break;
     }
     cameraMatrix_.camera2torso = getHeadToTorso(angles) * camera2head_uncalib;
-    cameraMatrix_.camera2ground = getTorso2Ground(supFoot2torso) * cameraMatrix_.camera2torso;
+
+    // Differs from original hulks code. assuming the nao's supportfoot dont leave ground, supFootMode is good for grid stuff
+    if(useProjectedTorsoAsGroundOrigin){
+        cameraMatrix_.camera2ground = getTorso2Ground(supFoot2torso) * cameraMatrix_.camera2torso;
+    }else{
+        cameraMatrix_.camera2ground = supFoot2torso.invert() * cameraMatrix_.camera2torso;
+    }
     // divide position by 1000 because we want it in meters but the head matrix buffer stores them in millimeters.
     cameraMatrix_.camera2torso.posV /= 1000.f;
     cameraMatrix_.camera2ground.posV /= 1000.f;
@@ -89,4 +96,37 @@ void NaoSensorDataProvider::updatedCameraMatrix(const std::vector<float> &angles
             cameraMatrix_.cc.y() + cameraMatrix_.fc.y() * (rM(2, 0) + cameraMatrix_.cc.x() * rM(2, 1) / cameraMatrix_.fc.x()) / rM(2, 2);
     }
     cameraMatrix_.valid = true;
+}
+
+std::vector<std::pair<Vector2f, Vector2f>>
+NaoSensorDataProvider::getFilteredCorrespondancePairs(
+    const VecVector2<float> &baseline,
+    const std::vector<std::pair<bool, Vector2f>> &meas) {
+  std::vector<std::pair<Vector2f, Vector2f>> output;
+  if (baseline.size() == meas.size()) {
+    for (size_t i = 0; i < baseline.size(); i++) {
+      if (meas[i].first) {
+        output.emplace_back(baseline[i], meas[i].second);
+      }
+    }
+  } else {
+    std::cout << "baseline and measurement list sizes mismatch";
+  }
+//#if DEBUG_CAM_OBS
+//  if (output.size() != baseline.size()) {
+//    std::cout << "diff " << (baseline.size() - output.size()) << std::endl;
+//  }
+//#endif
+  return output;
+}
+
+VecVector2<float> NaoSensorDataProvider::filterRobot2PixelSets(
+    const std::vector<std::pair<bool, Vector2f>> &vec) {
+  VecVector2<float> output;
+  for (const auto &i : vec) {
+    if (i.first) {
+      output.push_back(i.second);
+    }
+  }
+  return output;
 }

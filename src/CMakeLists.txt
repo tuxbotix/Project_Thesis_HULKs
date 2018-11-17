@@ -19,13 +19,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 set(RTTR_ENABLE_WERROR 0)
 
 add_subdirectory(lib)
-# Execs
-#poseGen
 
+### Main Programs
+
+# old test1
 set(target1 test1)
 add_executable(${target1} tests/test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target1} utils naoPose tuhh)
 
+# poseGen
 set(target2 poseGen)
 add_executable(${target2} poseGenerator.cpp lib/inc/MiniConfigHandle.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target2} observability utils naoPose tuhh)
@@ -36,27 +38,40 @@ add_executable(${target3} SensitivityExtractor.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_
 target_link_libraries(${target3} observability utils naoPose tuhh)
 
 # Filter poses by sensitivity, etc..
-
 set(target4 poseFilter)
 add_executable(${target4} PoseFilter.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target4} observability utils naoPose tuhh)
 
+# Filter poses by sensitivity, etc..
+#set(target5 poseLookup)
+#add_executable(${target5} PoseLookup.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+#target_link_libraries(${target5} observability utils naoPose tuhh)
+
+### Evaluations
+
+# 1st Simulation test
+set(eval1 simWholeGridTest)
+add_executable(${eval1} tests/simTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${eval1} observability utils naoPose tuhh)
+
+### Tests
+
 # other tests
-set(target5 tests)
-add_executable(${target5} tests/tests.cpp lib/inc/MiniConfigHandle.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_link_libraries(${target5} observability utils naoPose tuhh)
+set(test1 tests)
+add_executable(${test1} tests/tests.cpp lib/inc/MiniConfigHandle.hpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${test1} observability utils naoPose tuhh)
 
 # Pose2d test [ sort of ICP ]
-set(target6 icpTest)
-add_executable(${target6} tests/icpTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_link_libraries(${target6} observability utils naoPose tuhh)
+set(test2 icpTest)
+add_executable(${test2} tests/icpTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${test2} observability utils naoPose tuhh)
 
 # Obs Tests
-set(target7 obsTest)
-add_executable(${target7} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_link_libraries(${target7} observability utils naoPose tuhh)
+set(test3 obsTest)
+add_executable(${test3} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${test3} observability utils naoPose tuhh)
 
-# Copy Configs
+### Post build
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/configuration)
 configure_file(configuration/limits_d.json configuration/)
