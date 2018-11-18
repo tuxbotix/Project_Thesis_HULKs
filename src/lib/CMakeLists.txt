@@ -35,7 +35,7 @@ target_include_directories(naoPose SYSTEM PUBLIC inc external)
 target_link_libraries(naoPose tuhh)
 
 
-add_library(utils src/utils.cpp inc/utils.hpp inc/constants.hpp)
+add_library(utils src/utils.cpp inc/JointCalibSolver.hpp inc/utils.hpp inc/constants.hpp)
 target_include_directories(utils SYSTEM PUBLIC inc)
 target_link_libraries(utils naoPose tuhh)
 
