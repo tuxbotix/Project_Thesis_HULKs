@@ -8,6 +8,10 @@
 #include "NaoProjectionDataProvider.hpp"
 #include "ObservationModel.hpp"
 
+#ifndef DEBUG_JOINT_AND_SENS
+#define DEBUG_JOINT_AND_SENS 0
+#endif
+
 class NaoJointAndSensorModel {
 private:
   rawPoseT jointCalibOffsets; // inverse of error
@@ -28,10 +32,10 @@ private:
 public:
   NaoJointAndSensorModel(const Vector2i &imSize, const Vector2f &fc,
                          const Vector2f &cc, const Vector2f &fov,  const size_t &maxGridPointsPerSide, const float &gridSpacing)
-      : imSize(imSize), 
-      jointCalibOffsets(JOINTS::JOINT::JOINTS_MAX, 0.0),
+      :jointCalibOffsets(JOINTS::JOINT::JOINTS_MAX, 0.0),
       commandedPose(JOINTS::JOINT::JOINTS_MAX, 0.0),
       realPose (JOINTS::JOINT::JOINTS_MAX, 0.0),
+      imSize(imSize),
        basicGrid(0){
 
     topCamMat.fc = fc;
@@ -62,6 +66,10 @@ public:
     }
   }
   ~NaoJointAndSensorModel() {}
+
+  Vector2i getImSize(){
+    return imSize;
+  }
 
   void setPoseCamUpdateOnly(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
                             const Camera &camName) {
@@ -94,6 +102,7 @@ public:
 
   void setCalibValues(const rawPoseT &calibVals) {
     if (calibVals.size() < JOINTS::JOINT::JOINTS_MAX) {
+        throw "calibVals with incorrect length";
       return;
     }
     for (size_t i = 0; i < JOINTS::JOINT::JOINTS_MAX; i++) {
@@ -103,10 +112,22 @@ public:
 
   rawPoseT getCalibValues() { return jointCalibOffsets; }
 
+  bool pixelToRobot(const Camera &camName, const Vector2i & pixelCoords,
+                                    Vector2f &robotCoords) {
+    auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
+    return camMat.pixelToRobot(pixelCoords, robotCoords);
+  }
+
   bool projectCamCenterAxisToGround(const Camera &camName,
                                     Vector2f &robotCoords) {
     auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
-    return camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords);
+
+    if(camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords)){
+        return true;
+    }else{
+        std::cout<< robotCoords << camMat.cc << std::endl;
+        return false;
+    }
   }
 
   bool isCameraAboveHorizon(const Camera &camName) {
@@ -200,15 +221,17 @@ public:
   VecVector2<float> getGroundGrid(const Camera &camName, bool &success)
   {
     VecVector2<float> output;
-    Vector2f robotCoords;
+    Vector2f robotCoords = {0, 0};
+    Vector2f camCenterProjPoint = {0, 0};
+    float cornerProjMaxDist = 0; // max distance to corners from center.
 
     // Check if horizon line is above bottom of camera view.
     bool proceed = !isCameraAboveHorizon(camName);
     if (proceed)
     {
-      proceed = projectCamCenterAxisToGround(camName, robotCoords) && robotCoords.norm() <= maxViewDist;
+      proceed = projectCamCenterAxisToGround(camName, camCenterProjPoint) && (camCenterProjPoint.norm()) <= maxViewDist;
     }
-  #if DEBUG_CAM_OBS
+  #if DEBUG_JOINT_AND_SENS
     else
     {
       auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
@@ -222,6 +245,19 @@ public:
   #endif
     if (proceed)
     {
+        std::array<Vector2f, 4> imageCornerGroundProjections;
+        pixelToRobot(camName, Vector2i(0, 0), imageCornerGroundProjections[0]);
+        pixelToRobot(camName, Vector2i(0, imSize.y()), imageCornerGroundProjections[1]);
+        pixelToRobot(camName, Vector2i(imSize.x(), 0), imageCornerGroundProjections[2]);
+        pixelToRobot(camName, imSize, imageCornerGroundProjections[3]);
+
+        for(const auto & val : imageCornerGroundProjections){
+            float dist = (camCenterProjPoint - val).norm();
+            if( dist > cornerProjMaxDist){
+                cornerProjMaxDist = dist;
+            }
+        }
+
       Vector2f tempCoord;
       // Eigen::Translation<float, 2> trans(tempCoord.x(), tempCoord.y());
       float theta = std::atan2(robotCoords.y(), robotCoords.x());
@@ -229,17 +265,21 @@ public:
       for (const auto &i : basicGrid)
       {
         tempCoord = robotCoords + (rot2 * i);
-        output.push_back(tempCoord);
+        // if this point might be in image's viewpoint.
+        if((camCenterProjPoint - tempCoord).norm() <= cornerProjMaxDist){
+            output.push_back(tempCoord);
+        }
+//        std::cout << (camCenterProjPoint - tempCoord).norm() << "<=" <<  cornerProjMaxDist << " = " << ((camCenterProjPoint - tempCoord).norm() <= cornerProjMaxDist) << std::endl;
       }
     }
-  #if DEBUG_CAM_OBS
+  #if DEBUG_JOINT_AND_SENS
     else
     {
-      std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
+      std::cout << "CamCenterRayToGround: " << camCenterProjPoint.norm() << " " << camCenterProjPoint.x() << ", " << camCenterProjPoint.y() << std::endl;
       std::cout << "Too far view dist!" << std::endl;
     }
   #endif
-    success = proceed;
+    success = proceed && (output.size() > 0);
     return output;
   }
 };

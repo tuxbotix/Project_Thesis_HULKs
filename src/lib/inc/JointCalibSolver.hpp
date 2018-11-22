@@ -1,176 +1,201 @@
-//#pragma once
+#pragma once
 
-//#include <Eigen/Dense>
-//#include <Eigen/Sparse>
+#include <array>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <fstream>
+// #include <iomanip>
+#include <iostream>
+#include <random>
+#include <sstream>
+#include <thread>
+#include <tuple>
+#include <unordered_set>
 
-//#include <unsupported/Eigen/NonLinearOptimization>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <unsupported/Eigen/NonLinearOptimization>
 
-//#include "cppoptlib/meta.h"
-//#include "cppoptlib/boundedproblem.h"
-//#include "cppoptlib/solver/lbfgsbsolver.h"
+//#include <Data/CameraMatrix.hpp>
+//#include <Modules/NaoProvider.h>
+//#include <Modules/Configuration/Configuration.h>
+//#include <Modules/Configuration/UnixSocketConfig.hpp>
+//#include <Modules/Poses.h>
 
-//namespace JointCalibSolvers
-//{
+//#include <Tools/Storage/Image.hpp>
+//#include <Tools/Storage/Image422.hpp>
+//#include <Tools/Kinematics/KinematicMatrix.h>
+//#include <Hardware/RobotInterface.hpp>
 
-//typedef std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> Point2DVector;
-//typedef std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f>> Point2FVector;
+#include "constants.hpp"
+#include "NaoPoseInfo.hpp"
+#include "NaoStability.hpp"
+#include "NaoTorsoPose.hpp"
+#include "NaoJointAndSensorModel.hpp"
+
+namespace JointCalibSolvers
+{
+
+
+typedef std::vector<std::pair<int, std::vector<float>>> JointAndPoints;
+// first is ground point
+typedef std::vector<std::pair<Vector2f, Vector2f>> CorrespondanceList;
+typedef std::vector<std::pair<Vector3f, Vector2f>> Correspondance3D2DList;
+
+//struct JointCalibCapture{
+//    NaoPose<float> pose;
+//    Correspondance3D2DList capturedCorrespondances;
+//};
+
+struct JointCalibCaptureEvalT{
+    CorrespondanceList capturedCorrespondances;
+    rawPoseT pose;
+    SUPPORT_FOOT sf;
+    Camera camName;
+
+    JointCalibCaptureEvalT(const CorrespondanceList & correspondances, const rawPoseT & pose, const Camera camName, const SUPPORT_FOOT sf):
+    capturedCorrespondances(correspondances),
+    pose(pose),
+    sf(sf),
+    camName(camName)
+    {
+    }
+};
+
+struct JointCalibResult{
+    int status; // out of solver
+    float reprojectionErrorNorm;
+    float reprojectionErrorAvg;
+    rawPoseT jointParams; // solved params
+};
+
+typedef std::vector<JointCalibCaptureEvalT> CaptureList;
+
+const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
+const unsigned int MAX_POSES_TO_CALIB = 10;
 
 ///**
 // * Extracted from https://github.com/daviddoria/Examples/blob/master/c%2B%2B/Eigen/LevenbergMarquardt/CurveFitting.cpp
 // * This definition structure is needed to use NumericalDiff module
 // */
 
-//template <typename _Scalar = float, int NX = Eigen::Dynamic, int NY = Eigen::Dynamic>
-//struct Functor
-//{
-//  typedef _Scalar Scalar;
-//  enum
-//  {
-//    InputsAtCompileTime = NX,
-//    ValuesAtCompileTime = NY
-//  };
-//  typedef Eigen::Matrix<Scalar, InputsAtCompileTime, 1> InputType;
-//  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, 1> ValueType;
-//  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, InputsAtCompileTime> JacobianType;
+template <typename _Scalar = float, int NX = Eigen::Dynamic, int NY = Eigen::Dynamic>
+struct Functor
+{
+  typedef _Scalar Scalar;
+  enum
+  {
+    InputsAtCompileTime = NX,
+    ValuesAtCompileTime = NY
+  };
+  typedef Eigen::Matrix<Scalar, InputsAtCompileTime, 1> InputType;
+  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, 1> ValueType;
+  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, InputsAtCompileTime> JacobianType;
 
-//  int n_inputs, m_values;
+  int n_inputs, m_values;
 
-//  Functor() : n_inputs(InputsAtCompileTime), m_values(ValuesAtCompileTime) {}
-//  Functor(int inputs, int values) : n_inputs(inputs), m_values(values) {}
+  Functor() : n_inputs(InputsAtCompileTime), m_values(ValuesAtCompileTime) {}
+  Functor(int inputs, int values) : n_inputs(inputs), m_values(values) {}
 
-//  int inputs() const { return n_inputs; }
-//  int values() const { return m_values; }
-//};
+  int inputs() const { return n_inputs; }
+  int values() const { return m_values; }
+};
 
-//template <typename _Scalar = float>
-//struct JpointCalibFunctor : Functor<_Scalar>
-//{
-//  // 'm' pairs of (x, f(x))
-//  std::vector<_Scalar> initialPoints;
-//  std::vector<_Scalar> transformedPoints;
+struct JointCalibrator : Functor<float>{
 
-//  // Compute 'm' errors, one for each data point, for the given parameter values in 'x'
-//  int operator()(const Eigen::VectorXf &calibOffsets, Eigen::VectorXf &errorVec) const
-//  {
-//      // First get the input to std vector so that Nao can handle it..
-//    std::vector<_Scalar> calibOffsetsNaoFormat;
-//    calibOffsetsNaoFormat.resize(calibOffsets.size());
-//    Eigen::VectorXf::Map(&calibOffsetsNaoFormat[0], calibOffsets.size()) = calibOffsets;
+    const CaptureList captureList;
+    const size_t captureDataSetSize;
+    const NaoJointAndSensorModel naoModel;
 
-//    Eigen::Translation<_Scalar, 2> trans(xTrans, yTrans);
-//    Eigen::Rotation2D<_Scalar> rot2(zRot * TO_RAD);
-//    Eigen::UniformScaling<float> scale(x(3));
-//    Eigen::Vector2f diff;
-//    Eigen::Vector2f tempVec;
+    int operator()(const Eigen::VectorXf &calibrationVals, Eigen::VectorXf &errorVec) const {
+        auto tempModel = NaoJointAndSensorModel(naoModel);
+        auto imSize = tempModel.getImSize();
 
-//    for (size_t i = 0; i < initialPoints.size(); i += 2)
-//    {
-//      // diff = transformedPoints[i] - (trans * rot2 * initialPoints[i]);
-//      tempVec.x() = initialPoints[i];
-//      tempVec.y() = initialPoints[i + 1];
-//      diff = Vector2f(transformedPoints[i], transformedPoints[i + 1]) - (trans * scale * rot2 * tempVec);
-//      // fvec(i/2) = diff.dot(diff);
-//      errorVec(i) = diff.x();
-//      errorVec(i + 1) = diff.y();
-//    }
-//    return 0;
-//  }
+        rawPoseT calibrationValsStdVec;
+        calibrationValsStdVec.resize(calibrationVals.size());
+        Eigen::VectorXf::Map(&calibrationValsStdVec[0], calibrationVals.size()) = calibrationVals;
 
-//  int inputs() const { return 3; }
-//  int values() const { return initialPoints.size(); }
-//};
+//        for(int i =0; i< JOINTS::JOINT::JOINTS_MAX;++i){
+//            std::cout << calibrationVals.transpose()<<std::endl;
+//        }
 
-///**
-// * CppOptLib problem
-// */
+        tempModel.setCalibValues(calibrationValsStdVec);
+//        long totalErrVecSize = 0;
+//        error.resize(capture.);
+//        rawPoseListT errorVecVec(captureList.size());
 
-//// we will solve ||Xb-y|| s.t. b>=0
-//template <typename T>
-//class Pose2DLeastSquares : public cppoptlib::BoundedProblem<T>
-//{
-//public:
-//  using Superclass = cppoptlib::BoundedProblem<T>;
-//  using typename Superclass::TVector;
-//  using TMatrix = typename Superclass::THessian;
+        for(size_t capIdx = 0, iter = 0; capIdx < captureList.size(); capIdx++){
+            const auto & capture = captureList[capIdx];
+//            auto & errorAtCap = errorVecVec[capIdx];
+//            errorAtCap.reserve(capture.capturedCorrespondances.size());
+            const auto & camName = capture.camName;
 
-//  const TMatrix X;
-//  const TVector y;
+            tempModel.setPoseCamUpdateOnly(capture.pose, capture.sf, capture.camName);
+            for(const auto & correspondance : capture.capturedCorrespondances){
+                Vector2f error(0, 0);
+//                if(
+                tempModel.robotToPixelFlt(camName, correspondance.first, error);
+//                        ){
 
-//public:
-//  Pose2DLeastSquares(const TMatrix &X_, const TVector y_) : Superclass(X_.cols()),
-//                                                            X(X_), y(y_) {}
 
-//  T value(const TVector &beta)
-//  {
-//    return (X * beta - y).dot(X * beta - y);
-//  }
+                    error -= correspondance.second;
+//                    if(std::abs(error.x()) > imSize.x()){
+//                        errorAtCap.push_back(imSize.x() * utils::sgn(error.x()));
+//                    }else{
 
-//  void gradient(const TVector &beta, TVector &grad)
-//  {
-//    grad = X.transpose() * 2 * (X * beta - y);
-//  }
-//};
+                    errorVec(iter++) = error.x();
+                    errorVec(iter++) = error.y();
 
-///**
-// * This is quick n dirty way to call this..
-// */
+//                        errorAtCap.push_back(error.x());
+//                    }
+//                    if(std::abs(error.y()) > imSize.y()){
+//                        errorAtCap.push_back(imSize.y() * utils::sgn(error.y()));
+//                    }else{
+//                        errorAtCap.push_back(error.y());
+//                    }
 
-//// template <typename _Scalar>
-//int get2dPose(const std::vector<std::pair<Vector2f, Vector2f>> &correspondancePairs,
-//              Vector3f &params)
-//{
-//  VectorXf paramsX(4); // 2 translations, 1 rotations and 2 scaling
-//  paramsX(0) = params.x();
-//  paramsX(1) = params.y();
-//  paramsX(2) = params.z();
-//  paramsX(3) = 1; // scale
-//  // paramsX(4) = 1; // scale
+//                    totalErrVecSize++;
+//                }else{
+//                    std::cout << "behind " <<std::endl;
+//                    std::cout << error.transpose() << " " << correspondance.second.transpose() <<std::endl;
+//                    errorAtCap.push_back(0);
+//                    errorAtCap.push_back(0);
+//                    errorVec(iter++) = 0;
+//                    errorVec(iter++) = 0;
+//                }
+            }
+        }
+//            auto correspondances = NaoSensorDataProvider::getFilteredCorrespondancePairs(groundGrid, naoJointSensorModel.robotToPixelMulti(camName, groundGrid));
+//        int iter = 0;
+//        for(size_t i = 0; i< errorVecVec.size(); ++i){
+//            auto & errorAtCap = errorVecVec[i];
+//            for(size_t j = 0; j< errorAtCap.size(); ++j, ++iter){
+//                errorVec(iter) = errorAtCap[j];
+//            }
+//        }
+        return 0;
+    }
 
-//  std::vector<float> initialPoints;
-//  std::vector<float> transformedPoints;
+    JointCalibrator(CaptureList & captures, NaoJointAndSensorModel & model):
+        captureList(captures),
+        // This nasty chunk get total element count via a lambda and return to the int.
+        captureDataSetSize([=]()-> size_t{
+            size_t temp = 0;
+            for(auto & elem : captures){
+                temp += elem.capturedCorrespondances.size() * 2;
+            }
+            return temp;
+        }()),
+        naoModel(model)
+    {
 
-//  for (const auto &i : correspondancePairs)
-//  {
-//    initialPoints.push_back(i.first.x());
-//    initialPoints.push_back(i.first.y());
-//    transformedPoints.push_back(i.second.x());
-//    transformedPoints.push_back(i.second.y());
-//  }
+    }
 
-//  Pose2DFunctor<float> functor;
-//  functor.initialPoints = initialPoints;
-//  functor.transformedPoints = transformedPoints;
+    // Means the parameter count = 26~ in our case
+    int inputs() const { return JOINTS::JOINT::JOINTS_MAX;  }
+    // size of sample/ correspondance set
+    size_t values() const { return captureDataSetSize;}
+};
 
-//  { // Initial test, if the fuctor give almost no error, then just stop
-//    VectorXf diffs(functor.values());
-//    functor(paramsX, diffs);
-//    if (diffs.norm() < sqrt(Eigen::NumTraits<float>::epsilon()))
-//    {
-//      // std::cout << "skip" << std::endl;
-//      return 4;
-//    }
-//  }
-
-//  Eigen::NumericalDiff<Pose2DFunctor<float>> functorDiff(functor);
-//  Eigen::LevenbergMarquardt<Eigen::NumericalDiff<Pose2DFunctor<float>>, float> lm(functorDiff);
-
-//  int status = lm.minimize(paramsX);
-//  // {
-//  //   VectorXf diffs(functor.values());
-//  //   functor(paramsX, diffs);
-//  //   // if (diffs.norm() > 5)
-//  //   {
-//  //     float mean = diffs.mean();
-//  //     VectorXf val = (diffs - VectorXf::Ones(diffs.size()) * mean);
-//  //     double std_dev = std::sqrt(val.dot(val) / (diffs.size() - 1));
-
-//  //     std::cout << "Solver's efficiency?? mean" << mean << " std dev: "
-//  //               << std_dev << " norm " << diffs.norm() << std::endl;
-//  //     // " min " << diffs.minCoeff() << " max " << diffs.maxCoeff() << std::endl;
-//  //   }
-//  // }
-//  params = Eigen::Vector3f(paramsX(0), paramsX(1), paramsX(2));
-//  return status;
-//}
-
-//} // namespace ObservationSolvers
+} // namespace ObservationSolvers

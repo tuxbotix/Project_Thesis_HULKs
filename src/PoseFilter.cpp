@@ -34,7 +34,7 @@
 #include "utils.hpp"
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
-static const int SENSOR_COUNT = 4;
+static const int SENSOR_COUNT = 2;
 
 typedef std::array<float, JOINTS::JOINT::JOINTS_MAX> JointWeights;
 typedef std::array<float, SENSOR_COUNT> SensorWeights;
@@ -217,7 +217,8 @@ int main(int argc, char **argv)
 {
     std::string inFileName((argc > 1 ? argv[1] : "out"));
     std::string favouredJoint((argc > 2 ? argv[2] : "-1"));
-    std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
+    std::string favouredSensor((argc > 3 ? argv[3] : "all")); // t, b, all
+    std::string confRoot((argc > 4 ? argv[4] : "../../nao/home/"));
 
     int jointNum = std::stoi(favouredJoint);
     if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
@@ -267,6 +268,15 @@ int main(int argc, char **argv)
         std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
         SensorWeights sensorMagnitudeWeights;
         sensorMagnitudeWeights.fill(2);
+
+        if(favouredSensor.compare("t") == 0){
+            sensorMagnitudeWeights[SENSOR_NAME::TOP_CAMERA] = 4;
+        }else if(favouredSensor.compare("b") == 0){
+            sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
+        }else if(favouredSensor.compare("all") == 0){
+            sensorMagnitudeWeights[SENSOR_NAME::TOP_CAMERA] = 4;
+            sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
+        }
 
         // TODO change this as needed.
         JointWeights jointWeights;

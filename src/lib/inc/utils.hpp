@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cmath>
 #include <vector>
+#include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <atomic>
@@ -206,5 +208,86 @@ class JointsAndPosesStream
         return false;
     }
 };
+
+template <typename T>
+class SimpleHistogram{
+private:
+    long binCount;
+    T minRange;
+    T maxRange;
+    T binSize;
+    std::vector<T> histogram;
+    size_t totalElemCount;
+
+public:
+    SimpleHistogram(int bins, T min, T max):
+    binCount(bins),
+    minRange(min),
+    maxRange(max),
+    binSize((max-min)/(binCount - 1)),
+    histogram(binCount),
+    totalElemCount(0){
+
+    }
+
+    void update(const std::vector<T> & vals){
+        for(const auto & elem : vals){
+            if(std::isnan(elem) || std::isinf(elem)){
+                continue;
+            }
+            int binIdx = std::round((elem - minRange)/ binSize);
+            if(binIdx < 0){
+                binIdx = 0;
+            }else if(binIdx >= binCount){
+                binIdx = binCount - 1;
+            }
+            ++histogram[binIdx];
+            ++totalElemCount;
+        }
+    }
+
+    /**
+     * @brief getPercentileBounds
+     * @param percentile (approached from both sides until this is exceeded)
+     * @return min-max percentile bounds
+     */
+    std::pair<T, T> getPercentileBounds(const T percentile) const {
+              std::cout << std::setprecision(10);
+        std::pair<T, T> bounds;
+        T currentTotal = 0;
+        bool lowerBoundFound = false;
+
+        for(int i=0; i< binCount; ++i){
+            auto bin = ((T)i * binSize + minRange);
+            auto & val = histogram[i];
+
+            currentTotal += (val/ totalElemCount);
+            if(!lowerBoundFound && currentTotal > percentile){
+                bounds.first = bin;
+                lowerBoundFound = true;
+            }else if(currentTotal > (1.0 - percentile)){
+                bounds.second = bin;
+                break;
+            }
+        }
+        return bounds;
+    }
+
+    inline friend std::ostream &operator<<(std::ostream &out, const SimpleHistogram &hist){
+        auto old_precision = out.precision();
+        out << std::setprecision(10);
+        for(int i=0; i< hist.binCount; ++i){
+            out << ((T)i * hist.binSize + hist.minRange) << ", " << hist.histogram[i]/hist.totalElemCount << std::endl;
+        }
+        // do stuff
+        out.precision(old_precision);
+        return out;
+    }
+
+};
+
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
 
 } // namespace utils

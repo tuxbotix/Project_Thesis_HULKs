@@ -18,6 +18,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 # for some weird compiler bug
 set(RTTR_ENABLE_WERROR 0)
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
+endif(CCACHE_FOUND)
+
 add_subdirectory(lib)
 
 ### Main Programs
@@ -42,10 +48,10 @@ set(target4 poseFilter)
 add_executable(${target4} PoseFilter.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${target4} observability utils naoPose tuhh)
 
-# Filter poses by sensitivity, etc..
-#set(target5 poseLookup)
-#add_executable(${target5} PoseLookup.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-#target_link_libraries(${target5} observability utils naoPose tuhh)
+## Filter poses by sensitivity, etc..
+#set(target5 calibServer)
+#add_executable(${target5} calibServer.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+#target_link_libraries(${target5} observability utils naoPose tuhh zmq)
 
 ### Evaluations
 
@@ -70,6 +76,11 @@ target_link_libraries(${test2} observability utils naoPose tuhh)
 set(test3 obsTest)
 add_executable(${test3} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${test3} observability utils naoPose tuhh)
+
+# Obs Tests
+set(test4 calibSolverTest)
+add_executable(${test4} tests/JointCalibSolverTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${test4} observability utils naoPose tuhh)
 
 ### Post build
 
