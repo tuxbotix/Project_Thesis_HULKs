@@ -1,11 +1,15 @@
 #include <iostream>
+#include <tuple>
 // #include <iomanip>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <cmath>
 #include <chrono>
 #include <thread>
+#include <random>
 #include <array>
+#include <unordered_set>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -30,8 +34,10 @@
 #include "NaoJointAndSensorModel.hpp"
 
 #define DEBUG_CAM_OBS 1
+
 #include "CameraObservationModel.hpp"
 #include "ObservationSensitivityProvider.hpp"
+#include "JointCalibSolver.hpp"
 
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
@@ -41,134 +47,117 @@
 
 #include "utils.hpp"
 
-typedef std::vector<std::pair<int, std::vector<float>>> JointAndPoints;
-// first is ground point
-typedef std::vector<std::pair<Vector2f, Vector2f>> CorrespondanceList;
-typedef std::vector<std::pair<Vector3f, Vector2f>> Correspondance3D2DList;
-
-//struct JointCalibCapture{
-//    NaoPose<float> pose;
-//    Correspondance3D2DList capturedCorrespondances;
-//};
-
-struct JointCalibCaptureEvalT{
-    CorrespondanceList capturedCorrespondances;
-    rawPoseT pose;
-    SUPPORT_FOOT sf;
-    Camera camName;
-
-    JointCalibCaptureEvalT(const CorrespondanceList & correspondances, rawPoseT & pose, Camera camName, SUPPORT_FOOT sf){
-        capturedCorrespondances = correspondances;
-        this->pose = pose;
-        this->camName = camName;
-        this->sf = sf;
-    }
-};
-
-typedef std::vector<JointCalibCaptureEvalT> CaptureList;
-
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
-const unsigned int MAX_POSES_TO_CALIB = 15;
+const unsigned int MAX_POSES_TO_CALIB = 10;
 
-///**
-// * Extracted from https://github.com/daviddoria/Examples/blob/master/c%2B%2B/Eigen/LevenbergMarquardt/CurveFitting.cpp
-// * This definition structure is needed to use NumericalDiff module
-// */
+/**
+ * @brief evalJointErrorSet
+ * @param naoModel
+ * @param poseList
+ * @param inducedErrorStdVec
+ * @return pre-post residuals
+ */
+std::tuple<JointCalibSolvers::JointCalibResult, Eigen::VectorXf, Eigen::VectorXf, Eigen::VectorXf> evalJointErrorSet(const NaoJointAndSensorModel naoModel, const poseAndRawAngleListT & poseList, const rawPoseT & inducedErrorStdVec, bool & success){
 
-template <typename _Scalar = float, int NX = Eigen::Dynamic, int NY = Eigen::Dynamic>
-struct Functor
-{
-  typedef _Scalar Scalar;
-  enum
-  {
-    InputsAtCompileTime = NX,
-    ValuesAtCompileTime = NY
-  };
-  typedef Eigen::Matrix<Scalar, InputsAtCompileTime, 1> InputType;
-  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, 1> ValueType;
-  typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, InputsAtCompileTime> JacobianType;
+    JointCalibSolvers::JointCalibResult result;
 
-  int n_inputs, m_values;
+    const Eigen::VectorXf inducedErrorEig = Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(inducedErrorStdVec.data(), inducedErrorStdVec.size());
 
-  Functor() : n_inputs(InputsAtCompileTime), m_values(ValuesAtCompileTime) {}
-  Functor(int inputs, int values) : n_inputs(inputs), m_values(values) {}
+    Eigen::VectorXf jointCalibResidual = inducedErrorEig;
 
-  int inputs() const { return n_inputs; }
-  int values() const { return m_values; }
-};
+    auto naoJointSensorModel(naoModel);
+    naoJointSensorModel.setCalibValues(inducedErrorStdVec);
 
-struct JointCalibrator : Functor<float>{
+    auto camNames = {Camera::BOTTOM};
 
-    const CaptureList captureList;
-    const size_t captureDataSetSize;
-    const NaoJointAndSensorModel naoModel;
+    JointCalibSolvers::CaptureList frameCaptures;
 
-    int operator()(const Eigen::VectorXf &calibrationVals, Eigen::VectorXf &errorVec) const {
-        auto tempModel = NaoJointAndSensorModel(naoModel);
-
-        rawPoseT calibrationValsStdVec;
-        calibrationValsStdVec.resize(calibrationVals.size());
-        Eigen::VectorXf::Map(&calibrationValsStdVec[0], calibrationVals.size()) = calibrationVals;
-
-
-        tempModel.setCalibValues(calibrationValsStdVec);
-        long totalErrVecSize = 0;
-//        error.resize(capture.);
-        rawPoseListT errorVecVec(captureList.size());
-
-        for(size_t capIdx = 0; capIdx < captureList.size(); capIdx++){
-            const auto & capture = captureList[capIdx];
-            auto & errorAtCap = errorVecVec[capIdx];
-            const auto & camName = capture.camName;
-
-            tempModel.setPoseCamUpdateOnly(capture.pose, capture.sf, capture.camName);
-            for(const auto & correspondance : capture.capturedCorrespondances){
-                Vector2f error;
-                if(tempModel.robotToPixelFlt(camName, correspondance.first, error)){
-                    error -= correspondance.second;
-
-                    errorAtCap.push_back(error.x());
-                    errorAtCap.push_back(error.y());
-
-                    totalErrVecSize++;
+    for(auto & poseAndAngles : poseList){
+        naoJointSensorModel.setPose(poseAndAngles.angles, poseAndAngles.pose.supportFoot);
+        for(auto & camName : camNames){
+            bool success = false;
+            // will be relative to support foot, easier to manage
+            auto groundGrid = naoJointSensorModel.getGroundGrid(camName, success);
+            if(success){
+                // world points, pixel points.
+                // TODO make world points handle 3d also
+                auto correspondances = NaoSensorDataProvider::getFilteredCorrespondancePairs(groundGrid, naoJointSensorModel.robotToPixelMulti(camName, groundGrid));
+                if(correspondances.size() > 0){
+                    frameCaptures.emplace_back(correspondances, poseAndAngles.angles, camName, poseAndAngles.pose.supportFoot);
+                }else{
+                    std::cout << "No suitable ground points" << std::endl;
                 }
+            }else{
+                std::cerr << "Obtaining ground grid failed" << std::endl;
             }
         }
-//            auto correspondances = NaoSensorDataProvider::getFilteredCorrespondancePairs(groundGrid, naoJointSensorModel.robotToPixelMulti(camName, groundGrid));
-        int iter = 0;
-        for(size_t i = 0; i< errorVecVec.size(); ++i){
-            auto & errorAtCap = errorVecVec[i];
-            for(size_t j = 0; j< errorAtCap.size(); ++j, ++iter){
-                errorVec(iter) = errorAtCap[j];
-            }
-        }
-        return 0;
     }
 
-    JointCalibrator(CaptureList & captures, NaoJointAndSensorModel & model):
-        captureList(captures),
-        // This nasty chunk get total element count via a lambda and return to the int.
-        captureDataSetSize([=]()-> size_t{
-            size_t temp = 0;
-            for(auto & elem : captures){
-                temp += elem.capturedCorrespondances.size() * 2;
-            }
-            return temp;
-        }()),
-        naoModel(model)
-    {
-
+    if(frameCaptures.size() <= 0 ){
+        std::cout << "No suitable frame captures !!" << std::endl;
+        success = false;
+        return { result, jointCalibResidual, Eigen::VectorXf(0), Eigen::VectorXf(0) };
     }
+    /*
+     * Mini eval of cost fcn
+     */
 
-    // Means the parameter count = 26~ in our case
-    int inputs() const { return JOINTS::JOINT::JOINTS_MAX;  }
-    // size of sample/ correspondance set
-    size_t values() const { return captureDataSetSize;}
-};
+    auto calibrator = JointCalibSolvers::JointCalibrator(frameCaptures, naoJointSensorModel);
+
+    rawPoseT calVec(JOINTS::JOINT::JOINTS_MAX, 0.0);
+
+    Eigen::VectorXf errorVec(calibrator.values());
+    Eigen::VectorXf finalErrorVec(calibrator.values());
+
+//    std::cout<< "Compensated Calib state: " << calibrator(inducedErrorEig, errorVec) << " cost: " << errorVec.norm() << std::endl;
+
+//    {
+//        std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+//    std::cout<< "Calib state pre: " <<
+                calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(calVec.data(), calVec.size()), errorVec);
+//                        << " cost: " << errorVec.norm() << " avg err " << errorVec.sum();
+//    }
+
+
+
+    Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator> functorDiff(calibrator);
+    Eigen::LevenbergMarquardt<Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator>, float> lm(functorDiff);
+
+    // Setting zero is very important.
+    Eigen::VectorXf calibratedParams((int)JOINTS::JOINT::JOINTS_MAX);
+    calibratedParams.setZero();
+
+    int status = lm.minimize(calibratedParams);
+
+    calibrator(calibratedParams, finalErrorVec);
+
+    auto minCoeff = finalErrorVec.minCoeff();
+    auto maxCoeff = finalErrorVec.maxCoeff();
+    auto errorNorm = finalErrorVec.norm();
+    auto errorAvg = errorVec.norm()/errorVec.size();
+
+    if(std::isnan(minCoeff) || std::isnan(maxCoeff) || errorNorm > errorVec.norm()){
+//        std::cout << "Calibration failure" << errorVec.norm() << " " << finalErrorVec.norm() << std::endl;
+        success = false;
+    }else {
+        success = true;
+    }
+    result.status = status;
+    result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
+    for(int i = 0; i< JOINTS::JOINT::JOINTS_MAX; ++i){
+        result.jointParams[i] = calibratedParams(i);
+    }
+    result.reprojectionErrorNorm = errorNorm;
+    result.reprojectionErrorNorm = errorAvg;
+    jointCalibResidual -= calibratedParams;
+
+    return {result, jointCalibResidual, errorVec, finalErrorVec};
+}
 
 int main(int argc, char *argv[])
 {
     std::string inFileName((argc > 1 ? argv[1] : "out"));
+//    std::string inFileName((argc > 1 ? argv[1] : "out"));
     std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
 
 //    size_t usableThreads = 0;
@@ -212,97 +201,181 @@ int main(int argc, char *argv[])
     camMat.cc.y() *= imSize.y();
     camMat.fov = fov;
 
-    const ObservationModelConfig cfg = {imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA}, 1000, 25, 0.05};
-
-    auto naoJointSensorModel = NaoJointAndSensorModel(imSize,fc, cc,fov, cfg.maxGridPointsPerSide, cfg.gridSpacing);
-
-    // TODO.. actual calib values and reporting ;)
-    auto inducedErrorStdVec = rawPoseT(JOINTS::JOINT::JOINTS_MAX);
-    inducedErrorStdVec[JOINTS::JOINT::L_KNEE_PITCH] = 5 * TO_RAD;
-    inducedErrorStdVec[JOINTS::JOINT::L_HIP_PITCH] = -6 * TO_RAD;
-
-    naoJointSensorModel.setCalibValues(inducedErrorStdVec);
-
-    NaoPoseAndRawAngles<float> poseAndAngles;
-
-    auto camNames = {Camera::TOP, Camera::BOTTOM};
 
     // TODO multithread later...
 //    for(auto & iStreamRef : inputPoseAndJointStreams){
-    CaptureList frameCaptures;
+
+    poseAndRawAngleListT poseList;
+    poseList.reserve(MAX_POSES_TO_CALIB);
+    poseAndRawAngleT poseAndAngles;
 
     for(size_t i=0; i < MAX_POSES_TO_CALIB && utils::JointsAndPosesStream::getNextPoseAndRawAngles(inFile, poseAndAngles); ++i){
+        poseList.push_back(poseAndAngles);
+    }
 
-        naoJointSensorModel.setPose(poseAndAngles.angles, poseAndAngles.pose.supportFoot);
-        for(auto & camName : camNames){
-            bool success = false;
-            // will be relative to support foot, easier to manage
-            auto groundGrid = naoJointSensorModel.getGroundGrid(camName, success);
-            if(success){
-                // world points, pixel points.
-                // TODO make world points handle 3d also
-                auto correspondances = NaoSensorDataProvider::getFilteredCorrespondancePairs(groundGrid, naoJointSensorModel.robotToPixelMulti(camName, groundGrid));
+    std::cout<<" reading of poses done" << std::endl;
 
-                frameCaptures.emplace_back(correspondances, poseAndAngles.angles, camName, poseAndAngles.pose.supportFoot);
-            }else{
-                std::cerr << "Obtaining ground grid failed" << std::endl;
-            }
+    /*
+     * Make dataset
+     */
+
+    // TODO check if uniform distribution is the right choice?
+    std::default_random_engine generator;
+//    std::uniform_real_distribution<float> distribution(-8, 8);
+    std::normal_distribution<float>distribution(0.0, 5.5);
+
+    const size_t JOINT_ERR_LST_DESIRED_COUNT = 10000;
+
+    std::set<rawPoseT> uniqueJointErrList;
+//    std::vector<rawPoseT> jointErrList(JOINT_ERR_LST_DESIRED_COUNT);
+    for(size_t iter = 0; iter < JOINT_ERR_LST_DESIRED_COUNT; iter++){
+        rawPoseT elem = rawPoseT(JOINTS::JOINT::JOINTS_MAX, 0.0f);
+
+        elem[ JOINTS::JOINT::HEAD_PITCH] = std::min(0.0f, static_cast<float>(distribution(generator))/2 * TO_RAD);
+        elem[ JOINTS::JOINT::HEAD_YAW] = distribution(generator) * TO_RAD;
+
+        // todo make this dual leg supported..
+        for( size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH; i <= JOINTS::JOINT::L_ANKLE_ROLL; i++ ){
+            elem[i] = distribution(generator) * TO_RAD;
+        }
+        uniqueJointErrList.insert(elem);
+    }
+
+    const size_t JOINT_ERR_LST_COUNT = uniqueJointErrList.size();
+    std::vector<rawPoseT> jointErrList(JOINT_ERR_LST_COUNT);
+    std::copy(uniqueJointErrList.begin(), uniqueJointErrList.end(), jointErrList.begin());
+    uniqueJointErrList.clear();
+
+    std::cout << jointErrList.size() << "error lists to try" << std::endl;
+
+    // create nao model
+    const ObservationModelConfig cfg = {imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA}, 1000, 50, 0.05};
+    auto naoJointSensorModel = NaoJointAndSensorModel(imSize,fc, cc,fov, cfg.maxGridPointsPerSide, cfg.gridSpacing);
+
+    // initialize histograms
+    std::cout << " initializing histograms " << std::endl;
+
+    // start calib runs
+    size_t badCases = 0;
+
+    std::cout << " Running calibrations" << std::endl;
+
+    Vector2f min = {1000.0f, 1000.0f} , max = {-1000.0f, -1000.0f};
+    Vector2f minMaxJointParams;
+
+    std::pair<std::vector<double>, std::vector<double>> preResidualsXY;
+    std::pair<std::vector<double>, std::vector<double>> postResidualsXY;
+    std::vector<double> jointCalibParamResidual;
+
+    for(size_t i = 0; i < JOINT_ERR_LST_COUNT; i++){
+        auto & errorSet = jointErrList[i];
+        bool success = false;
+
+        JointCalibSolvers::JointCalibResult result;
+        Eigen::VectorXf preResiduals;
+        Eigen::VectorXf postResiduals;
+        Eigen::VectorXf jointCalibResiduals;
+        std::tie(result, jointCalibResiduals, preResiduals, postResiduals) = evalJointErrorSet(naoJointSensorModel, poseList, errorSet, success);
+        if(!success){
+            ++badCases;
+            continue;
+        }
+
+        for(long i = 0; i < preResiduals.size(); ++i){
+           if(i % 2 == 0){ // x -> even number
+               preResidualsXY.first.push_back(preResiduals(i));
+               postResidualsXY.first.push_back(postResiduals(i));
+
+               min.x() = std::min(postResiduals(i), min.x());
+               max.x() = std::max(postResiduals(i), max.x());
+           }else{ // odd  -> newline
+               preResidualsXY.second.push_back(preResiduals(i));
+               postResidualsXY.second.push_back(postResiduals(i));
+
+               min.y() = std::min(postResiduals(i), min.y());
+               max.y() = std::max(postResiduals(i), max.y());
+           }
+        }
+        jointCalibResiduals /= TO_RAD;
+        for(int i = 0; i< JOINTS::JOINT::JOINTS_MAX; ++i){
+            jointCalibParamResidual.push_back(jointCalibResiduals(i));
+            minMaxJointParams.x() = std::min(jointCalibResiduals(i), minMaxJointParams.x());
+            minMaxJointParams.y() = std::max(jointCalibResiduals(i), minMaxJointParams.x());
+        }
+        if(i % (size_t)(JOINT_ERR_LST_COUNT * 0.01) == 0){
+            std::cout<< "list: " << i << " badCases: " << badCases/ (float) JOINT_ERR_LST_COUNT << std::endl;
         }
     }
 
+    utils::SimpleHistogram<double> preXhist(3000, -1500, 1500);
+    utils::SimpleHistogram<double> preYhist(3000, -1500, 1500);
 
-    /*
-     * Mini eval of cost fcn
-     */
+    auto maxOfAll = std::max(std::abs(min.minCoeff()), max.maxCoeff()) * 1.1;
 
-    auto calibrator = JointCalibrator(frameCaptures, naoJointSensorModel);
+    utils::SimpleHistogram<double> postXhist(3000, -maxOfAll, maxOfAll);
+    utils::SimpleHistogram<double> postYhist(3000, -maxOfAll, maxOfAll);
 
-    rawPoseT calVec(JOINTS::JOINT::JOINTS_MAX, 0.0);
-
-    Eigen::VectorXf inducedErrorEig = Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(inducedErrorStdVec.data(), inducedErrorStdVec.size());
-
-    Eigen::VectorXf errorVec(calibrator.values());
-    Eigen::VectorXf finalErrorVec(calibrator.values());
-
-    std::cout<< "Compensated Calib state: " << calibrator(inducedErrorEig, errorVec) << " cost: " << errorVec.norm() << std::endl;
-
-    std::cout<< "Without Calib state: " << calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(calVec.data(), calVec.size()), errorVec) << " cost: " << errorVec.norm() << std::endl;
+    auto maxOfJointParamsAll = std::max(std::abs(minMaxJointParams.x()), std::abs(minMaxJointParams.y())) * 1.1;
+    utils::SimpleHistogram<double> postParamhist(3000, -maxOfJointParamsAll, maxOfJointParamsAll);
 
 
+    preXhist.update(preResidualsXY.first);
+    preYhist.update(preResidualsXY.second);
+    postXhist.update(postResidualsXY.first);
+    postYhist.update(postResidualsXY.second);
 
-    Eigen::NumericalDiff<JointCalibrator> functorDiff(calibrator);
-    Eigen::LevenbergMarquardt<Eigen::NumericalDiff<JointCalibrator>, float> lm(functorDiff);
-
-    Eigen::VectorXf calibratedParams;
-    calibratedParams.resize(JOINTS::JOINT::JOINTS_MAX);
-
-    int status = lm.minimize(calibratedParams);
-
-    std::cout<< "Calib status: "<< status <<
-                "\nInduced Error and calib diff: \n" << ((inducedErrorEig - calibratedParams)/ TO_RAD).transpose() <<
-                "\nCalibration values:   \n" << (calibratedParams / TO_RAD).transpose() <<std::endl;
-
-    std::cout<< "Calibrated status:: " << calibrator(calibratedParams, finalErrorVec) << " cost: " << errorVec.norm() << std::endl;
-
-    std::cout<< "Dumping residuals" << std::endl;
-
-    std::pair<Eigen::VectorXf &, std::string> originalResidualDump(errorVec, inFileName + ".originalResidual");
-    std::pair<Eigen::VectorXf &, std::string> calibratedResidualDump(finalErrorVec, inFileName + ".calibratedResidual");
+    postParamhist.update(jointCalibParamResidual);
 
 
-    for(auto elem : {originalResidualDump, calibratedResidualDump}){
+//    const Eigen::VectorXf preResidualsX = Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(preResidualsXY.first.data(), preResidualsXY.first.size());
+//    const Eigen::VectorXf preResidualsY = Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(preResidualsXY.second.data(), preResidualsXY.second.size());
+
+//    {
+//        const Eigen::VectorXf postResidualsX = Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(postResidualsXY.first.data(), postResidualsXY.first.size());
+//       float mean = postResidualsX.mean();
+//       VectorXf val = (postResidualsX - VectorXf::Ones(postResidualsX.size()) * mean);
+//       double std_dev = std::sqrt(val.dot(val) / (postResidualsX.size() - 1));
+//       std::cout << "X mean" << mean << " std dev: "
+//                 << std_dev << " norm " << postResidualsX.norm() << std::endl;
+//    }
+//    {
+//        const Eigen::VectorXf postResidualsY = Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(postResidualsXY.second.data(), postResidualsXY.second.size());
+//       float mean = postResidualsY.mean();
+//       VectorXf val = (postResidualsY - VectorXf::Ones(postResidualsY.size()) * mean);
+//       double std_dev = std::sqrt(val.dot(val) / (postResidualsY.size() - 1));
+//       std::cout << "Y mean" << mean << " std dev: "
+//                 << std_dev << " norm " << postResidualsY.norm() << std::endl;
+//    }
+
+
+    std::cout << "Min: " << min.transpose() <<" max: " << max.transpose() << " Bad cases: " << badCases / (float) jointErrList.size() << std::endl;
+//    std::cout << postYhist << std::endl;
+
+    // dump the data into the files.
+
+    std::pair<utils::SimpleHistogram<double> &, std::string> originalResidualDumpX(preXhist, "/tmp/originalResidualX");
+    std::pair<utils::SimpleHistogram<double> &, std::string> calibratedResidualDumpX(postXhist, "/tmp/calibratedResidualX");
+    std::pair<utils::SimpleHistogram<double> &, std::string> originalResidualDumpY(preYhist, "/tmp/originalResidualY");
+    std::pair<utils::SimpleHistogram<double> &, std::string> calibratedResidualDumpY(postYhist, "/tmp/calibratedResidualY");
+
+    std::pair<utils::SimpleHistogram<double> &, std::string> calibratedJointParamResidualDumpY(postParamhist, "/tmp/calibratedJointResidual");
+
+    for(auto elem : {originalResidualDumpX, originalResidualDumpY, calibratedResidualDumpX, calibratedResidualDumpY, calibratedJointParamResidualDumpY}){
         std::cout<< "Start dump to : " << elem.second << std::endl;
+        std::pair<double, double> bounds = elem.first.getPercentileBounds(0.25);
+        std::cout<< " 25% bounds: " << bounds.first << " " << bounds.second << std::endl;
+        bounds = elem.first.getPercentileBounds(0.1);
+        std::cout<< " 10% bounds: " << bounds.first << " " << bounds.second << std::endl;
+        bounds = elem.first.getPercentileBounds(0.05);
+        std::cout<< " 5% bounds: " << bounds.first << " " << bounds.second << std::endl;
+        bounds = elem.first.getPercentileBounds(0.01);
+        std::cout<< "  1% bounds: " << bounds.first << " " << bounds.second << std::endl;
+        bounds = elem.first.getPercentileBounds(0.001);
+        std::cout<< "0.1% bounds: " << bounds.first << " " << bounds.second << std::endl;
+
         std::fstream file(elem.second, std::ios::out);
-        if(file){
-            auto & residualVec = elem.first;
-            for(long i = 0; i < residualVec.size(); ++i){
-                if(i % 2 == 0){ // even number
-                    file << residualVec(i);
-                }else{ // odd  -> newline
-                    file << "," << residualVec(i) << "\n";
-                }
-            }
-        }
+        file << elem.first;
+        file.close();
     }
 
     return 0;
