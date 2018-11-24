@@ -14,6 +14,8 @@
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/NonLinearOptimization>
 
+#include <dlib/global_optimization.h>
+
 #include <Data/CameraMatrix.hpp>
 #include <Modules/Configuration/Configuration.h>
 #include <Modules/Configuration/UnixSocketConfig.hpp>
@@ -141,20 +143,70 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
       Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator>, float>
       lm(functorDiff);
 
-  // Important bit!! Initialize AND fill! :P
-  Eigen::VectorXf calibratedParams;
-  calibratedParams.resize(JOINTS::JOINT::JOINTS_MAX);
-  calibratedParams.setZero();
+  /*
+   * EIGEN SOLVER
+   */
+//   Important bit!! Initialize AND fill! :P
+    Eigen::VectorXf calibratedParamsEig;
+    calibratedParamsEig.resize(JOINTS::JOINT::JOINTS_MAX);
+    calibratedParamsEig.setZero();
 
-  int status = lm.minimize(calibratedParams);
+    int status = lm.minimize(calibratedParamsEig);
+    calibrator(calibratedParamsEig, finalErrorVec);
+  /*
+   * DLIB SOLVER
+   */
+//  std::vector<float> calibratedParams; //(JOINTS::JOINT::JOINTS_MAX, 0.0);
 
-  //    std::cout<< "Calib status: "<< status <<
-  //                "\nInduced Error and calib diff: \n" << ((inducedErrorEig -
-  //                calibratedParams)/ TO_RAD).transpose() <<
-  //                "\nCalibration values:   \n" << (calibratedParams /
-  //                TO_RAD).transpose() <<std::endl;
 
-  calibrator(calibratedParams, finalErrorVec);
+//  //  auto calibrator
+//  //      dlib::fin=_min_global()
+
+//  auto holder_table = [calibrator](dlib::matrix<double, 0, 1> x0) -> double {
+//    if (x0.size() >= JOINTS::JOINT::JOINTS_MAX) {
+//      std::vector<float> ll(x0.begin(), x0.end());
+//      return calibrator(ll);
+//    } else {
+//      std::cout << x0.size() << "we got a problem!" << std::endl;
+//    }
+//    return 0.0;
+//  };
+
+//  dlib::matrix<double, 0, 1> boundUpper =
+//      dlib::uniform_matrix<double>(JOINTS::JOINT::JOINTS_MAX, 1, 10 * TO_RAD);
+//  dlib::matrix<double, 0, 1> solution =
+//      dlib::uniform_matrix<double>(JOINTS::JOINT::JOINTS_MAX, 1, 0 * TO_RAD);
+
+//  //    std::cout<<boundUpper.size() << " " << boundUpper<<std::endl;
+//  // obtain result.x and result.y
+//  //  auto result = dlib::find_min_global(holder_table, -boundUpper, // lower
+//  //  bounds
+//  //                                      boundUpper,                 // upper
+//  //                                      bounds
+//  //                                      dlib::max_function_calls(200));
+////  solution = result.x;
+
+////  auto result =
+//          dlib::find_min_box_constrained(
+//      dlib::lbfgs_search_strategy(10), dlib::objective_delta_stop_strategy(1e-10),
+//      holder_table, dlib::derivative(holder_table), solution, -10, 10);
+
+
+////  std::cout << result.y << std::endl;
+//  //    std::cout<< "Calib status: "<< status <<
+//  //                "\nInduced Error and calib diff: \n" << ((inducedErrorEig -
+//  //                calibratedParams)/ TO_RAD).transpose() <<
+//  //                "\nCalibration values:   \n" << (calibratedParams /
+//  //                TO_RAD).transpose() <<std::endl;
+//  calibratedParams = std::vector<float>(solution.begin(), solution.end());
+//  const Eigen::VectorXf calibratedParamsEig =
+//      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
+//          calibratedParams.data(), calibratedParams.size());
+//calibrator(calibratedParams, finalErrorVec);
+    /*
+     * END DLIB
+     */
+
 
   std::cout << "init reproj: cost: " << errorVec.norm() << " avg err "
             << errorVec.sum() << std::endl;
@@ -186,9 +238,9 @@ finalErrorVec.minCoeff() << " max: " << finalErrorVec.maxCoeff() << std::endl;
   std::cout << "reproj: cost: " << finalErrorVec.norm() << " avg err "
             << finalErrorVec.sum() << std::endl;
 
-  auto paramErr = (inducedErrorEig - calibratedParams);
+  auto paramErr = (inducedErrorEig - calibratedParamsEig);
   std::cout << "param: cost: " << paramErr.norm() << " avg err "
-            << paramErr.sum() /paramErr.size() << std::endl;
+            << paramErr.sum() / paramErr.size() << std::endl;
 
   //    std::cout<< "Dumping residuals" << std::endl;
 
@@ -286,8 +338,8 @@ int main(int argc, char *argv[]) {
     // todo make this dual leg supported..
     for (size_t i = JOINTS::JOINT::L_ANKLE_PITCH;
          i <= JOINTS::JOINT::L_ANKLE_PITCH; i++) {
-                  elem[i] = distribution(generator) * TO_RAD;
-//                  elem[i] = 10 * TO_RAD;
+      elem[i] = distribution(generator) * TO_RAD;
+      //                  elem[i] = 10 * TO_RAD;
     }
     uniqueJointErrList.insert(elem);
   }

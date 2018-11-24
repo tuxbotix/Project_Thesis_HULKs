@@ -56,47 +56,47 @@ ax = axs[3]
 #ax.boxplot(origResX[:, 1])
 ax.set_title('Left Leg X error distribution after calib')
 ax.plot(calibResX[:, 0], calibResX[:, 1], 1, label='Raw')
-popt,pcov = fitGauss(calibResX)
+#popt,pcov = fitGauss(calibResX)
 
-ax.text(-maxCalResX * 0.9, maxCalResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
-ax.text(-maxCalResX * 0.9, maxCalResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
-ax.plot(calibResX[:, 0], gaus(calibResX[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+#ax.text(-maxCalResX * 0.9, maxCalResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
+#ax.text(-maxCalResX * 0.9, maxCalResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
+#ax.plot(calibResX[:, 0], gaus(calibResX[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
 ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
-print("X std dev and mean", popt[1:])
+#print("X std dev and mean", popt[1:])
 
 ax = axs[1]
 ax.set_title('Left Leg Y error distribution before calib')
 ax.plot(origResY[:, 0], origResY[:, 1], 1)
 
 ax = axs[4]
-popt,pcov = fitGauss(calibResY)
+#popt,pcov = fitGauss(calibResY)
 ax.set_title('Left Leg Y error distribution after calib')
 ax.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
 
 
-ax.text(-maxCalResX * 0.9, maxCalResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
-ax.text(-maxCalResX * 0.9, maxCalResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
-ax.plot(calibResY[:, 0], gaus(calibResY[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+#ax.text(-maxCalResX * 0.9, maxCalResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
+#ax.text(-maxCalResX * 0.9, maxCalResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
+#ax.plot(calibResY[:, 0], gaus(calibResY[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
 
 ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
-print("Y std dev and mean", popt[1:])
+#print("Y std dev and mean", popt[1:])
     
 ax = axs[2]
 ax.set_title('Joint error distribution before calib')
 #plt.plot(origResY[:, 0], origResY[:, 1], 1)
 
 ax = axs[5]
-popt,pcov = fitGauss(claibJointRes)
+#popt,pcov = fitGauss(claibJointRes)
 ax.set_title('Joint error distribution after calib')
 ax.plot(claibJointRes[:, 0], claibJointRes[:, 1], 1, label='Raw')
 
 
-ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
-ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
-ax.plot(claibJointRes[:, 0], gaus(claibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+#ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
+#ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
+#ax.plot(claibJointRes[:, 0], gaus(claibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
 
 ax.axis([-maxCalJointResX, maxCalJointResX, -0.02, maxCalJointResY])
-print("Y std dev and mean", popt[1:])
+#print("Y std dev and mean", popt[1:])
 
 
 # n, bins, patches = plt.hist(val[:,1], 50, density=True, facecolor='r', alpha=0.75)

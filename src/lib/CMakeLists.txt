@@ -18,8 +18,8 @@ find_package(tuhhSDK REQUIRED)
 set(TUHHSDK_HOME ${NAO_PATH}/src/tuhhsdk)
 
 add_subdirectory(${TUHHSDK_HOME} "${CMAKE_CURRENT_BINARY_DIR}/tuhhsdk")
+add_subdirectory(${DLIB_PATH}/dlib dlib_build)
 
-message("lalal" ${TUHHSDK_HOME})
 include(tuhhSDKInfo.cmake)
 
 include_directories(SYSTEM PUBLIC inc)
@@ -37,7 +37,7 @@ target_link_libraries(naoPose tuhh)
 
 add_library(utils src/utils.cpp inc/JointCalibSolver.hpp inc/utils.hpp inc/constants.hpp)
 target_include_directories(utils SYSTEM PUBLIC inc)
-target_link_libraries(utils naoPose tuhh)
+target_link_libraries(utils naoPose dlib::dlib tuhh)
 
 set(libObs observability)
 set(OBS_HEADERS 
