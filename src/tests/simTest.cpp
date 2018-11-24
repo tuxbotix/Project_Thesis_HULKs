@@ -175,6 +175,10 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   //  Get reprojection error
   calibrator(calibratedParams, finalErrorVec);
 
+  /*
+   * END lev-mar
+   */
+
   auto minCoeff = finalErrorVec.minCoeff();
   auto maxCoeff = finalErrorVec.maxCoeff();
   auto errorNorm = finalErrorVec.norm();
