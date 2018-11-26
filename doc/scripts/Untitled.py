@@ -34,7 +34,7 @@ calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
 calibJointRes = np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')
 unCalibJointRes = np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')
 
-#calibJointRes[:, 0] *= (180 / math.pi)
+unCalibJointRes[:, 0] *= (180 / math.pi)
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()
