@@ -595,7 +595,7 @@ int main(int argc, char *argv[]) {
     std::vector<double> newElem;
     for (auto &i : elem) {
       if (i > 0.01 || i < -0.01) {
-        newElem.push_back(i);
+        newElem.push_back(i / TO_RAD);
       }
     }
     preParamhist.update(newElem);
