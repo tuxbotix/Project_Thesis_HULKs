@@ -14,8 +14,6 @@
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/NonLinearOptimization>
 
-#include <dlib/global_optimization.h>
-
 #include <Data/CameraMatrix.hpp>
 #include <Modules/Configuration/Configuration.h>
 #include <Modules/Configuration/UnixSocketConfig.hpp>
@@ -52,64 +50,79 @@ const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 const unsigned int MAX_POSES_TO_CALIB = 10;
 
 /**
- * @brief evalJointErrorSet
- * @param naoModel
+ * @brief evalJointErrorSet Evaluate calibration capability for an error config.
+ * @param naoModel As mentioned in threadedFcn..
  * @param poseList
- * @param inducedErrorStdVec
- * @return pre-post residuals
+ * @param inducedErrorStdVec Joint error configuration
+ * @return pre-post residuals residuals and more infos.
  */
-std::pair<Eigen::VectorXf, Eigen::VectorXf>
+std::tuple<JointCalibSolvers::JointCalibResult, Eigen::VectorXf,
+           Eigen::VectorXf, Eigen::VectorXf>
 evalJointErrorSet(const NaoJointAndSensorModel naoModel,
                   const poseAndRawAngleListT &poseList,
-                  const rawPoseT &inducedErrorStdVec, bool &success) {
+                  const rawPoseT &inducedErrorStdVec, const bool &stochasticFix,
+                  bool &success) {
+  // Create result object
+  JointCalibSolvers::JointCalibResult result;
 
+  // Map the error vector into an Eigen vector
+  const Eigen::VectorXf inducedErrorEig =
+      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
+          inducedErrorStdVec.data(), inducedErrorStdVec.size());
+
+  // Initialize residual of joint calibration (this isn't squared*)
+  Eigen::VectorXf jointCalibResidual = inducedErrorEig;
+
+  // Make a copy of nao sensor model
   auto naoJointSensorModel(naoModel);
+  // set the error state
   naoJointSensorModel.setCalibValues(inducedErrorStdVec);
 
+  // TODO get this from somewhere else?
   auto camNames = {Camera::BOTTOM};
 
+  // List of captures
   JointCalibSolvers::CaptureList frameCaptures;
 
+  // Capture per pose.
   for (auto &poseAndAngles : poseList) {
     naoJointSensorModel.setPose(poseAndAngles.angles,
                                 poseAndAngles.pose.supportFoot);
     for (auto &camName : camNames) {
-      bool success = false;
+      bool proceed = false;
       // will be relative to support foot, easier to manage
-      auto groundGrid = naoJointSensorModel.getGroundGrid(camName, success);
-      if (success) {
+      auto groundGrid = naoJointSensorModel.getGroundGrid(camName, proceed);
+      if (proceed) {
         // world points, pixel points.
         // TODO make world points handle 3d also
-        auto pixelMulti =
-            naoJointSensorModel.robotToPixelMulti(camName, groundGrid);
         auto correspondances =
-            NaoSensorDataProvider::getFilteredCorrespondancePairs(groundGrid,
-                                                                  pixelMulti);
+            NaoSensorDataProvider::getFilteredCorrespondancePairs(
+                groundGrid,
+                naoJointSensorModel.robotToPixelMulti(camName, groundGrid));
         if (correspondances.size() > 0) {
           frameCaptures.emplace_back(correspondances, poseAndAngles.angles,
                                      camName, poseAndAngles.pose.supportFoot);
         } else {
+          std::lock_guard<std::mutex> lg(utils::mtx_cout_);
           std::cout << "No suitable ground points" << std::endl;
         }
-        //                std::cout << " % successful correspondances : " <<
-        //                (float)correspondances.size()/
-        //                (float)pixelMulti.size() << " " <<
-        //                correspondances.size() << " " << pixelMulti.size()  <<
-        //                std::endl;
       } else {
+        std::lock_guard<std::mutex> lg(utils::mtx_cout_);
         std::cerr << "Obtaining ground grid failed" << std::endl;
       }
     }
   }
 
+  // If no frames are captured, consider this as a failure
   if (frameCaptures.size() <= 0) {
-    std::cout << "No suitable frame captures !!" << std::endl;
+    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+    std::cerr << "No suitable frame captures !!" << std::endl;
     success = false;
-    return {Eigen::VectorXf(0), Eigen::VectorXf(0)};
+    return {result, jointCalibResidual, Eigen::VectorXf(0), Eigen::VectorXf(0)};
   }
-  std::cout << "Initiate calibrator " << std::endl;
+
   /*
-   * Mini eval of cost fcn
+   * Mini eval of cost fcn to get an idea of error
    */
 
   auto calibrator =
@@ -117,160 +130,159 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
   rawPoseT calVec(JOINTS::JOINT::JOINTS_MAX, 0.0);
 
-  const Eigen::VectorXf inducedErrorEig =
-      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
-          inducedErrorStdVec.data(), inducedErrorStdVec.size());
-
   Eigen::VectorXf errorVec(calibrator.values());
   Eigen::VectorXf finalErrorVec(calibrator.values());
 
-  //    std::cout<< "Compensated Calib state: " << calibrator(inducedErrorEig,
-  //    errorVec) << " cost: " << errorVec.norm() << std::endl;
-
-  //    {
-  //        std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-  //    std::cout<< "Calib state pre: " <<
   calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(calVec.data(),
                                                            calVec.size()),
              errorVec);
-  //                        << " cost: " << errorVec.norm() << " avg err " <<
-  //                        errorVec.sum();
-  //    }
-
-  Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator> functorDiff(
-      calibrator);
-  Eigen::LevenbergMarquardt<
-      Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator>, float>
-      lm(functorDiff);
 
   /*
-   * EIGEN SOLVER
+   * Run Lev-Mar to optimize
    */
-//   Important bit!! Initialize AND fill! :P
-    Eigen::VectorXf calibratedParamsEig;
-    calibratedParamsEig.resize(JOINTS::JOINT::JOINTS_MAX);
-    calibratedParamsEig.setZero();
+  auto runLevMar = [&calibrator](Eigen::VectorXf &params) {
+    Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator> functorDiff(
+        calibrator);
+    Eigen::LevenbergMarquardt<
+        Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator>, float>
+        lm(functorDiff);
 
-    int status = lm.minimize(calibratedParamsEig);
-    calibrator(calibratedParamsEig, finalErrorVec);
-  /*
-   * DLIB SOLVER
-   */
-//  std::vector<float> calibratedParams; //(JOINTS::JOINT::JOINTS_MAX, 0.0);
+    int status = lm.minimize(params);
+    return status;
+  };
 
+  // Setting zero is very important.
+  Eigen::VectorXf calibratedParams((int)JOINTS::JOINT::JOINTS_MAX);
+  calibratedParams.setZero();
 
-//  //  auto calibrator
-//  //      dlib::fin=_min_global()
+  /// Run the Levenberg-Marquardt solver
+  int status = runLevMar(calibratedParams);
+  //  Get reprojection error
+  calibrator(calibratedParams, finalErrorVec);
 
-//  auto holder_table = [calibrator](dlib::matrix<double, 0, 1> x0) -> double {
-//    if (x0.size() >= JOINTS::JOINT::JOINTS_MAX) {
-//      std::vector<float> ll(x0.begin(), x0.end());
-//      return calibrator(ll);
-//    } else {
-//      std::cout << x0.size() << "we got a problem!" << std::endl;
-//    }
-//    return 0.0;
-//  };
+  // Just to note if the loop was done and broken with success
+  bool loopedAndBroken = false;
+  // Do stochastic fixing?
+  if (stochasticFix) {
+    // This will hold best params in case looping is needed
+    Eigen::VectorXf oldParams((int)JOINTS::JOINT::JOINTS_MAX);
+    size_t count = 0;                     // counter for the while loop
+    std::default_random_engine generator; // random gen
+    /// TODO make this distribution configurable
+    std::uniform_real_distribution<float> distribution(-5, 5);
 
-//  dlib::matrix<double, 0, 1> boundUpper =
-//      dlib::uniform_matrix<double>(JOINTS::JOINT::JOINTS_MAX, 1, 10 * TO_RAD);
-//  dlib::matrix<double, 0, 1> solution =
-//      dlib::uniform_matrix<double>(JOINTS::JOINT::JOINTS_MAX, 1, 0 * TO_RAD);
-
-//  //    std::cout<<boundUpper.size() << " " << boundUpper<<std::endl;
-//  // obtain result.x and result.y
-//  //  auto result = dlib::find_min_global(holder_table, -boundUpper, // lower
-//  //  bounds
-//  //                                      boundUpper,                 // upper
-//  //                                      bounds
-//  //                                      dlib::max_function_calls(200));
-////  solution = result.x;
-
-////  auto result =
-//          dlib::find_min_box_constrained(
-//      dlib::lbfgs_search_strategy(10), dlib::objective_delta_stop_strategy(1e-10),
-//      holder_table, dlib::derivative(holder_table), solution, -10, 10);
-
-
-////  std::cout << result.y << std::endl;
-//  //    std::cout<< "Calib status: "<< status <<
-//  //                "\nInduced Error and calib diff: \n" << ((inducedErrorEig -
-//  //                calibratedParams)/ TO_RAD).transpose() <<
-//  //                "\nCalibration values:   \n" << (calibratedParams /
-//  //                TO_RAD).transpose() <<std::endl;
-//  calibratedParams = std::vector<float>(solution.begin(), solution.end());
-//  const Eigen::VectorXf calibratedParamsEig =
-//      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
-//          calibratedParams.data(), calibratedParams.size());
-//calibrator(calibratedParams, finalErrorVec);
     /*
-     * END DLIB
+     * If status is 2 or 5, most likely we are at a local minima
+     * So to give some push-start random start positions will be attempted
      */
+    while ((status == 2 || status == 5) && count < 100) {
+      // save state
+      oldParams = calibratedParams;
+      // get cost
+      double finalCost = finalErrorVec.squaredNorm();
 
+      /// Populate the starting point with random values
 
-  std::cout << "init reproj: cost: " << errorVec.norm() << " avg err "
-            << errorVec.sum() << std::endl;
+      calibratedParams(JOINTS::JOINT::HEAD_PITCH) = std::min(
+          0.0f, static_cast<float>(distribution(generator)) / 2 * TO_RAD);
+      calibratedParams(JOINTS::JOINT::HEAD_YAW) =
+          distribution(generator) * TO_RAD;
 
-  //    auto imSize = naoJointSensorModel.getImSize();
+      // todo make this dual leg supported..
+      for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
+           i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
+        calibratedParams(i) = distribution(generator) * TO_RAD;
+      }
+      /// Run Lev-Mar again
+      status = runLevMar(calibratedParams);
+      // Get the new cost
+      calibrator(calibratedParams, finalErrorVec);
+
+      // Check status and continue accordingly
+      if (status == 4 && finalCost > finalErrorVec.squaredNorm()) {
+        //      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+        //      std::cout << "break: " << (finalCost <
+        //      finalErrorVec.squaredNorm()) << std::endl;
+        loopedAndBroken = true;
+        break;
+      } else if (
+          //                    (status == 2 || status == 5) ||
+          finalCost < finalErrorVec.squaredNorm()) {
+        calibratedParams = oldParams;
+      }
+      count++;
+    }
+  }
+
+  /*
+   * END lev-mar
+   */
+
+  jointCalibResidual -= calibratedParams; // Joint residual
+  const float tolerance = 0.5f * TO_RAD;  // Ad-hoc tolerance
+
+  // Get min-max info for error checking
   auto minCoeff = finalErrorVec.minCoeff();
   auto maxCoeff = finalErrorVec.maxCoeff();
-  //    auto imMaxX2 = std::max(imSize.x(), imSize.y()) * 2;
+  auto finalErrAbsMax = std::max(std::abs(minCoeff), std::abs(maxCoeff));
+  auto errorNorm = finalErrorVec.norm();
+  auto errorAvg = finalErrorVec.norm() / finalErrorVec.size();
+  auto jointCalibResAbsMax = std::max(std::abs(jointCalibResidual.maxCoeff()),
+                                      std::abs(jointCalibResidual.minCoeff()));
+  const auto imageSize = naoModel.getImSize();
 
-  /*if(std::isnan(minCoeff) || std::isnan(maxCoeff) || std::abs(minCoeff) >
-imMaxX2 || std::abs(maxCoeff) > imMaxX2)
-  {
-      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-//        std::cout<< " post: " << status << " " << "min: " <<
-finalErrorVec.minCoeff() << " max: " << finalErrorVec.maxCoeff() << std::endl;
-//        std::cout << inducedErrorEig.transpose() / TO_RAD << std::endl;
-      success = false;
-  }else */
+  // Determine success or failure
   if (std::isnan(minCoeff) || std::isnan(maxCoeff) ||
-      finalErrorVec.norm() > errorVec.norm()) {
-    std::cout << "Calibration failure" << errorVec.norm() << " "
-              << finalErrorVec.norm() << " "
-              << "min: " << finalErrorVec.minCoeff()
-              << " max: " << finalErrorVec.maxCoeff() << std::endl;
+      finalErrAbsMax > imageSize.minCoeff() * 0.1 ||
+      errorNorm > errorVec.norm()) {
+    std::cout << "Calibration failure\n"
+              << calibratedParams.transpose() << "\n"
+              << inducedErrorEig.transpose() << "\n"
+              << finalErrorVec.norm() << std::endl;
     success = false;
   } else {
     success = true;
   }
-  std::cout << "reproj: cost: " << finalErrorVec.norm() << " avg err "
-            << finalErrorVec.sum() << std::endl;
 
-  auto paramErr = (inducedErrorEig - calibratedParamsEig);
-  std::cout << "param: cost: " << paramErr.norm() << " avg err "
-            << paramErr.sum() / paramErr.size() << std::endl;
+  // if failed OR if loop broken BUT calibration is bad
+  /*
+   * NOTE: Local minima if reprojection errr is small but jointResidual isn't
+   * low!
+   */
+  //  if (!success ||
+  //      (stochasticFix && loopedAndBroken && jointCalibResAbsMax > tolerance))
+  //      {
 
-  //    std::cout<< "Dumping residuals" << std::endl;
+  std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+  std::cout << "errAbsMax: " << std::max(std::abs(minCoeff), std::abs(maxCoeff))
+            << " "
+            << " errorNorm: " << jointCalibResAbsMax
+            << " errorAvg: " << jointCalibResAbsMax
+            << " jointCalibResAbsMax: " << jointCalibResAbsMax / TO_RAD
+            << " Status: " << status
+            << " stochastic & success?: " << (stochasticFix && loopedAndBroken &&
+                                             jointCalibResAbsMax <= tolerance)
+            << std::endl;
+  //  }
 
-  return {errorVec, finalErrorVec};
-  //    std::pair<Eigen::VectorXf &, std::string> originalResidualDump(errorVec,
-  //    inFileName + ".originalResidual");
-  //    std::pair<Eigen::VectorXf &, std::string>
-  //    calibratedResidualDump(finalErrorVec, inFileName +
-  //    ".calibratedResidual");
+  // Update the result object
+  result.status = status;
+  result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
+  for (int i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
+    result.jointParams[i] = calibratedParams(i);
+  }
+  result.reprojectionErrorNorm = errorNorm;
+  result.reprojectionErrorNorm = errorAvg;
 
-  //    for(auto elem : {originalResidualDump, calibratedResidualDump}){
-  //        std::cout<< "Start dump to : " << elem.second << std::endl;
-  //        std::fstream file(elem.second, std::ios::out);
-  //        if(file){
-  //            auto & residualVec = elem.first;
-  //            for(long i = 0; i < residualVec.size(); ++i){
-  //                if(i % 2 == 0){ // even number
-  //                    file << residualVec(i);
-  //                }else{ // odd  -> newline
-  //                    file << "," << residualVec(i) << "\n";
-  //                }
-  //            }
-  //        }
-  //    }
+  return {result, jointCalibResidual, errorVec, finalErrorVec};
 }
 
 int main(int argc, char *argv[]) {
   std::string inFileName((argc > 1 ? argv[1] : "out"));
-  //    std::string inFileName((argc > 1 ? argv[1] : "out"));
-  std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
+  // Default is true..
+  bool stochasticFix =
+      argc > 2 ? (std::string(argv[2]).compare("s") == 0) : true;
+  std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
 
   std::fstream inFile(inFileName, std::ios::in);
   if (!inFile.is_open()) {
@@ -320,8 +332,8 @@ int main(int argc, char *argv[]) {
 
   // TODO check if uniform distribution is the right choice?
   std::default_random_engine generator;
-  //    std::uniform_real_distribution<float> distribution(-0.5, 0.5);
-  std::normal_distribution<float> distribution(0.0, 2);
+      std::uniform_real_distribution<float> distribution(-0.5, 0.5);
+//  std::normal_distribution<float> distribution(0.0, 2);
 
   const size_t JOINT_ERR_LST_DESIRED_COUNT = 20;
 
@@ -368,8 +380,8 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < JOINT_ERR_LST_COUNT; i++) {
     auto &errorSet = jointErrList[i];
     bool success = false;
-    auto residuals =
-        evalJointErrorSet(naoJointSensorModel, poseList, errorSet, success);
+    auto residuals = evalJointErrorSet(naoJointSensorModel, poseList, errorSet,
+                                       stochasticFix, success);
     if (!success) {
       ++badCases;
       continue;

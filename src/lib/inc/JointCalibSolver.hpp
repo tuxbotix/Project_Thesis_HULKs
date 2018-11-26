@@ -17,17 +17,6 @@
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/NonLinearOptimization>
 
-//#include <Data/CameraMatrix.hpp>
-//#include <Modules/NaoProvider.h>
-//#include <Modules/Configuration/Configuration.h>
-//#include <Modules/Configuration/UnixSocketConfig.hpp>
-//#include <Modules/Poses.h>
-
-//#include <Tools/Storage/Image.hpp>
-//#include <Tools/Storage/Image422.hpp>
-//#include <Tools/Kinematics/KinematicMatrix.h>
-//#include <Hardware/RobotInterface.hpp>
-
 #include "NaoJointAndSensorModel.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
@@ -46,6 +35,9 @@ typedef std::vector<std::pair<Vector3f, Vector2f>> Correspondance3D2DList;
 //    Correspondance3D2DList capturedCorrespondances;
 //};
 
+/**
+ * @brief The JointCalibCaptureEvalT struct
+ */
 struct JointCalibCaptureEvalT {
   CorrespondanceList capturedCorrespondances;
   rawPoseT pose;
@@ -59,6 +51,9 @@ struct JointCalibCaptureEvalT {
         camName(camName) {}
 };
 
+/**
+ * @brief The JointCalibResult struct
+ */
 struct JointCalibResult {
   int status; // out of solver
   float reprojectionErrorNorm;
@@ -69,21 +64,20 @@ struct JointCalibResult {
 typedef std::vector<JointCalibCaptureEvalT> CaptureList;
 
 /*
- * Below is DLib based global optimizer..
- */
-
-/*
  * Below is Eigen based non-global optimization
  */
 
-///**
-// * Extracted from
-// https://github.com/daviddoria/Examples/blob/master/c%2B%2B/Eigen/LevenbergMarquardt/CurveFitting.cpp
-// * This definition structure is needed to use NumericalDiff module
-// */
+/*
+ * Extracted from
+ * https://github.com/daviddoria/Examples/blob/master/c%2B%2B/Eigen/LevenbergMarquardt/CurveFitting.cpp
+ * This definition structure is needed to use NumericalDiff module
+ */
 
 template <typename _Scalar = float, int NX = Eigen::Dynamic,
           int NY = Eigen::Dynamic>
+/**
+ * @brief The Functor struct
+ */
 struct Functor {
   typedef _Scalar Scalar;
   enum { InputsAtCompileTime = NX, ValuesAtCompileTime = NY };
@@ -101,25 +95,24 @@ struct Functor {
   int values() const { return m_values; }
 };
 
+/**
+ * @brief The JointCalibrator struct
+ */
 struct JointCalibrator : Functor<float> {
 
   const CaptureList captureList;
   const size_t captureDataSetSize;
   const NaoJointAndSensorModel naoModel;
 
+  /**
+   * @brief operator () Almost the flavour liked by Eigen's solvers
+   * @param calibrationValsStdVec testParameters, as std::vector
+   * @param errorVec residual vector
+   * @return state of the function.
+   */
   int operator()(const std::vector<float> &calibrationValsStdVec,
                  Eigen::VectorXf &errorVec) const {
     auto tempModel = NaoJointAndSensorModel(naoModel);
-    auto imSize = tempModel.getImSize();
-
-    //        rawPoseT calibrationValsStdVec;
-    //        calibrationValsStdVec.resize(calibrationVals.size());
-    //        Eigen::VectorXf::Map(&calibrationValsStdVec[0],
-    //        calibrationVals.size()) = calibrationVals;
-
-    //        for(int i =0; i< JOINTS::JOINT::JOINTS_MAX;++i){
-    //            std::cout << calibrationVals.transpose()<<std::endl;
-    //        }
 
     tempModel.setCalibValues(calibrationValsStdVec);
     //        long totalErrVecSize = 0;
@@ -135,43 +128,24 @@ struct JointCalibrator : Functor<float> {
       tempModel.setPoseCamUpdateOnly(capture.pose, capture.sf, capture.camName);
       for (const auto &correspondance : capture.capturedCorrespondances) {
         Vector2f error(0, 0);
-        //                if(
+
         tempModel.robotToPixelFlt(camName, correspondance.first, error);
-        //                        ){
-
         error = correspondance.second - error;
-        //                    if(std::abs(error.x()) > imSize.x()){
-        //                        errorAtCap.push_back(imSize.x() *
-        //                        utils::sgn(error.x()));
-        //                    }else{
-
         errorVec(iter++) = error.x();
         errorVec(iter++) = error.y();
-
-        //                        errorAtCap.push_back(error.x());
-        //                    }
-        //                    if(std::abs(error.y()) > imSize.y()){
-        //                        errorAtCap.push_back(imSize.y() *
-        //                        utils::sgn(error.y()));
-        //                    }else{
-        //                        errorAtCap.push_back(error.y());
-        //                    }
-
-        //                    totalErrVecSize++;
-        //                }else{
-        //                    std::cout << "behind " <<std::endl;
-        //                    std::cout << error.transpose() << " " <<
-        //                    correspondance.second.transpose() <<std::endl;
-        //                    errorAtCap.push_back(0);
-        //                    errorAtCap.push_back(0);
-        //                    errorVec(iter++) = 0;
-        //                    errorVec(iter++) = 0;
-        //                }
       }
     }
     return 0;
   }
 
+  /**
+   * @brief operator () Flavour liked by Eigen's solvers (it needs
+   * Eigen::VectorXx)
+   * This just maps the eigen::vector to std::vector and call above func.
+   * @param calibrationVals same as above function, but Eig::VectorXf
+   * @param errorVec residual vector
+   * @return return of above func
+   */
   int operator()(const Eigen::VectorXf &calibrationVals,
                  Eigen::VectorXf &errorVec) const {
     rawPoseT calibrationValsStdVec(static_cast<size_t>(calibrationVals.size()));
@@ -180,6 +154,11 @@ struct JointCalibrator : Functor<float> {
     return this->operator()(calibrationValsStdVec, errorVec);
   }
 
+  /**
+   * @brief operator () Simpler varient for typical Least Square
+   * @param calibrationVals std::vector with test params
+   * @return sum of error squared
+   */
   double operator()(const std::vector<float> &calibrationVals) const {
     double out;
 
@@ -208,6 +187,11 @@ struct JointCalibrator : Functor<float> {
     return out;
   }
 
+  /**
+   * @brief JointCalibrator The constructor!
+   * @param captures captures - 3d-2d correspondances
+   * @param model naoJoint model
+   */
   JointCalibrator(CaptureList &captures, NaoJointAndSensorModel &model)
       : captureList(captures),
         // This nasty chunk get total element count via a lambda and return to
@@ -227,4 +211,4 @@ struct JointCalibrator : Functor<float> {
   size_t values() const { return captureDataSetSize; }
 };
 
-} // namespace ObservationSolvers
+} // namespace JointCalibSolvers
