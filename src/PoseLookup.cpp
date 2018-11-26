@@ -32,20 +32,22 @@
 
 //#include "utils.hpp"
 
-//const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
-//static const int SENSOR_COUNT = 4;
+// const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
+// static const int SENSOR_COUNT = 4;
 
-//typedef std::array<float, JOINTS::JOINT::JOINTS_MAX> JointWeights;
-//typedef std::array<float, SENSOR_COUNT> SensorWeights;
+// typedef std::array<float, JOINTS::JOINT::JOINTS_MAX> JointWeights;
+// typedef std::array<float, SENSOR_COUNT> SensorWeights;
 
-//typedef std::pair<int, std::string> SensMagAndPoseId; // Sensor Name should be maintained externally.
-//typedef std::pair<double, std::string> PoseCost;      // Pose cost and ID
+// typedef std::pair<int, std::string> SensMagAndPoseId; // Sensor Name should
+// be maintained externally.
+// typedef std::pair<double, std::string> PoseCost;      // Pose cost and ID
 
-//static const size_t maxPeakElemsPerList = 10E15;
-//static const size_t maxPeakElemsPerListSortTrigger = 10E18;
-//static const size_t finalPoseFilteringLimit = 1000;
+// static const size_t maxPeakElemsPerList = 10E15;
+// static const size_t maxPeakElemsPerListSortTrigger = 10E18;
+// static const size_t finalPoseFilteringLimit = 1000;
 
-//void sortDescAndTrimPoseCostVector(std::vector<PoseCost> &vec, const size_t &elemLimit)
+// void sortDescAndTrimPoseCostVector(std::vector<PoseCost> &vec, const size_t
+// &elemLimit)
 //{
 //    // sort in asc. order
 //    std::sort(vec.begin(),
@@ -64,14 +66,18 @@
 // * 2. Mutual orthogonality
 // * Weights:
 // * 1. w_sensor_mag - can be used to prioritize a given sensor's magnitudes
-// * 2. w_joint - can be used to prioritize a given joint (esp. useful when general optimization only favor some joints)
+// * 2. w_joint - can be used to prioritize a given joint (esp. useful when
+// general optimization only favor some joints)
 // * 3. w_sensor_ortho - Orthogonality weight for a given sensor.
 // *
-// * w_sensor_mag * w_joint and w_sensor_ortho * w_joint are used for magnitude and orthogonality weighting respectively.
+// * w_sensor_mag * w_joint and w_sensor_ortho * w_joint are used for magnitude
+// and orthogonality weighting respectively.
 // */
-//template <typename T>
-//double poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
-//                          const JointWeights &wJoints, const float &wOrthoGeneric,
+// template <typename T>
+// double poseFilterCostFunc(const PoseSensitivity<T> &p, const float
+// &wSensorMag,
+//                          const JointWeights &wJoints, const float
+//                          &wOrthoGeneric,
 //                          const float &observableJointCountWeight)
 //{
 //    double accum = observableJointCountWeight * p.getObservableCount();
@@ -98,7 +104,8 @@
 //        if (std::isnan(val.norm()) || std::isnan(accum))
 //        {
 //            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-//            std::cout << p.getId() << " is NAN 1st stage joint: " << j << " val " << val.norm() << std::endl;
+//            std::cout << p.getId() << " is NAN 1st stage joint: " << j << "
+//            val " << val.norm() << std::endl;
 //            continue;
 //        }
 
@@ -128,10 +135,14 @@
 //                dot = -1.0;
 //            }
 //            accum += wOrtho * std::fabs(std::acos(dot) / TO_RAD);
-//            if (dot > (double)1.0 || dot < (double)-1.0 || std::isnan(dot) || std::isnan(accum))
+//            if (dot > (double)1.0 || dot < (double)-1.0 || std::isnan(dot) ||
+//            std::isnan(accum))
 //            {
 //                std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-//                std::cout << p.getId() << " is NAN 2nd stage [domain err] " << j << " " << k << " dot " << dot << " aco " << std::acos(dot) << " wOrtho " << wOrtho << " fabs " << std::fabs(std::acos(dot) / TO_RAD) << std::endl;
+//                std::cout << p.getId() << " is NAN 2nd stage [domain err] " <<
+//                j << " " << k << " dot " << dot << " aco " << std::acos(dot)
+//                << " wOrtho " << wOrtho << " fabs " <<
+//                std::fabs(std::acos(dot) / TO_RAD) << std::endl;
 //                continue;
 //            }
 //        }
@@ -143,7 +154,7 @@
 // * This runs the cost function :)
 // * @param poseCosts list of all cost minimas (local minimas).
 // */
-//void poseFilterFunc(std::istream &inputStream,
+// void poseFilterFunc(std::istream &inputStream,
 //                    // std::ostream &outputStream,
 //                    std::vector<PoseCost> &poseCosts,
 //                    const SensorWeights sensorMagnitudeWeights,
@@ -157,7 +168,8 @@
 
 //    // Per pose, multiple sensors are there,..
 //    std::string curPoseId = "-100";
-//    // if at least one sensor had observations at that pose. If not, drop that pose from this level.
+//    // if at least one sensor had observations at that pose. If not, drop that
+//    pose from this level.
 //    // bool anySensorObserved = false;
 
 //    PoseSensitivity<Vector3f> p;
@@ -178,7 +190,8 @@
 //        // Things don't match up = new pose loaded.
 //        if (curPoseId.compare(tempId))
 //        {
-//            // current pose's total cost is lesser than previous pose's total cost
+//            // current pose's total cost is lesser than previous pose's total
+//            cost
 //            bool curDir = (poseCostAccum < previousCostVal.first);
 //            // falling edge - at a peak
 //            if (!curDir && direction)
@@ -212,19 +225,21 @@
 //    sortDescAndTrimPoseCostVector(poseCosts, maxPeakElemsPerList);
 //}
 
-//int main(int argc, char **argv)
+// int main(int argc, char **argv)
 //{
 //    std::string inFileName((argc > 1 ? argv[1] : "out"));
 //    std::string favouredJoint((argc > 2 ? argv[2] : "-1"));
 //    std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
 
 //    int jointNum = std::stoi(favouredJoint);
-//    if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
+//    if (jointNum < 0 || jointNum >=
+//    static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
 //    {
 //        jointNum = -1;
 //    }
 
-//    const std::string outFileName(inFileName + "_FilteredPoses_" + (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
+//    const std::string outFileName(inFileName + "_FilteredPoses_" + (jointNum
+//    >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
 //    TUHH tuhhInstance(confRoot);
 
@@ -235,7 +250,8 @@
 //    std::vector<std::fstream> inputPoseAndJointStreams;
 //    for (size_t i = 0; i < MAX_THREADS; i++)
 //    {
-//        std::string fileName = inFileName + "_ExtractedSensitivities_" + std::to_string(i) + ".txt";
+//        std::string fileName = inFileName + "_ExtractedSensitivities_" +
+//        std::to_string(i) + ".txt";
 //        if (std::ifstream(fileName))
 //        {
 //            inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
@@ -246,8 +262,10 @@
 //            break;
 //        }
 //    }
-//    std::cout << "make outfiles. Usable threads -> " << usableThreads << std::endl;
-//    std::fstream outputFile = std::fstream((outFileName + ".txt"), std::ios::out);
+//    std::cout << "make outfiles. Usable threads -> " << usableThreads <<
+//    std::endl;
+//    std::fstream outputFile = std::fstream((outFileName + ".txt"),
+//    std::ios::out);
 //    if (!outputFile.is_open())
 //    {
 //        std::cerr << "output file creation failed. Aborting!!!" << std::endl;
@@ -259,7 +277,8 @@
 //        std::vector<std::thread> threadList(usableThreads);
 //        std::vector<std::atomic<size_t>> iterCount(usableThreads);
 
-//        // threads -> sensors -> joints -> peakList (PerJointPerSensorPerThread)
+//        // threads -> sensors -> joints -> peakList
+//        (PerJointPerSensorPerThread)
 //        std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
 //        SensorWeights sensorMagnitudeWeights;
 //        sensorMagnitudeWeights.fill(2);
@@ -267,7 +286,8 @@
 //        // TODO change this as needed.
 //        JointWeights jointWeights;
 //        jointWeights.fill(1);
-//        if (jointNum > 0 && jointNum < static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
+//        if (jointNum > 0 && jointNum <
+//        static_cast<int>(JOINTS::JOINT::JOINTS_MAX))
 //        {
 //            jointWeights[jointNum] = 4;
 //        }
@@ -284,9 +304,11 @@
 //            //                     const SensorWeights sensorMagnitudeWeights,
 //            //                     const JointWeights jointWeights,
 //            //                     const float orthogonalityWeight,
-//            //                     std::atomic<size_t> &iterations, bool lastPortion)
+//            //                     std::atomic<size_t> &iterations, bool
+//            lastPortion)
 
-//            threadList[i] = std::thread(poseFilterFunc, std::ref(inputPoseAndJointStreams[i]),
+//            threadList[i] = std::thread(poseFilterFunc,
+//            std::ref(inputPoseAndJointStreams[i]),
 //                                        // std::ref(outputFileList[i]),
 //                                        std::ref(poseCostListList[i]),
 //                                        sensorMagnitudeWeights,
@@ -302,11 +324,13 @@
 //            const size_t interval = 5;
 //            while (continueTicker)
 //            {
-//                size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
+//                size_t iterSum = std::accumulate(iterCount.begin(),
+//                iterCount.end(), (size_t)0);
 //                if (elapsed % 100)
 //                {
 //                    std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-//                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterSum << std::endl;
+//                    std::cout << "Elapsed: " << elapsed << "s Iterations: " <<
+//                    std::scientific << (double)iterSum << std::endl;
 //                }
 //                else
 //                {
@@ -322,7 +346,8 @@
 //                    }
 //                }
 //                elapsed += interval;
-//                std::this_thread::sleep_for(std::chrono::seconds(interval)); // 100Hz -> 10ms
+//                std::this_thread::sleep_for(std::chrono::seconds(interval));
+//                // 100Hz -> 10ms
 //            }
 //        });
 //#endif
@@ -356,9 +381,11 @@
 //        std::sort(sortedPoseCostVec.begin(),
 //                  sortedPoseCostVec.end());
 
-//        for (size_t i = 0; i < std::min(finalPoseFilteringLimit, sortedPoseCostVec.size()); i++)
+//        for (size_t i = 0; i < std::min(finalPoseFilteringLimit,
+//        sortedPoseCostVec.size()); i++)
 //        {
-//            outputFile << "poseCost " << sortedPoseCostVec[i].second << " " << sortedPoseCostVec[i].first << std::endl;
+//            outputFile << "poseCost " << sortedPoseCostVec[i].second << " " <<
+//            sortedPoseCostVec[i].first << std::endl;
 //        }
 
 //        // outputFileList[t].close();

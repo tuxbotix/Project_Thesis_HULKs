@@ -122,7 +122,7 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(
   updateState(tempJoints, sf, camName);
 
   std::vector<std::pair<Vector2f, Vector2f>> baselineToObsList =
-     NaoSensorDataProvider::getFilteredCorrespondancePairs(
+      NaoSensorDataProvider::getFilteredCorrespondancePairs(
           baselinePoints, naoJointSensorModel.robotToPixelMulti(camName, grid));
 
   int status = -2;

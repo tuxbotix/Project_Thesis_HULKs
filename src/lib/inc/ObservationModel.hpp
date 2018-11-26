@@ -7,14 +7,13 @@
  * Currently I'll leave this as an abstract class
  */
 
-class ObservationModel
-{
-  public:
-    // friend class ObservationSensitivity;
+class ObservationModel {
+public:
+  // friend class ObservationSensitivity;
 
-//   private:
-    virtual inline ~ObservationModel(){}
-    virtual std::string getName() = 0;
-    // template <typeName T> // Must be a VectorXf type.
-    // virtual T getSensitivities() = 0;
+  //   private:
+  virtual inline ~ObservationModel() {}
+  virtual std::string getName() = 0;
+  // template <typeName T> // Must be a VectorXf type.
+  // virtual T getSensitivities() = 0;
 };

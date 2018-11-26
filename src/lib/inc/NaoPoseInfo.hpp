@@ -424,7 +424,8 @@ typedef std::vector<angleT> rawPoseT;
 typedef std::vector<rawPoseT> rawPoseListT;
 typedef VecVector3<dataT> vector3ListT;
 
-template <typename T> const std::string PoseSensitivity<T>::className = "SENSV2";
+template <typename T>
+const std::string PoseSensitivity<T>::className = "SENSV2";
 template <typename T>
 const std::string NaoPose<T>::className = "NaoPoseV2"; // updated version
 

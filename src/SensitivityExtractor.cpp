@@ -1,25 +1,25 @@
-#include <iostream>
-#include <fstream>
-#include <thread>
 #include <algorithm>
-#include <numeric>
+#include <fstream>
+#include <iostream>
 #include <limits>
+#include <numeric>
+#include <thread>
 
 #include <Data/CameraMatrix.hpp>
-#include <Modules/NaoProvider.h>
 #include <Modules/Configuration/Configuration.h>
 #include <Modules/Configuration/UnixSocketConfig.hpp>
+#include <Modules/NaoProvider.h>
 #include <Modules/Poses.h>
 
+#include <Hardware/RobotInterface.hpp>
+#include <Tools/Kinematics/KinematicMatrix.h>
 #include <Tools/Storage/Image.hpp>
 #include <Tools/Storage/Image422.hpp>
-#include <Tools/Kinematics/KinematicMatrix.h>
-#include <Hardware/RobotInterface.hpp>
 
-#include "TUHHMin.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
+#include "TUHHMin.hpp"
 // #define DEBUG_CAM_OBS 1
 #include "ObservationSensitivityProvider.hpp"
 
@@ -35,206 +35,213 @@ static const size_t maxMemBuf = 5e9;
 static std::atomic<size_t> maxBufSize(1);
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
-void sensitivityTesterFunc(const ObservationModelConfig cfg, std::istream &inputStream, std::ostream &outputStream,
-                           std::atomic<size_t> &iterations, std::atomic<size_t> &sensitivityCount)
-{
-    auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
-    std::vector<PoseSensitivity<Vector3f>> sensitivityBuf;
-    NaoPoseAndRawAngles<float> poseAndAngles;
+void sensitivityTesterFunc(const ObservationModelConfig cfg,
+                           std::istream &inputStream,
+                           std::ostream &outputStream,
+                           std::atomic<size_t> &iterations,
+                           std::atomic<size_t> &sensitivityCount) {
+  auto obs = ObservationSensitivityProvider::getSensitivityProvider(cfg);
+  std::vector<PoseSensitivity<Vector3f>> sensitivityBuf;
+  NaoPoseAndRawAngles<float> poseAndAngles;
 
-    while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream, poseAndAngles))
-    {
-        iterations++;
-        std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
-            obs.getSensitivities(poseAndAngles.angles, poseAndAngles.pose.supportFoot);
-        for (auto &i : sensitivityOutput)
-        {
-            if (i.getObservableCount() <= 0)
-            {
-                continue;
-            }
-            i.setId(poseAndAngles.pose.id);
-            sensitivityBuf.push_back(i); // change for moving?
-            sensitivityCount++;
-        }
-        /// if buffer is "well full", commit to output stream.
-        if (sensitivityBuf.size() > maxBufSize)
-        {
-            utils::commitToStream(sensitivityBuf, outputStream);
-        }
+  while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream,
+                                                              poseAndAngles)) {
+    iterations++;
+    std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
+        obs.getSensitivities(poseAndAngles.angles,
+                             poseAndAngles.pose.supportFoot);
+    for (auto &i : sensitivityOutput) {
+      if (i.getObservableCount() <= 0) {
+        continue;
+      }
+      i.setId(poseAndAngles.pose.id);
+      sensitivityBuf.push_back(i); // change for moving?
+      sensitivityCount++;
     }
-    // flushing rest of the buffer
-    utils::commitToStream(sensitivityBuf, outputStream);
+    /// if buffer is "well full", commit to output stream.
+    if (sensitivityBuf.size() > maxBufSize) {
+      utils::commitToStream(sensitivityBuf, outputStream);
+    }
+  }
+  // flushing rest of the buffer
+  utils::commitToStream(sensitivityBuf, outputStream);
 }
 
-int main(int argc, char **argv)
-{
-    std::string inFileName((argc > 1 ? argv[1] : "out"));
-    std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
+int main(int argc, char **argv) {
+  std::string inFileName((argc > 1 ? argv[1] : "out"));
+  std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
 
-    const std::string outFileName(inFileName + "_ExtractedSensitivities");
+  const std::string outFileName(inFileName + "_ExtractedSensitivities");
 
-    TUHH tuhhInstance(confRoot);
+  TUHH tuhhInstance(confRoot);
 
-    Vector2f fc, cc, fov;
+  Vector2f fc, cc, fov;
 
-    tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);
-    tuhhInstance.config_.get("Projection", "top_fc") >> fc;
-    tuhhInstance.config_.get("Projection", "top_cc") >> cc;
-    tuhhInstance.config_.get("Projection", "fov") >> fov;
+  tuhhInstance.config_.mount("Projection", "Projection.json",
+                             ConfigurationType::HEAD);
+  tuhhInstance.config_.get("Projection", "top_fc") >> fc;
+  tuhhInstance.config_.get("Projection", "top_cc") >> cc;
+  tuhhInstance.config_.get("Projection", "fov") >> fov;
 
-    Vector2i imSize(640, 480);
+  Vector2i imSize(640, 480);
 
-    size_t maxGridPointsPerSide = 20;
+  size_t maxGridPointsPerSide = 20;
 
-    std::cout << "init" << std::endl;
+  std::cout << "init" << std::endl;
 
-    size_t usableThreads = 0;
+  size_t usableThreads = 0;
 
-    std::vector<std::fstream> inputPoseAndJointStreams;
-    for (size_t i = 0; i < MAX_THREADS; i++)
-    {
-        std::string fileName = inFileName + "_GeneratedPoses_" + std::to_string(i) + ".txt";
-        if (std::ifstream(fileName))
-        {
-            inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
-            usableThreads++;
-        }
-        else
-        {
-            break;
-        }
+  std::vector<std::fstream> inputPoseAndJointStreams;
+  for (size_t i = 0; i < MAX_THREADS; i++) {
+    std::string fileName =
+        inFileName + "_GeneratedPoses_" + std::to_string(i) + ".txt";
+    if (std::ifstream(fileName)) {
+      inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
+      usableThreads++;
+    } else {
+      break;
+    }
+  }
+
+  // Update the buffer size per thread
+  maxBufSize = maxMemBuf / (usableThreads * 500);
+  std::cout << "Elem buf size per thread: " << maxBufSize
+            << " of total mem: " << maxMemBuf << std::endl;
+  /// Start the real threading..
+  {
+    std::vector<std::thread> threadList(usableThreads);
+    std::vector<std::atomic<size_t>> iterCount(usableThreads);
+    std::vector<std::atomic<size_t>> sensitivityCount(usableThreads);
+    std::vector<std::fstream> outputFileList(usableThreads);
+
+    const ObservationModelConfig cfg = {
+        imSize,
+        fc,
+        cc,
+        fov,
+        {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA},
+        1000,
+        maxGridPointsPerSide,
+        0.08};
+
+    for (unsigned int i = 0; i < usableThreads; i++) {
+      outputFileList[i] = std::fstream(
+          (outFileName + "Temp_" + std::to_string(i) + ".txt"), std::ios::out);
+      if (!outputFileList[i].is_open()) {
+        std::cerr << "output file creation failed. Aborting!!!" << std::endl;
+        break;
+      }
+
+      threadList[i] = std::thread(
+          sensitivityTesterFunc, cfg, std::ref(inputPoseAndJointStreams[i]),
+          std::ref(outputFileList[i]), std::ref(iterCount[i]),
+          std::ref(sensitivityCount[i]));
     }
 
-    // Update the buffer size per thread
-    maxBufSize = maxMemBuf / (usableThreads * 500);
-    std::cout << "Elem buf size per thread: " << maxBufSize << " of total mem: " << maxMemBuf << std::endl;
-    /// Start the real threading..
-    {
-        std::vector<std::thread> threadList(usableThreads);
-        std::vector<std::atomic<size_t>> iterCount(usableThreads);
-        std::vector<std::atomic<size_t>> sensitivityCount(usableThreads);
-        std::vector<std::fstream> outputFileList(usableThreads);
-
-        const ObservationModelConfig cfg = {
-            imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA}, 1000, maxGridPointsPerSide, 0.08};
-
-        for (unsigned int i = 0; i < usableThreads; i++)
-        {
-            outputFileList[i] = std::fstream((outFileName + "Temp_" + std::to_string(i) + ".txt"), std::ios::out);
-            if (!outputFileList[i].is_open())
-            {
-                std::cerr << "output file creation failed. Aborting!!!" << std::endl;
-                break;
-            }
-
-            threadList[i] = std::thread(sensitivityTesterFunc, cfg, std::ref(inputPoseAndJointStreams[i]),
-                                        std::ref(outputFileList[i]), std::ref(iterCount[i]), std::ref(sensitivityCount[i]));
-        }
-
-        /// Progress display
+/// Progress display
 #if ENABLE_PROGRESS
-        bool continueTicker = true;
-        std::thread tTick = std::thread([&]() {
-            int elapsed = 0;
-            const size_t interval = 5;
-            while (continueTicker)
-            {
-                size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
-                if (elapsed % 100)
-                {
-                    std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-                    std::cout << "Elapsed: " << elapsed << "s Iterations: " << std::scientific << (double)iterSum << std::endl;
-                }
-                else
-                {
-                    std::stringstream t;
-                    t << "Elapsed: " << elapsed << " ";
-                    for (size_t i = 0; i < usableThreads; i++)
-                    {
-                        t << "T" << i << " :" << iterCount[i].load() << " ";
-                    }
-                    {
-                        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-                        std::cout << t.str() << std::endl;
-                    }
-                }
-                elapsed += interval;
-                std::this_thread::sleep_for(std::chrono::seconds(interval));
-            }
-        });
+    bool continueTicker = true;
+    std::thread tTick = std::thread([&]() {
+      int elapsed = 0;
+      const size_t interval = 5;
+      while (continueTicker) {
+        size_t iterSum =
+            std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
+        if (elapsed % 100) {
+          std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+          std::cout << "Elapsed: " << elapsed
+                    << "s Iterations: " << std::scientific << (double)iterSum
+                    << std::endl;
+        } else {
+          std::stringstream t;
+          t << "Elapsed: " << elapsed << " ";
+          for (size_t i = 0; i < usableThreads; i++) {
+            t << "T" << i << " :" << iterCount[i].load() << " ";
+          }
+          {
+            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+            std::cout << t.str() << std::endl;
+          }
+        }
+        elapsed += interval;
+        std::this_thread::sleep_for(std::chrono::seconds(interval));
+      }
+    });
 #endif
-        /// Join all :P
-        for (auto &t : threadList)
-        {
-            if (t.joinable())
-            {
-                t.join();
-            }
-        }
+    /// Join all :P
+    for (auto &t : threadList) {
+      if (t.joinable()) {
+        t.join();
+      }
+    }
 #if ENABLE_PROGRESS
-        continueTicker = false;
-        if (tTick.joinable())
-        {
-            tTick.join();
-        }
+    continueTicker = false;
+    if (tTick.joinable()) {
+      tTick.join();
+    }
 #endif
 #if DO_COMMIT
-        /// Write the remaining buffers to file
-        std::cout << "flushing all " << std::endl;
-        for (size_t i = 0; i < usableThreads; i++)
-        {
-            outputFileList[i].close();
-        }
-
-        std::cout << "Redistributing data" << std::endl;
-        // redistribute the written lines.
-        {
-            const size_t linesPerFile = std::accumulate(sensitivityCount.begin(),
-                                                        sensitivityCount.end(), (size_t)0) /
-                                        (size_t)usableThreads;
-            size_t outFileNum = 0;
-            std::fstream inStream;
-            std::fstream outStream = std::fstream((outFileName + "_" + std::to_string(outFileNum) + ".txt"), std::ios::out);
-            std::cout << "Write to file: " << outFileNum << std::endl;
-            size_t counter = 0;
-            size_t totalCounter = 0;
-
-            for (size_t i = 0; i < usableThreads; i++)
-            {
-                std::cout << "Read file: " << i << std::endl;
-                inStream.open((outFileName + "Temp_" + std::to_string(i) + ".txt"), std::ios::in);
-                if (!inStream)
-                {
-                    continue;
-                }
-                std::string s;
-                while (std::getline(inStream, s))
-                {
-                    outStream << s << std::endl;
-                    counter++;
-                    totalCounter++;
-                    if (counter > linesPerFile && (outFileNum + 1) < usableThreads) // if last file, keep appending to the same file.
-                    {
-                        outStream.close();
-                        outStream.clear();
-                        std::cout << "Finished writing to file: " << outFileNum << " written: " << counter << std::endl;
-                        counter = 0;
-                        outFileNum++;
-                        std::cout << "Open write to file: " << outFileNum << std::endl;
-                        outStream.open((outFileName + "_" + std::to_string(outFileNum) + ".txt"), std::ios::out);
-                    }
-                }
-                inStream.close();
-                inStream.clear();
-                // deleting the temp file.
-                std::remove((outFileName + "Temp_" + std::to_string(i) + ".txt").c_str());
-            }
-            std::cout << "Total redistributed lines: " << totalCounter << std::endl;
-        }
-
-#endif
+    /// Write the remaining buffers to file
+    std::cout << "flushing all " << std::endl;
+    for (size_t i = 0; i < usableThreads; i++) {
+      outputFileList[i].close();
     }
 
-    return 0;
+    std::cout << "Redistributing data" << std::endl;
+    // redistribute the written lines.
+    {
+      const size_t linesPerFile =
+          std::accumulate(sensitivityCount.begin(), sensitivityCount.end(),
+                          (size_t)0) /
+          (size_t)usableThreads;
+      size_t outFileNum = 0;
+      std::fstream inStream;
+      std::fstream outStream = std::fstream(
+          (outFileName + "_" + std::to_string(outFileNum) + ".txt"),
+          std::ios::out);
+      std::cout << "Write to file: " << outFileNum << std::endl;
+      size_t counter = 0;
+      size_t totalCounter = 0;
+
+      for (size_t i = 0; i < usableThreads; i++) {
+        std::cout << "Read file: " << i << std::endl;
+        inStream.open((outFileName + "Temp_" + std::to_string(i) + ".txt"),
+                      std::ios::in);
+        if (!inStream) {
+          continue;
+        }
+        std::string s;
+        while (std::getline(inStream, s)) {
+          outStream << s << std::endl;
+          counter++;
+          totalCounter++;
+          if (counter > linesPerFile &&
+              (outFileNum + 1) < usableThreads) // if last file, keep appending
+                                                // to the same file.
+          {
+            outStream.close();
+            outStream.clear();
+            std::cout << "Finished writing to file: " << outFileNum
+                      << " written: " << counter << std::endl;
+            counter = 0;
+            outFileNum++;
+            std::cout << "Open write to file: " << outFileNum << std::endl;
+            outStream.open(
+                (outFileName + "_" + std::to_string(outFileNum) + ".txt"),
+                std::ios::out);
+          }
+        }
+        inStream.close();
+        inStream.clear();
+        // deleting the temp file.
+        std::remove(
+            (outFileName + "Temp_" + std::to_string(i) + ".txt").c_str());
+      }
+      std::cout << "Total redistributed lines: " << totalCounter << std::endl;
+    }
+
+#endif
+  }
+
+  return 0;
 }

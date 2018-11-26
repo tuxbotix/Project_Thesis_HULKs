@@ -259,9 +259,9 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
             << " errorNorm: " << jointCalibResAbsMax
             << " errorAvg: " << jointCalibResAbsMax
             << " jointCalibResAbsMax: " << jointCalibResAbsMax / TO_RAD
-            << " Status: " << status
-            << " stochastic & success?: " << (stochasticFix && loopedAndBroken &&
-                                             jointCalibResAbsMax <= tolerance)
+            << " Status: " << status << " stochastic & success?: "
+            << (stochasticFix && loopedAndBroken &&
+                jointCalibResAbsMax <= tolerance)
             << std::endl;
   //  }
 
@@ -332,8 +332,8 @@ int main(int argc, char *argv[]) {
 
   // TODO check if uniform distribution is the right choice?
   std::default_random_engine generator;
-      std::uniform_real_distribution<float> distribution(-0.5, 0.5);
-//  std::normal_distribution<float> distribution(0.0, 2);
+  std::uniform_real_distribution<float> distribution(-0.5, 0.5);
+  //  std::normal_distribution<float> distribution(0.0, 2);
 
   const size_t JOINT_ERR_LST_DESIRED_COUNT = 20;
 

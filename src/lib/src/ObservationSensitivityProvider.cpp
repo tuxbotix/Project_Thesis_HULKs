@@ -26,12 +26,15 @@
 //   CameraMatrix camMat;
 
 //   friend class ObservationSensitivityProvider;
-//   ObservationSensitivity(const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc, const Vector2f &fov,
-//                          const size_t &maxGridPointsPerSide = 15, const float &gridSpacing = 0.05)
+//   ObservationSensitivity(const Vector2i &imSize, const Vector2f &fc, const
+//   Vector2f &cc, const Vector2f &fov,
+//                          const size_t &maxGridPointsPerSide = 15, const float
+//                          &gridSpacing = 0.05)
 //       : maxGridPointsPerSide(maxGridPointsPerSide),
 //         imSize(imSize),
 //         // gridSpacing(gridSpacing),
-//         deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD), horizon(0), dimensionScale(imSize.x() / 2, imSize.y() / 2, M_PI_2f64)
+//         deltaThetaCorse(5.0f * TO_RAD), deltaThetaFine(1.0f * TO_RAD),
+//         horizon(0), dimensionScale(imSize.x() / 2, imSize.y() / 2, M_PI_2f64)
 //   {
 //     camMat.fc = fc;
 //     camMat.fc.x() *= imSize.x();
@@ -41,7 +44,8 @@
 //     camMat.cc.y() *= imSize.y();
 //     camMat.fov = fov;
 //     // Default state, ready pose and top camera with double foot.
-//     updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_DOUBLE, SENSOR_NAME::TOP_CAMERA);
+//     updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_DOUBLE,
+//     SENSOR_NAME::TOP_CAMERA);
 
 //     float x, y;
 //     const int gridSizeHalf = maxGridPointsPerSide / 2;
@@ -63,19 +67,27 @@
 //   /**
 //    * Update the state of the robot.
 //    */
-//   void updateState(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const SENSOR_NAME &sensorNames)
+//   void updateState(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const
+//   SENSOR_NAME &sensorNames)
 //   {
-//     Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
-//     NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sf, camMat, camName);
+//     Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP :
+//     Camera::BOTTOM;
+//     NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sf, camMat,
+//     camName);
 //     // update default horizon
-//     horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
+//     horizon = std::min(std::min(camMat.getHorizonHeight(0),
+//     camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
 //   }
-//   // void updateState(const rawPoseT &jointAngles, const KinematicMatrix &sfoot, const SENSOR_NAME &sensorNames)
+//   // void updateState(const rawPoseT &jointAngles, const KinematicMatrix
+//   &sfoot, const SENSOR_NAME &sensorNames)
 //   // {
-//   //   Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP : Camera::BOTTOM;
-//   //   NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sfoot, camMat, camName);
+//   //   Camera camName = sensorNames == SENSOR_NAME::TOP_CAMERA ? Camera::TOP
+//   : Camera::BOTTOM;
+//   //   NaoSensorDataProvider::updatedCameraMatrix(jointAngles, sfoot, camMat,
+//   camName);
 //   //   // update default horizon
-//   //   horizon = std::min(std::min(camMat.getHorizonHeight(0), camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
+//   //   horizon = std::min(std::min(camMat.getHorizonHeight(0),
+//   camMat.getHorizonHeight(imSize.x() - 1)), imSize.y() - 1);
 //   // }
 
 //   /**
@@ -94,17 +106,25 @@
 
 //     if (proceed)
 //     {
-//       proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) && robotCoords.norm() <= maxViewDist);
-//       // std::cout << "CamCenterRayToGround: " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
+//       proceed = (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords) &&
+//       robotCoords.norm() <= maxViewDist);
+//       // std::cout << "CamCenterRayToGround: " << robotCoords.x() << ", " <<
+//       robotCoords.y() << std::endl;
 //     }
 //     else
 //     {
-//       std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB << std::endl;
+//       std::cout << "HorizA" << camMat.horizonA << " horizB " <<
+//       camMat.horizonB << std::endl;
 //       std::cout << " Out of horizon!" << std::endl;
-//       std::cout << camMat.pixelToRobot(Vector2i(0, 0), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
-//       std::cout << camMat.pixelToRobot(Vector2i(imSize.x(), 0), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
-//       std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
-//       std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
+//       std::cout << camMat.pixelToRobot(Vector2i(0, 0), robotCoords) << "(" <<
+//       robotCoords.x() << ", " << robotCoords.y() << ")\t";
+//       std::cout << camMat.pixelToRobot(Vector2i(imSize.x(), 0), robotCoords)
+//       << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" <<
+//       std::endl;
+//       std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords)
+//       << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
+//       std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" <<
+//       robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
 //     }
 //     if (proceed)
 //     {
@@ -120,7 +140,8 @@
 //     }
 //     else
 //     {
-//       std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " << robotCoords.x() << ", " << robotCoords.y() << std::endl;
+//       std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " <<
+//       robotCoords.x() << ", " << robotCoords.y() << std::endl;
 //       std::cout << "Too far view dist!" << std::endl;
 //     }
 //     return output;
@@ -143,11 +164,16 @@
 //   }
 
 //   /**
-//  * Get observability (sensitivity?) of a given joint for a given camera at a given pose
+//  * Get observability (sensitivity?) of a given joint for a given camera at a
+//  given pose
 //  */
-//   Vector3f getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
-//                                            const VecVector2<float> &grid, const std::vector<float> &baselinePoints,
-//                                            const SENSOR_NAME &sensorName, bool &observed)
+//   Vector3f getSensitivityForJointForCamera(const JOINTS::JOINT &joint, const
+//   rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
+//                                            const VecVector2<float> &grid,
+//                                            const std::vector<float>
+//                                            &baselinePoints,
+//                                            const SENSOR_NAME &sensorName,
+//                                            bool &observed)
 //   {
 //     Vector3f output(0, 0, 0);
 
@@ -171,7 +197,8 @@
 //     //   {
 //     //     std::cout << std::endl;
 //     //   }
-//     //   std::cout << "(" << baselinePoints[i] << ", " << baselinePoints[i + 1] << ")\t";
+//     //   std::cout << "(" << baselinePoints[i] << ", " << baselinePoints[i +
+//     1] << ")\t";
 //     // }
 //     // std::cout << "Baseline points" << std::endl;
 
@@ -182,30 +209,37 @@
 //     //   {
 //     //     std::cout << std::endl;
 //     //   }
-//     //   std::cout << "(" << observedPoints[i] << ", " << observedPoints[i + 1] << ")\t";
+//     //   std::cout << "(" << observedPoints[i] << ", " << observedPoints[i +
+//     1] << ")\t";
 //     // }
 //     // std::cout << "transformed points" << std::endl;
 
-//     int status = ObservationSolvers::get2dPose(baselinePoints, observedPoints, output);
+//     int status = ObservationSolvers::get2dPose(baselinePoints,
+//     observedPoints, output);
 //     // std::cout << status << std::endl;
 //     // simple check.
-//     // observed = (Vector2f(output.x(), output.y()).norm() > 2 || abs(output.z()) > 3);
+//     // observed = (Vector2f(output.x(), output.y()).norm() > 2 ||
+//     abs(output.z()) > 3);
 //     observed = true;
 //     return output;
 //   }
 
 //   /**
-//  * Get observability (sensitivity?) of each joint for a given camera at a given pose
+//  * Get observability (sensitivity?) of each joint for a given camera at a
+//  given pose
 //  */
-//   PoseSensitivity<Vector3f> getSensitivitiesForCamera(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const SENSOR_NAME &sensorName)
+//   PoseSensitivity<Vector3f> getSensitivitiesForCamera(const rawPoseT
+//   &jointAngles, const SUPPORT_FOOT &sf, const SENSOR_NAME &sensorName)
 //   {
-//     if (sensorName != SENSOR_NAME::TOP_CAMERA && sensorName != SENSOR_NAME::BOTTOM_CAMERA)
+//     if (sensorName != SENSOR_NAME::TOP_CAMERA && sensorName !=
+//     SENSOR_NAME::BOTTOM_CAMERA)
 //     {
 //       throw "Invalid sensor, not camera!";
 //     }
 
 //     PoseSensitivity<Vector3f> output(sensorName);
-//     // KinematicMatrix supportFoot2Torso = NaoSensorDataProvider::getSupportFootMatrix(jointAngles, sf);
+//     // KinematicMatrix supportFoot2Torso =
+//     NaoSensorDataProvider::getSupportFootMatrix(jointAngles, sf);
 
 //     /// Make the basline set of points.
 //     updateState(jointAngles, sf, sensorName);
@@ -214,8 +248,10 @@
 //     const std::vector<float> baseLinePoints = robotToPixelMulti(grid);
 
 //     /**
-//      * TODO There is one major issue; The sensitivity is *ignored* based on which support foot!!!
-//      * ie: if double or left sup, and right leg joints are tweaked, that's completely ignored..
+//      * TODO There is one major issue; The sensitivity is *ignored* based on
+//      which support foot!!!
+//      * ie: if double or left sup, and right leg joints are tweaked, that's
+//      completely ignored..
 //      * This only matters for double foot..
 //      */
 //     bool observed = false;
@@ -224,9 +260,12 @@
 //       for (const auto &i : Sensor::CAM_OBS_L_SUP_FOOT)
 //       {
 //         // Same as..
-//         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot, grid, baseLinePoints, cameraName, observed);
+//         // vec3f p = getSensitivityForJointForCamera(i, jointAngles, supFoot,
+//         grid, baseLinePoints, cameraName, observed);
 //         // output.setSensitivity(i, p, observed);
-//         output.setSensitivity(i, getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName, observed), observed);
+//         output.setSensitivity(i, getSensitivityForJointForCamera(i,
+//         jointAngles, SUPPORT_FOOT::SF_LEFT, grid, baseLinePoints, sensorName,
+//         observed), observed);
 //       }
 //     }
 //     if (sf == SUPPORT_FOOT::SF_RIGHT || sf == SUPPORT_FOOT::SF_DOUBLE)
@@ -234,7 +273,9 @@
 //       for (const auto &i : Sensor::CAM_OBS_R_SUP_FOOT)
 //       {
 //         // temp fix in injecting support foot as right always.
-//         output.setSensitivity(i, getSensitivityForJointForCamera(i, jointAngles, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints, sensorName, observed), observed);
+//         output.setSensitivity(i, getSensitivityForJointForCamera(i,
+//         jointAngles, SUPPORT_FOOT::SF_RIGHT, grid, baseLinePoints,
+//         sensorName, observed), observed);
 //       }
 //     }
 //     return output;
@@ -243,7 +284,9 @@
 //   /**
 //    * Get sensitivities for each joint and each sensor
 //    */
-//   std::vector<PoseSensitivity<Vector3f>> getSensitivities(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf, const std::vector<SENSOR_NAME> &sensorNames)
+//   std::vector<PoseSensitivity<Vector3f>> getSensitivities(const rawPoseT
+//   &jointAngles, const SUPPORT_FOOT &sf, const std::vector<SENSOR_NAME>
+//   &sensorNames)
 //   {
 //     std::vector<PoseSensitivity<Vector3f>> output;
 //     for (const auto &i : sensorNames)
@@ -266,15 +309,33 @@
 // public:
 //   /**
 //      * ctor
-//      * @param threadCount allows automatic initializing of enough camera matrices..
+//      * @param threadCount allows automatic initializing of enough camera
+//      matrices..
 //      */
 
-//   static std::vector<ObservationSensitivity> getSensitivityProviders(const size_t &threadCount, const Vector2i &imSize,
-//                                                                      const Vector2f &fc, const Vector2f &cc,
-//                                                                      const Vector2f &fov,
-//                                                                      const size_t &maxGridPointsPerSide = 15, const float &gridSpacing = 0.05)
+//   static std::vector<ObservationSensitivity> getSensitivityProviders(const
+//   size_t &threadCount, const Vector2i &imSize,
+//                                                                      const
+//                                                                      Vector2f
+//                                                                      &fc,
+//                                                                      const
+//                                                                      Vector2f
+//                                                                      &cc,
+//                                                                      const
+//                                                                      Vector2f
+//                                                                      &fov,
+//                                                                      const
+//                                                                      size_t
+//                                                                      &maxGridPointsPerSide
+//                                                                      = 15,
+//                                                                      const
+//                                                                      float
+//                                                                      &gridSpacing
+//                                                                      = 0.05)
 //   {
 
-//     return std::vector<ObservationSensitivity>(threadCount, ObservationSensitivity(imSize, fc, cc, fov, maxGridPointsPerSide, gridSpacing));
+//     return std::vector<ObservationSensitivity>(threadCount,
+//     ObservationSensitivity(imSize, fc, cc, fov, maxGridPointsPerSide,
+//     gridSpacing));
 //   }
 // };
