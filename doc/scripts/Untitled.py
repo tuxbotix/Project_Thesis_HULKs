@@ -34,13 +34,14 @@ calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
 calibJointRes = np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')
 unCalibJointRes = np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')
 
-unCalibJointRes[:, 0] *= (180 / math.pi)
+#unCalibJointRes[:, 0] *= (180 / math.pi)
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()
 
 maxCalResY = max(calibResX[:, 1].max(), calibResY[:, 1].max()) * 1.1
-#maxorigResY = max(calibResX[:, 1].max(), calibResY[:, 1].max())
+maxOrigResY = max(origResX[:, 1].max(), origResY[:, 1].max()) * 1.1
+maxOrigResX = max(origResX[:, 0].max(), origResY[:, 0].max()) * 1.1
 
 maxCalResX = max(calibResX[:, 0].max(), calibResY[:, 0].max()) * 1.1
 
@@ -48,15 +49,17 @@ maxCalJointResX = max(calibJointRes[:, 0].max(), calibJointRes[:, 0].max()) * 1.
 maxCalJointResY = max(calibJointRes[:, 1].max(), calibJointRes[:, 1].max()) * 1.1
 maxUnCalJointResX = max(unCalibJointRes[:, 0].max(), unCalibJointRes[:, 0].max()) * 1.1
 maxUnCalJointResY = max(unCalibJointRes[:, 1].max(), unCalibJointRes[:, 1].max()) * 1.1
+maxAllUncalibY = max(maxOrigResY, maxUnCalJointResY)
 
 ax = axs[0]
 
-ax.set_title('Left Leg X error distribution before calib')
+ax.set_title('Reproj. error (x ax.) distribution before calibration.')
 ax.plot(origResX[:, 0], origResX[:, 1], 1)
+ax.axis([-maxOrigResX, maxOrigResX, -0.02, maxAllUncalibY])
 
 ax = axs[3]
 #ax.boxplot(origResX[:, 1])
-ax.set_title('Left Leg X error distribution after calib')
+ax.set_title('Reproj. error (x ax.) distribution after calibration.')
 ax.plot(calibResX[:, 0], calibResX[:, 1], 1, label='Raw')
 #popt,pcov = fitGauss(calibResX)
 
@@ -67,12 +70,13 @@ ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
 #print("X std dev and mean", popt[1:])
 
 ax = axs[1]
-ax.set_title('Left Leg Y error distribution before calib')
+ax.set_title('Reproj. error (y ax.) distribution before calibration.')
 ax.plot(origResY[:, 0], origResY[:, 1], 1)
+ax.axis([-maxOrigResX, maxOrigResX, -0.02, maxAllUncalibY])
 
 ax = axs[4]
 #popt,pcov = fitGauss(calibResY)
-ax.set_title('Left Leg Y error distribution after calib')
+ax.set_title('Reproj. error (y ax.) distribution before calibration.')
 ax.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
 
 
@@ -84,12 +88,13 @@ ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
 #print("Y std dev and mean", popt[1:])
     
 ax = axs[2]
-ax.set_title('Joint error distribution before calib')
+ax.set_title('Joint error distribution before calibration')
 ax.plot(unCalibJointRes[:, 0], unCalibJointRes[:, 1], 1, label='Raw')
+ax.axis([-maxUnCalJointResX, maxUnCalJointResX, -0.02, maxAllUncalibY])
 
 ax = axs[5]
 #popt,pcov = fitGauss(calibJointRes)
-ax.set_title('Joint error distribution after calib')
+ax.set_title('Joint error distribution after calibration')
 ax.plot(calibJointRes[:, 0], calibJointRes[:, 1], 1, label='Raw')
 
 

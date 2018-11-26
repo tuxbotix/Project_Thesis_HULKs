@@ -250,10 +250,15 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
           //                    (status == 2 || status == 5) ||
           finalCost < finalErrorVec.squaredNorm()) {
         calibratedParams = oldParams;
+        // Get the new cost
+        calibrator(calibratedParams, finalErrorVec);
       }
       count++;
     }
   }
+
+  /// Run Lev-Mar again
+  status = runLevMar(calibratedParams);
 
   /*
    * END lev-mar
@@ -275,11 +280,12 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Determine success or failure
   if (std::isnan(minCoeff) || std::isnan(maxCoeff) ||
       finalErrAbsMax > imageSize.minCoeff() * 0.1 ||
-      errorNorm > errorVec.norm()) {
-    std::cout << "Calibration failure\n"
-              << calibratedParams.transpose() << "\n"
-              << inducedErrorEig.transpose() << "\n"
-              << finalErrorVec.norm() << std::endl;
+      errorNorm > errorVec.norm() || jointCalibResAbsMax > tolerance) {
+    //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+    //    std::cout << "Calibration failure\n"
+    //              << calibratedParams.transpose() << "\n"
+    //              << inducedErrorEig.transpose() << "\n"
+    //              << finalErrorVec.norm() << std::endl;
     success = false;
   } else {
     success = true;
@@ -456,13 +462,14 @@ int main(int argc, char *argv[]) {
   // TODO check if uniform distribution is the right choice?
   std::default_random_engine generator;
   const float MAX_ERR_VAL = 6.5;
+  const float MIN_ERR_VAL = -MAX_ERR_VAL;
   /// New change, try 1 to 6, -1 to -6 only
-  std::uniform_real_distribution<float> distribution(2, MAX_ERR_VAL);
+  std::uniform_real_distribution<float> distribution(MIN_ERR_VAL, MAX_ERR_VAL);
 
-  std::uniform_int_distribution<int> binDistribution(0, 1);
-  const auto plusOrMinus = [&binDistribution, &generator]() -> float {
-    return binDistribution(generator) ? 1.0f : -1.0f;
-  };
+  //  std::uniform_int_distribution<int> binDistribution(0, 1);
+  //  const auto plusOrMinus = [&binDistribution, &generator]() -> float {
+  //    return binDistribution(generator) ? 1.0f : -1.0f;
+  //  };
   //  std::normal_distribution<float> distribution(0.0, 2);
 
   /// Sample Size
@@ -474,17 +481,16 @@ int main(int argc, char *argv[]) {
     rawPoseT elem = rawPoseT(JOINTS::JOINT::JOINTS_MAX, 0.0f);
 
     /// Do head angles seperately..
-    elem[JOINTS::JOINT::HEAD_PITCH] =
-        std::min(0.0f, static_cast<float>(distribution(generator)) *
-                           plusOrMinus() / 2 * TO_RAD);
+    elem[JOINTS::JOINT::HEAD_PITCH] = std::min(
+        0.0f, static_cast<float>(distribution(generator)) / 2 * TO_RAD);
     elem[JOINTS::JOINT::HEAD_YAW] =
-        distribution(generator) * plusOrMinus() * TO_RAD;
+        distribution(generator) * TO_RAD /* * plusOrMinus() */;
 
     /// Leg Angles
     // TODO make this dual leg supported..
     for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
          i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
-      elem[i] = distribution(generator) * plusOrMinus() * TO_RAD;
+      elem[i] = distribution(generator) * TO_RAD /* * plusOrMinus() */;
     }
     uniqueJointErrList.insert(elem);
   }
@@ -567,13 +573,13 @@ int main(int argc, char *argv[]) {
       std::minmax_element(finalResidualSet.jointResiduals[0].begin(),
                           finalResidualSet.jointResiduals[0].end());
   auto maxOfJointParamsAll =
-      1.1 * std::max(std::abs(*minMaxJointParams.first),
-                     std::abs(*minMaxJointParams.second));
+      1.01 * std::max(std::abs(*minMaxJointParams.first),
+                      std::abs(*minMaxJointParams.second));
 
   auto maxOfAll = std::max(std::abs(*minMaxPostX.first), *minMaxPostX.second);
-  maxOfAll = 1.1 * std::max(std::max(std::abs(*minMaxPostY.first),
-                                     *minMaxPostY.second),
-                            maxOfAll);
+  maxOfAll = 1.01 * std::max(std::max(std::abs(*minMaxPostY.first),
+                                      *minMaxPostY.second),
+                             maxOfAll);
 
   std::cout << "absMax Post Errors" << maxOfAll << std::endl;
   std::cout << "absMax Joint Errors" << maxOfJointParamsAll << std::endl;
@@ -581,21 +587,22 @@ int main(int argc, char *argv[]) {
   /*
    * Initialize Histograms
    */
-  utils::SimpleHistogram<double> preXhist(3000, -1500, 1500);
-  utils::SimpleHistogram<double> preYhist(3000, -1500, 1500);
+  utils::SimpleHistogram<double> preXhist(1000, -300, 300);
+  utils::SimpleHistogram<double> preYhist(1000, -300, 300);
 
   utils::SimpleHistogram<double> postXhist(100, -maxOfAll, maxOfAll);
   utils::SimpleHistogram<double> postYhist(100, -maxOfAll, maxOfAll);
 
-  utils::SimpleHistogram<double> preParamhist(3000, -MAX_ERR_VAL, MAX_ERR_VAL);
-  utils::SimpleHistogram<double> postParamhist(3000, -maxOfJointParamsAll,
+  utils::SimpleHistogram<double> preParamhist(30, -MAX_ERR_VAL, MAX_ERR_VAL);
+  utils::SimpleHistogram<double> postParamhist(300, -maxOfJointParamsAll,
                                                maxOfJointParamsAll);
 
   for (const auto &elem : jointErrList) {
     std::vector<double> newElem;
     for (auto &i : elem) {
-      if (i > 0.01 || i < -0.01) {
-        newElem.push_back(i / TO_RAD);
+      float val = i / TO_RAD;
+      if (val > 0.01 || val < -0.01) {
+        newElem.push_back(val);
       }
     }
     preParamhist.update(newElem);
@@ -610,6 +617,12 @@ int main(int argc, char *argv[]) {
     // For the moment, all joints are bundled together
     // TODO seperate this
     for (auto &jointErr : elem.jointResiduals) {
+      std::vector<double> newElem;
+      for (auto &i : jointErr) {
+        if (i > __FLT_EPSILON__ && i < -__FLT_EPSILON__) {
+          newElem.push_back(i);
+        }
+      }
       postParamhist.update(jointErr);
     }
   }
