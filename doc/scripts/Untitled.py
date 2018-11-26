@@ -31,10 +31,10 @@ origResY = np.loadtxt("/tmp/originalResidualY", delimiter=',')
 calibResX = np.loadtxt("/tmp/calibratedResidualX", delimiter=',')
 calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
 
-claibJointRes = np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')
-#calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
+calibJointRes = np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')
+unCalibJointRes = np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')
 
-#claibJointRes[:, 0] *= (180 / math.pi)
+#calibJointRes[:, 0] *= (180 / math.pi)
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()
@@ -44,8 +44,10 @@ maxCalResY = max(calibResX[:, 1].max(), calibResY[:, 1].max()) * 1.1
 
 maxCalResX = max(calibResX[:, 0].max(), calibResY[:, 0].max()) * 1.1
 
-maxCalJointResX = max(claibJointRes[:, 0].max(), claibJointRes[:, 0].max()) * 1.1
-maxCalJointResY = max(claibJointRes[:, 1].max(), claibJointRes[:, 1].max()) * 1.1
+maxCalJointResX = max(calibJointRes[:, 0].max(), calibJointRes[:, 0].max()) * 1.1
+maxCalJointResY = max(calibJointRes[:, 1].max(), calibJointRes[:, 1].max()) * 1.1
+maxUnCalJointResX = max(unCalibJointRes[:, 0].max(), unCalibJointRes[:, 0].max()) * 1.1
+maxUnCalJointResY = max(unCalibJointRes[:, 1].max(), unCalibJointRes[:, 1].max()) * 1.1
 
 ax = axs[0]
 
@@ -83,17 +85,17 @@ ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
     
 ax = axs[2]
 ax.set_title('Joint error distribution before calib')
-#plt.plot(origResY[:, 0], origResY[:, 1], 1)
+ax.plot(unCalibJointRes[:, 0], unCalibJointRes[:, 1], 1, label='Raw')
 
 ax = axs[5]
-#popt,pcov = fitGauss(claibJointRes)
+#popt,pcov = fitGauss(calibJointRes)
 ax.set_title('Joint error distribution after calib')
-ax.plot(claibJointRes[:, 0], claibJointRes[:, 1], 1, label='Raw')
+ax.plot(calibJointRes[:, 0], calibJointRes[:, 1], 1, label='Raw')
 
 
 #ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
 #ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
-#ax.plot(claibJointRes[:, 0], gaus(claibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+#ax.plot(calibJointRes[:, 0], gaus(calibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
 
 ax.axis([-maxCalJointResX, maxCalJointResX, -0.02, maxCalJointResY])
 #print("Y std dev and mean", popt[1:])
@@ -215,14 +217,14 @@ doHist(ax, fig, calibResX, calibResY)
 # #plt.plot(origResY[:, 0], origResY[:, 1], 1)
 
 # ax = plt.subplot(236)
-# popt,pcov = fitGauss(claibJointRes)
+# popt,pcov = fitGauss(calibJointRes)
 # ax.set_title('Joint error distribution after calib')
-# plt.plot(claibJointRes[:, 0], claibJointRes[:, 1], 1, label='Raw')
+# plt.plot(calibJointRes[:, 0], calibJointRes[:, 1], 1, label='Raw')
 
 
 # ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
 # ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
-# plt.plot(claibJointRes[:, 0], gaus(claibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+# plt.plot(calibJointRes[:, 0], gaus(calibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
 
 # plt.axis([-maxCalJointResX, maxCalJointResX, -0.02, maxCalJointResY])
 # print("Y std dev and mean", popt[1:])
