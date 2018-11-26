@@ -466,7 +466,7 @@ int main(int argc, char *argv[]) {
   //  std::normal_distribution<float> distribution(0.0, 2);
 
   /// Sample Size
-  const size_t JOINT_ERR_LST_DESIRED_COUNT = 10000;
+  const size_t JOINT_ERR_LST_DESIRED_COUNT = 1000;
 
   std::set<rawPoseT> uniqueJointErrList;
 
@@ -592,7 +592,12 @@ int main(int argc, char *argv[]) {
                                                maxOfJointParamsAll);
 
   for (const auto &elem : jointErrList) {
-    std::vector<double> newElem(elem.begin(), elem.end());
+    std::vector<double> newElem;
+    for (auto &i : elem) {
+      if (i > 0.01 || i < -0.01) {
+        newElem.push_back(i);
+      }
+    }
     preParamhist.update(newElem);
   }
   // Update each histogram
