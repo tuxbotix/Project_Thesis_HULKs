@@ -26,17 +26,18 @@ private:
   static constexpr float maxViewDist = 3.0;
 
   // Default state, ready pose and top camera with double foot.
-  // updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT, SENSOR_NAME::TOP_CAMERA);
+  // updateState(Poses::getPose(Poses::READY), SUPPORT_FOOT::SF_LEFT,
+  // SENSOR_NAME::TOP_CAMERA);
   VecVector2<float> basicGrid;
 
 public:
   NaoJointAndSensorModel(const Vector2i &imSize, const Vector2f &fc,
-                         const Vector2f &cc, const Vector2f &fov,  const size_t &maxGridPointsPerSide, const float &gridSpacing)
-      :jointCalibOffsets(JOINTS::JOINT::JOINTS_MAX, 0.0),
-      commandedPose(JOINTS::JOINT::JOINTS_MAX, 0.0),
-      realPose (JOINTS::JOINT::JOINTS_MAX, 0.0),
-      imSize(imSize),
-       basicGrid(0){
+                         const Vector2f &cc, const Vector2f &fov,
+                         const size_t &maxGridPointsPerSide,
+                         const float &gridSpacing)
+      : jointCalibOffsets(JOINTS::JOINT::JOINTS_MAX, 0.0),
+        commandedPose(JOINTS::JOINT::JOINTS_MAX, 0.0),
+        realPose(JOINTS::JOINT::JOINTS_MAX, 0.0), imSize(imSize), basicGrid(0) {
 
     topCamMat.fc = fc;
     topCamMat.fc.x() *= imSize.x();
@@ -55,11 +56,9 @@ public:
 
     float x, y;
     const int gridSizeHalf = maxGridPointsPerSide / 2;
-    for (size_t i = 0; i < maxGridPointsPerSide; i++)
-    {
+    for (size_t i = 0; i < maxGridPointsPerSide; i++) {
       x = ((int)i - gridSizeHalf) * gridSpacing;
-      for (size_t j = 0; j < maxGridPointsPerSide; j++)
-      {
+      for (size_t j = 0; j < maxGridPointsPerSide; j++) {
         y = ((int)j - gridSizeHalf) * gridSpacing;
         basicGrid.emplace_back(x, y);
       }
@@ -67,9 +66,7 @@ public:
   }
   ~NaoJointAndSensorModel() {}
 
-  Vector2i getImSize(){
-    return imSize;
-  }
+  const Vector2i getImSize() const { return imSize; }
 
   void setPoseCamUpdateOnly(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
                             const Camera &camName) {
@@ -83,7 +80,8 @@ public:
     // update sensor model based on the REAL pose!!
 
     // Always use supportFootOrigin policy
-    NaoSensorDataProvider::updatedCameraMatrix(realPose, sf, camMat, camName, false);
+    NaoSensorDataProvider::updatedCameraMatrix(realPose, sf, camMat, camName,
+                                               false);
     // update default horizon
     horizon[static_cast<int>(camName)] =
         std::min(std::min(camMat.getHorizonHeight(0),
@@ -102,7 +100,7 @@ public:
 
   void setCalibValues(const rawPoseT &calibVals) {
     if (calibVals.size() < JOINTS::JOINT::JOINTS_MAX) {
-        throw "calibVals with incorrect length";
+      throw "calibVals with incorrect length";
       return;
     }
     for (size_t i = 0; i < JOINTS::JOINT::JOINTS_MAX; i++) {
@@ -112,8 +110,8 @@ public:
 
   rawPoseT getCalibValues() { return jointCalibOffsets; }
 
-  bool pixelToRobot(const Camera &camName, const Vector2i & pixelCoords,
-                                    Vector2f &robotCoords) {
+  bool pixelToRobot(const Camera &camName, const Vector2i &pixelCoords,
+                    Vector2f &robotCoords) {
     auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
     return camMat.pixelToRobot(pixelCoords, robotCoords);
   }
@@ -122,11 +120,11 @@ public:
                                     Vector2f &robotCoords) {
     auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
 
-    if(camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords)){
-        return true;
-    }else{
-        std::cout<< robotCoords << camMat.cc << std::endl;
-        return false;
+    if (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords)) {
+      return true;
+    } else {
+      std::cout << robotCoords << camMat.cc << std::endl;
+      return false;
     }
   }
 
@@ -149,12 +147,12 @@ public:
       return false;
     }
     // pinhole projection
-    pixel_coordinates.x() = camMat.cc.x() - camMat.fc.x() *
-                                                cameraCoordinates.y() /
-                                                cameraCoordinates.x();
-    pixel_coordinates.y() = camMat.cc.y() - camMat.fc.y() *
-                                                cameraCoordinates.z() /
-                                                cameraCoordinates.x();
+    pixel_coordinates.x() =
+        camMat.cc.x() -
+        camMat.fc.x() * cameraCoordinates.y() / cameraCoordinates.x();
+    pixel_coordinates.y() =
+        camMat.cc.y() -
+        camMat.fc.y() * cameraCoordinates.z() / cameraCoordinates.x();
     return true;
   }
 
@@ -211,15 +209,13 @@ public:
     return output;
   }
 
-
   /**
    * Get 3D grid with given grid spacing relative to robot's ground coord.
    * Obviously, camera matrix must be updated before calling this.
    * 1. This has a hard range limit of 2m
    */
   // TODO  Make this private.
-  VecVector2<float> getGroundGrid(const Camera &camName, bool &success)
-  {
+  VecVector2<float> getGroundGrid(const Camera &camName, bool &success) {
     VecVector2<float> output;
     Vector2f robotCoords = {0, 0};
     Vector2f camCenterProjPoint = {0, 0};
@@ -227,58 +223,67 @@ public:
 
     // Check if horizon line is above bottom of camera view.
     bool proceed = !isCameraAboveHorizon(camName);
-    if (proceed)
-    {
-      proceed = projectCamCenterAxisToGround(camName, camCenterProjPoint) && (camCenterProjPoint.norm()) <= maxViewDist;
+    if (proceed) {
+      proceed = projectCamCenterAxisToGround(camName, camCenterProjPoint) &&
+                (camCenterProjPoint.norm()) <= maxViewDist;
     }
-  #if DEBUG_JOINT_AND_SENS
-    else
-    {
+#if DEBUG_JOINT_AND_SENS
+    else {
       auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
-      std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB << std::endl;
+      std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB
+                << std::endl;
       std::cout << " Out of horizon!" << std::endl;
-      std::cout << camMat.pixelToRobot(Vector2i(0, 0), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
-      std::cout << camMat.pixelToRobot(Vector2i(imSize.x(), 0), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
-      std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
-      std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
+      std::cout << camMat.pixelToRobot(Vector2i(0, 0), robotCoords) << "("
+                << robotCoords.x() << ", " << robotCoords.y() << ")\t";
+      std::cout << camMat.pixelToRobot(Vector2i(imSize.x(), 0), robotCoords)
+                << "(" << robotCoords.x() << ", " << robotCoords.y() << ")"
+                << std::endl;
+      std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords)
+                << "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
+      std::cout << camMat.pixelToRobot(imSize, robotCoords) << "("
+                << robotCoords.x() << ", " << robotCoords.y() << ")"
+                << std::endl;
     }
-  #endif
-    if (proceed)
-    {
-        std::array<Vector2f, 4> imageCornerGroundProjections;
-        pixelToRobot(camName, Vector2i(0, 0), imageCornerGroundProjections[0]);
-        pixelToRobot(camName, Vector2i(0, imSize.y()), imageCornerGroundProjections[1]);
-        pixelToRobot(camName, Vector2i(imSize.x(), 0), imageCornerGroundProjections[2]);
-        pixelToRobot(camName, imSize, imageCornerGroundProjections[3]);
+#endif
+    if (proceed) {
+      std::array<Vector2f, 4> imageCornerGroundProjections;
+      pixelToRobot(camName, Vector2i(0, 0), imageCornerGroundProjections[0]);
+      pixelToRobot(camName, Vector2i(0, imSize.y()),
+                   imageCornerGroundProjections[1]);
+      pixelToRobot(camName, Vector2i(imSize.x(), 0),
+                   imageCornerGroundProjections[2]);
+      pixelToRobot(camName, imSize, imageCornerGroundProjections[3]);
 
-        for(const auto & val : imageCornerGroundProjections){
-            float dist = (camCenterProjPoint - val).norm();
-            if( dist > cornerProjMaxDist){
-                cornerProjMaxDist = dist;
-            }
+      for (const auto &val : imageCornerGroundProjections) {
+        float dist = (camCenterProjPoint - val).norm();
+        if (dist > cornerProjMaxDist) {
+          cornerProjMaxDist = dist;
         }
+      }
 
       Vector2f tempCoord;
       // Eigen::Translation<float, 2> trans(tempCoord.x(), tempCoord.y());
       float theta = std::atan2(robotCoords.y(), robotCoords.x());
       Eigen::Rotation2D<float> rot2(theta);
-      for (const auto &i : basicGrid)
-      {
+      for (const auto &i : basicGrid) {
         tempCoord = robotCoords + (rot2 * i);
         // if this point might be in image's viewpoint.
-        if((camCenterProjPoint - tempCoord).norm() <= cornerProjMaxDist){
-            output.push_back(tempCoord);
+        if ((camCenterProjPoint - tempCoord).norm() <= cornerProjMaxDist) {
+          output.push_back(tempCoord);
         }
-//        std::cout << (camCenterProjPoint - tempCoord).norm() << "<=" <<  cornerProjMaxDist << " = " << ((camCenterProjPoint - tempCoord).norm() <= cornerProjMaxDist) << std::endl;
+        //        std::cout << (camCenterProjPoint - tempCoord).norm() << "<="
+        //        <<  cornerProjMaxDist << " = " << ((camCenterProjPoint -
+        //        tempCoord).norm() <= cornerProjMaxDist) << std::endl;
       }
     }
-  #if DEBUG_JOINT_AND_SENS
-    else
-    {
-      std::cout << "CamCenterRayToGround: " << camCenterProjPoint.norm() << " " << camCenterProjPoint.x() << ", " << camCenterProjPoint.y() << std::endl;
+#if DEBUG_JOINT_AND_SENS
+    else {
+      std::cout << "CamCenterRayToGround: " << camCenterProjPoint.norm() << " "
+                << camCenterProjPoint.x() << ", " << camCenterProjPoint.y()
+                << std::endl;
       std::cout << "Too far view dist!" << std::endl;
     }
-  #endif
+#endif
     success = proceed && (output.size() > 0);
     return output;
   }

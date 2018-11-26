@@ -203,7 +203,7 @@ void jointIterFuncWithLim(const size_t torsoPosBegin, const size_t torsoPosEnd,
                             {
                                 poseCount++;
 #if DO_COMMIT
-                                poseList.emplace_back(poseT(id_prefix + std::to_string(poseCount), supFoot, com2CentroidDist, headYawPitch,
+                                poseList.emplace_back(poseT(std::stoull(id_prefix + std::to_string(poseCount)), supFoot, com2CentroidDist, headYawPitch,
                                                             *torsoPos, torsoRot, OFootPos, OFootRot),
                                                       jointAngles);
                                 if (poseList.size() > BUFFER_SIZE)
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
         supportFootName = "d";
     }
 
-    const std::string timestamp = utils::getMilliSecondsString();
+    const std::string timestamp = utils::getMilliSecondsString().substr(4);
 
     TUHH tuhhInstance(confRoot);
     tuhhInstance.config_.mount("Projection", "Projection.json", ConfigurationType::HEAD);

@@ -39,9 +39,9 @@ static const int SENSOR_COUNT = 2;
 typedef std::array<float, JOINTS::JOINT::JOINTS_MAX> JointWeights;
 typedef std::array<float, SENSOR_COUNT> SensorWeights;
 
-typedef std::pair<int, std::string>
+typedef std::pair<int, size_t>
     SensMagAndPoseId; // Sensor Name should be maintained externally.
-typedef std::pair<double, std::string> PoseCost; // Pose cost and ID
+typedef std::pair<double, size_t> PoseCost; // Pose cost and ID
 
 static const size_t maxPeakElemsPerList = 10E15;
 static const size_t maxPeakElemsPerListSortTrigger = 10E18;
@@ -149,10 +149,11 @@ void poseFilterFunc(std::istream &inputStream,
                     const float observableJointCountWeight,
                     std::atomic<size_t> &iterations) {
   bool direction = false;
-  PoseCost previousCostVal(-10, "-100");
+  PoseCost previousCostVal(-10, 0);
 
   // Per pose, multiple sensors are there,..
-  std::string curPoseId = "-100";
+  size_t curPoseId = 0;
+  bool first = true;
   // if at least one sensor had observations at that pose. If not, drop that
   // pose from this level.
   // bool anySensorObserved = false;
@@ -169,9 +170,9 @@ void poseFilterFunc(std::istream &inputStream,
     if (p.getObservableCount() <= 0) {
       continue;
     }
-    std::string tempId = p.getId();
+    size_t tempId = p.getId();
     // Things don't match up = new pose loaded.
-    if (curPoseId.compare(tempId)) {
+    if (first || curPoseId != tempId) {
       // current pose's total cost is lesser than previous pose's total cost
       bool curDir = (poseCostAccum < previousCostVal.first);
       // falling edge - at a peak
@@ -189,6 +190,7 @@ void poseFilterFunc(std::istream &inputStream,
       curPoseId = tempId;
       direction = curDir;
       // std::cout << "new sensor" << std::endl;
+      first = false;
     }
     sensorAsIndex = static_cast<int>(p.getSensorName());
 
@@ -366,8 +368,8 @@ int main(int argc, char **argv) {
 
     //        /// Lookup the poses and get to memory.
     //        // actual poses here..
-    std::map<std::string, poseAndRawAngleT> poseMap;
-    std::map<std::string, poseAndRawAngleT>::iterator poseMapIter;
+    std::map<size_t, poseAndRawAngleT> poseMap;
+    std::map<size_t, poseAndRawAngleT>::iterator poseMapIter;
 
     std::fstream genPoseListFile;
 
@@ -385,7 +387,7 @@ int main(int argc, char **argv) {
 
       std::string curString = "";
       std::string dummy = "";
-      std::string id = "";
+      size_t id = 0;
       bool elementFound = false;
 
       poseAndRawAngleT tempPose;
@@ -396,7 +398,7 @@ int main(int argc, char **argv) {
         std::stringstream curStream(curString);
 
         curStream >> dummy >> dummy >> id;
-        if (elem.second.compare(id) == 0) {
+        if (elem.second == id) {
           elementFound = true;
           curStream.seekg(0, curStream.beg);
 
@@ -479,8 +481,8 @@ int main(int argc, char **argv) {
         curTopPose = pose.pose;
         first = false;
         iter++;
-      }else{
-//          std::cout<<"not near"<<std::endl;
+      } else {
+        //          std::cout<<"not near"<<std::endl;
       }
     }
     std::cout << "commited % " << (iter * 100) / trimmedLen << std::endl;

@@ -63,7 +63,7 @@ template <typename T> class PoseSensitivity {
   SENSOR_NAME sensorName;
   std::vector<T> sensitivities;
   std::vector<bool> observationMask;
-  std::string id;
+  size_t id;
   const int dimensionSize;
 
 public:
@@ -73,9 +73,9 @@ public:
         observationMask(std::vector<bool>(JOINTS::JOINT::JOINTS_MAX, false)),
         dimensionSize(T::Zero().size()) {}
 
-  std::string getId() const { return id; }
+  size_t getId() const { return id; }
 
-  void setId(const std::string &id) { this->id = id; }
+  void setId(const size_t &id) { this->id = id; }
 
   SENSOR_NAME getSensorName() const { return sensorName; }
 
@@ -273,7 +273,7 @@ private:
   bool valid; // set true once valid data is loaded.
 
 public:
-  std::string id;
+  size_t id;
   SUPPORT_FOOT supportFoot;
   float com2CentroidDist;
   HeadYawPitch headYawPitch;
@@ -282,14 +282,14 @@ public:
   Vector3<T> otherFootPosV;
   Vector3<T> otherFootRotV;
 
-  inline NaoPose<T>(const std::string &id, SUPPORT_FOOT sf,
-                    float com2CentroidDist, HeadYawPitch hyp, Vector3<T> tPosV,
-                    Vector3<T> tRotV, Vector3<T> OFPosV, Vector3<T> OFRotV)
+  inline NaoPose<T>(const size_t &id, SUPPORT_FOOT sf, float com2CentroidDist,
+                    HeadYawPitch hyp, Vector3<T> tPosV, Vector3<T> tRotV,
+                    Vector3<T> OFPosV, Vector3<T> OFRotV)
       : id(id), supportFoot(sf), com2CentroidDist(com2CentroidDist),
         headYawPitch(hyp), torsoPosV(tPosV), torsoRotV(tRotV),
         otherFootPosV(OFPosV), otherFootRotV(OFRotV) {}
   inline NaoPose()
-      : id("noId"), supportFoot(SUPPORT_FOOT::SF_NONE), com2CentroidDist(0),
+      : id(0), supportFoot(SUPPORT_FOOT::SF_NONE), com2CentroidDist(0),
         headYawPitch(0, 0), torsoPosV(), torsoRotV(), otherFootPosV(),
         otherFootRotV() {}
   inline friend std::ostream &operator<<(std::ostream &out,
@@ -424,9 +424,9 @@ typedef std::vector<angleT> rawPoseT;
 typedef std::vector<rawPoseT> rawPoseListT;
 typedef VecVector3<dataT> vector3ListT;
 
-template <typename T> const std::string PoseSensitivity<T>::className = "SENS";
+template <typename T> const std::string PoseSensitivity<T>::className = "SENSV2";
 template <typename T>
-const std::string NaoPose<T>::className = "NaoPoseV1"; // updated version
+const std::string NaoPose<T>::className = "NaoPoseV2"; // updated version
 
 template <typename T>
 const std::string NaoPoseAndRawAngles<T>::className = "NaoPoseAndRawAngles";
