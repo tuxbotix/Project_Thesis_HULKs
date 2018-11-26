@@ -109,7 +109,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Map the error vector into an Eigen vector
   const Eigen::VectorXf inducedErrorEig =
       Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
-          inducedErrorStdVec.data(), inducedErrorStdVec.size());
+          inducedErrorStdVec.data(),
+          static_cast<Eigen::Index>(inducedErrorStdVec.size()));
 
   // Initialize residual of joint calibration (this isn't squared*)
   Eigen::VectorXf jointCalibResidual = inducedErrorEig;
@@ -174,8 +175,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   Eigen::VectorXf errorVec(calibrator.values());
   Eigen::VectorXf finalErrorVec(calibrator.values());
 
-  calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(calVec.data(),
-                                                           calVec.size()),
+  calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(
+                 calVec.data(), static_cast<Eigen::Index>(calVec.size())),
              errorVec);
 
   /*
@@ -193,7 +194,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   };
 
   // Setting zero is very important.
-  Eigen::VectorXf calibratedParams((int)JOINTS::JOINT::JOINTS_MAX);
+  Eigen::VectorXf calibratedParams(
+      static_cast<Eigen::Index>(JOINTS::JOINT::JOINTS_MAX));
   calibratedParams.setZero();
 
   /// Run the Levenberg-Marquardt solver
@@ -206,7 +208,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Do stochastic fixing?
   if (stochasticFix) {
     // This will hold best params in case looping is needed
-    Eigen::VectorXf oldParams((int)JOINTS::JOINT::JOINTS_MAX);
+    Eigen::VectorXf oldParams(
+        static_cast<Eigen::Index>(JOINTS::JOINT::JOINTS_MAX));
     size_t count = 0;                     // counter for the while loop
     std::default_random_engine generator; // random gen
     /// TODO make this distribution configurable
@@ -220,19 +223,20 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
       // save state
       oldParams = calibratedParams;
       // get cost
-      double finalCost = finalErrorVec.squaredNorm();
+      float finalCost = finalErrorVec.squaredNorm();
 
       /// Populate the starting point with random values
 
       calibratedParams(JOINTS::JOINT::HEAD_PITCH) = std::min(
-          0.0f, static_cast<float>(distribution(generator)) / 2 * TO_RAD);
+          0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD);
       calibratedParams(JOINTS::JOINT::HEAD_YAW) =
           distribution(generator) * TO_RAD;
 
       // todo make this dual leg supported..
       for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
            i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
-        calibratedParams(i) = distribution(generator) * TO_RAD;
+        calibratedParams(static_cast<Eigen::Index>(i)) =
+            distribution(generator) * TO_RAD;
       }
       /// Run Lev-Mar again
       status = runLevMar(calibratedParams);
@@ -279,7 +283,7 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
   // Determine success or failure
   if (std::isnan(minCoeff) || std::isnan(maxCoeff) ||
-      finalErrAbsMax > imageSize.minCoeff() * 0.1 ||
+      finalErrAbsMax > imageSize.minCoeff() * 0.1f ||
       errorNorm > errorVec.norm() || jointCalibResAbsMax > tolerance) {
     //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
     //    std::cout << "Calibration failure\n"
@@ -312,7 +316,7 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   result.status = status;
   result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
   for (int i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
-    result.jointParams[i] = calibratedParams(i);
+    result.jointParams[static_cast<size_t>(i)] = calibratedParams(i);
   }
   result.reprojectionErrorNorm = errorNorm;
   result.reprojectionErrorNorm = errorAvg;
@@ -372,11 +376,11 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
 
     for (long i = 0; i < preResiduals.size(); ++i) {
       if (i % 2 == 0) { // x -> even number
-        residuals.preX.push_back(preResiduals(i));
-        residuals.postX.push_back(postResiduals(i));
+        residuals.preX.push_back(static_cast<double>(preResiduals(i)));
+        residuals.postX.push_back(static_cast<double>(postResiduals(i)));
       } else { // odd  -> newline
-        residuals.preY.push_back(preResiduals(i));
-        residuals.postY.push_back(postResiduals(i));
+        residuals.preY.push_back(static_cast<double>(preResiduals(i)));
+        residuals.postY.push_back(static_cast<double>(postResiduals(i)));
       }
     }
     // Convert to degrees
@@ -385,7 +389,8 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
       // TODO FIX THIS
       //      residuals.jointResiduals[static_cast<size_t>(i)].push_back(
       //          jointCalibResiduals(i));
-      residuals.jointResiduals[0].push_back(jointCalibResiduals(i));
+      residuals.jointResiduals[0].push_back(
+          static_cast<double>(jointCalibResiduals(i)));
     }
   }
   badCases += tempBadCases;
@@ -436,7 +441,7 @@ int main(int argc, char *argv[]) {
 
   // create nao model TODO change camera mode?
   const ObservationModelConfig cfg = {
-      imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA}, 1000, 50, 0.05};
+      imSize, fc, cc, fov, {SENSOR_NAME::BOTTOM_CAMERA}, 1000, 50, 0.05f};
   auto naoJointSensorModel = NaoJointAndSensorModel(
       imSize, fc, cc, fov, cfg.maxGridPointsPerSide, cfg.gridSpacing);
 
@@ -473,7 +478,7 @@ int main(int argc, char *argv[]) {
   //  std::normal_distribution<float> distribution(0.0, 2);
 
   /// Sample Size
-  const size_t JOINT_ERR_LST_DESIRED_COUNT = 1000;
+  const size_t JOINT_ERR_LST_DESIRED_COUNT = 10000;
 
   std::set<rawPoseT> uniqueJointErrList;
 
@@ -482,7 +487,7 @@ int main(int argc, char *argv[]) {
 
     /// Do head angles seperately..
     elem[JOINTS::JOINT::HEAD_PITCH] = std::min(
-        0.0f, static_cast<float>(distribution(generator)) / 2 * TO_RAD);
+        0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD);
     elem[JOINTS::JOINT::HEAD_YAW] =
         distribution(generator) * TO_RAD /* * plusOrMinus() */;
 
@@ -529,12 +534,14 @@ int main(int argc, char *argv[]) {
   // Start the threads
   for (size_t i = 0; i < MAX_THREADS; ++i) {
 
-    std::vector<rawPoseT>::iterator begin =
-        jointErrList.begin() + (threadingOffsets * i);
-    std::vector<rawPoseT>::iterator end =
-        (i + 1 >= MAX_THREADS)
-            ? jointErrList.end()
-            : jointErrList.begin() + threadingOffsets * (i + 1);
+    std::vector<rawPoseT>::iterator begin = jointErrList.begin();
+    std::advance(begin, (threadingOffsets * i));
+    std::vector<rawPoseT>::iterator end = jointErrList.begin();
+    if (i + 1 >= MAX_THREADS) {
+      end = jointErrList.end();
+    } else {
+      std::advance(end, (threadingOffsets * (i + 1)));
+    }
 
     std::cout << "starting thread: " << i << std::endl;
     // Initialize the thread. Maybe use futures later?
@@ -593,7 +600,8 @@ int main(int argc, char *argv[]) {
   utils::SimpleHistogram<double> postXhist(100, -maxOfAll, maxOfAll);
   utils::SimpleHistogram<double> postYhist(100, -maxOfAll, maxOfAll);
 
-  utils::SimpleHistogram<double> preParamhist(30, -MAX_ERR_VAL, MAX_ERR_VAL);
+  utils::SimpleHistogram<double> preParamhist(
+      30, static_cast<double>(-MAX_ERR_VAL), static_cast<double>(MAX_ERR_VAL));
   utils::SimpleHistogram<double> postParamhist(300, -maxOfJointParamsAll,
                                                maxOfJointParamsAll);
 
@@ -601,8 +609,8 @@ int main(int argc, char *argv[]) {
     std::vector<double> newElem;
     for (auto &i : elem) {
       float val = i / TO_RAD;
-      if (val > 0.01 || val < -0.01) {
-        newElem.push_back(val);
+      if (val > 0.01f || val < -0.01f) {
+        newElem.push_back(static_cast<double>(val));
       }
     }
     preParamhist.update(newElem);
@@ -619,7 +627,7 @@ int main(int argc, char *argv[]) {
     for (auto &jointErr : elem.jointResiduals) {
       std::vector<double> newElem;
       for (auto &i : jointErr) {
-        if (i > __FLT_EPSILON__ && i < -__FLT_EPSILON__) {
+        if (i > __DBL_EPSILON__ && i < -__DBL_EPSILON__) {
           newElem.push_back(i);
         }
       }
@@ -628,8 +636,8 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "Finishing; Bad cases: "
-            << badCases.load() * 100 / (float)JOINT_ERR_LST_COUNT << "%"
-            << std::endl;
+            << badCases.load() * 100 / static_cast<float>(JOINT_ERR_LST_COUNT)
+            << "%" << std::endl;
 
   /*
    * Print the statistics & Write into files

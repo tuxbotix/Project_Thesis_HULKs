@@ -12,7 +12,7 @@
 #include "Sensors.hpp"
 
 #ifndef PRINT_EXCEPT
-#define PRINT_EXCEPT 0
+#define PRINT_EXCEPT 1
 #endif
 
 /**

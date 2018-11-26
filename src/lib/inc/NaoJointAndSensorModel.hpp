@@ -100,8 +100,9 @@ public:
 
   void setCalibValues(const rawPoseT &calibVals) {
     if (calibVals.size() < JOINTS::JOINT::JOINTS_MAX) {
+      std::cerr << "calibVals with incorrect length " << calibVals.size()
+                << std::endl;
       throw "calibVals with incorrect length";
-      return;
     }
     for (size_t i = 0; i < JOINTS::JOINT::JOINTS_MAX; i++) {
       jointCalibOffsets[i] = calibVals[i];

@@ -29,9 +29,9 @@ add_subdirectory(lib)
 ### Main Programs
 
 # old test1
-set(target1 test1)
-add_executable(${target1} tests/test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_link_libraries(${target1} utils naoPose tuhh)
+#set(target1 test1)
+#add_executable(${target1} tests/test1.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+#target_link_libraries(${target1} utils naoPose tuhh)
 
 # poseGen
 set(target2 poseGen)

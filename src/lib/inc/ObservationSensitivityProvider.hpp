@@ -51,7 +51,7 @@ public:
         output.push_back(
             camObsModelPtr->getSensitivitiesForCamera(jointAngles, sf, i));
       } else {
-        std::cout << "Sensor Sensitivity Function not implemented."
+        std::cerr << "Sensor Sensitivity Function not implemented."
                   << std::endl;
         throw "Sensor Sensitivity Function not implemented.";
       }

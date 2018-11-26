@@ -8,6 +8,8 @@
 #include <atomic>
 #include <mutex>
 
+#define TO_RAD_DBL static_cast<double>(M_PI / 180.0)
+
 namespace utils
 {
 #if !WRITE_PARALLEL
