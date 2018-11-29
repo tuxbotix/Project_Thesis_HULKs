@@ -1,6 +1,9 @@
 \documentclass[english, printversion, nomenclature, notitle]{tuvisionthesis} % TUVISION template
 \usepackage{amsmath}
 \usepackage{tikz}
+\usepackage{gensymb}
+\usepackage{graphicx}
+\graphicspath{ {./images/} }
 
 % use other format for captions
 \usepackage[labelfont=bf,textfont=it]{caption}
@@ -12,6 +15,9 @@
 \usetikzlibrary{plotmarks}
 \usepgfplotslibrary{external}
 \tikzexternalize
+
+\usepackage{listings} 
+\lstset{language=C++}
 
 \usepackage{xargs}
 \usepackage[colorinlistoftodos,prependcaption,textsize=tiny]{todonotes}
@@ -167,7 +173,7 @@ NAO V6 will be used officially in the upcoming RoboCup, thus it is also a priori
 
 \subsubsection{Joint encoders}
 
-They feature magnetic incremental encoders with $0.1\deg$ precision. As mentioned previously, these sensors give feedback to closed loop controllers of the joints as well as let the software framework to calculate kinematic matrices. \todo{cite datasheet}
+They feature magnetic incremental encoders with $0.1\degree$ precision. As mentioned previously, these sensors give feedback to closed loop controllers of the joints as well as let the software framework to calculate kinematic matrices. \todo{cite datasheet}
 
 \subsubsection{Other Sensors}
 IMU is also an important element, FSR ... etc. \todo {complete this}
@@ -446,9 +452,83 @@ Further information about the tools and software is available in the team resear
 
 In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process is as follows.
 
+\todo{Replace this with psuedocode listing}
 \begin{itemize}
-	\item 
+	\item Generate a grid of ground points.
+	\item Generate a set of error configuration and for each;
+	\begin{enumerate}
+		\item Capture the ground points with the simulated Nao world-robot model and obtain the corresponding 2D points in camera plane for each pose. Only a small set of poses were under test (10).
+		\item Use a solver to obtain joint calibration value that can minimize the reprojection error for the above correspondance set.
+		\item Return the state of calibration (by solver), residual in camera plane (reprojection error vector), joint parameter residual.
+		\item If the reprojection error is within a certain margin, it is considered as a success.
+		\item However, the joint parameter residual is used to verify if the solver was stuch in a local minima.
+	\end{enumerate}
+	\item Accumilate all the residuals and compute the histograms.
 \end{itemize}
+
+\subsubsection{Error Generation}
+For this evaluation, only poses that make the robot stand in one leg was used, thus it was focussed either left foot or right foot as support foot. Therefore, only the following joints were employed to generate the error configurations.
+
+\begin{itemize}
+	\item Head Yaw
+	\item Head Pitch
+	\item Support leg HipYaw joint
+	\item .. to support leg Ankle Roll (6 joints per leg)
+\end{itemize}
+Support leg can be either left or right.
+
+Based on the observations in \todo{cite bhuman paper}, the maximum error was determined to be $5\degree$. Since the "population size" is very large (ie: $100^8$ assuming $0.1\degree$ granularity and $\pm5\degree$ range per joint), a sample size of 10000 was selected. The sample set was generated using random numbers obtained from a generator with uniform distribution (\lstinline{std::uniform_real_distribution<float>}). Floating point random numbers in range $\pm5\degree$ were inserted for each of above joint. 
+
+\subsubsection{Solvers}
+
+Although it was planned to use global optimizers from the beginning, due to prior experience and intuition; yet the appeal of very fast convergence of Levenberg-Marquardt (often in a few iterations - under $100ms$) and abundance of high quality implementations caused the author to start with this algorithm. The implementation available with Eigen library was used (Eigen/unsupported).
+
+\subsubsection{Local Minima problems}
+It was noticed that while reprojection error was low ($\pm3 pixels$ approx), the residual of joint parameters had values as large as maximum error possible. Further inspection of induced error values vs the parameters given by the solver, it was determined that the solver got stuck at local minimums. This was considered as a failure and the rate was about 60-70\%.
+
+\subsubsection{Global optimization attempts}
+Since the failure rate with the local optimizer was unacceptable, attention for possible global optimization strategies was given. The author briefly tried the following approaches.
+\begin{itemize}
+	\item dlib::find\_min\_global(). \todo{cite}
+	\item igl::pso (Particle Swarm Optimization). \todo{cite?}
+	\item Stochastic initial guess with local optimizer, retried upto a given amount.
+\end{itemize}
+
+The first approach sometimes converged but the results were generally inferior to Levenberg Marquardt algorithm (when it converged) and was more slower (it was a non-derivative based solver). Next candidate was particle swarm optimization, it almost never had any convergence, thus a full test run was not attempted.
+
+Finally, the idea of attempting to supply a sample set of the population as initial guess was formulated using uniform distribution based generation similar to the above mentioned error generation. Upon later reading, this approach appears to be similar to stochastic steepest descent, except the stochastic input is fed into Levenberg-Marquardt hoping the input helped to escape the local minima(s). \todo{literature?}
+
+\subsubsection{Results}
+
+Below are the results for each step of the above experiment.
+
+\begin{itemize}
+	\item Grid size: 50 per side, $5cm$ between two points. ($2.5m$ per side)
+	\item Camera image size: $640 x 480$ pixels. (Floating point arithmetic used for projections to reduce errors)
+	\item Random distribution: Uniform Random Distribution.
+	\item Sample size: 10000 error configurations
+\end{itemize}
+
+\begin{table}[]
+	\begin{tabular}{|l|l|l|l|l|}
+		\hline
+	Distribution (Uniform) Range & Lev.-Mar.  & dlib::global & igl::PSO & stochastic \\
+	\hline
+	$\pm6.5\degree$& 68\% &  &  & 1.9\% \\
+	$1\degree$ to $6.5\degree$ and $-1\degree$ to $-6.5\degree$	& 54\% & . &  &3.2\% \\ \hline
+%		&  &  &  &  \\
+%		&  &  &  & 
+
+	\end{tabular}
+\caption{Failure rates for solvers tested. Lev-Mar - Levenberg-Marquardt, dlib::global..., igl::PSO - Particle Swarm Optimizer in libigl, stochastic - random start positions with Lev.-Mar. solver. The reason for avoiding $\pm1\degree$ in second distribution is to eliminate effect of $0 - 0 = 0$ on the errors, thus artificially inflating the percieved quality of calibration.}
+\end{table}
+\todo{Figure... demonstrate it is not affected by tis}
+
+\begin{center}
+  \noindent\makebox[\textwidth]{\includegraphics[width=0.9\paperwidth]{"poselist-L-generic-L-LegaAndHeadUniRandErr0-6_5deg-pitchDiv2_stochastic_fix"}}
+	\captionof{figure}{Error distribution for $\pm6.5\degree$ error set. Top row is before calibration and Bottom row is after calibration.}
+\end{center}
+
 
 \todo{Explain why}
 \todo{Data, randomly induced errors, individually induced errors}
