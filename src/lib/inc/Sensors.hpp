@@ -17,5 +17,7 @@ public:
   static const std::vector<JOINTS::JOINT> CAM_OBS_L_SUP_FOOT;
   static const std::vector<JOINTS::JOINT> CAM_OBS_R_SUP_FOOT;
 
+  static const std::vector<JOINTS::JOINT> ALL_OBS_JOINTS; // all observed joints, excludes arms..
+
   static void init() {}
 };

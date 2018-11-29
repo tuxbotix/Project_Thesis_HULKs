@@ -30,6 +30,54 @@ typedef std::vector<std::pair<int, std::vector<float>>> JointAndPoints;
 typedef std::vector<std::pair<Vector2f, Vector2f>> CorrespondanceList;
 typedef std::vector<std::pair<Vector3f, Vector2f>> Correspondance3D2DList;
 
+const long LEG_JOINT_COUNT =
+    JOINTS::JOINT::L_ANKLE_ROLL - JOINTS::JOINT::L_HAND;
+const long COMPACT_JOINT_CALIB_PARAM_COUNT =
+    2 + LEG_JOINT_COUNT * 2; // head->2 + legs = 6*2
+
+// compact calib packing format: headY, headP, LLegjoints, RLegJoints
+/**
+ * @brief calibParamsToRawPose
+ * @param params
+ * @param vec
+ */
+inline bool jointCalibParamsToRawPose(const Eigen::VectorXf &params,
+                                      std::vector<float> &vec) {
+  if (params.size() < COMPACT_JOINT_CALIB_PARAM_COUNT) {
+    return false;
+  }
+  if (vec.size() < JOINTS::JOINT::JOINTS_MAX) {
+    vec.resize(JOINTS::JOINT::JOINTS_MAX);
+  }
+  vec[JOINTS::JOINT::HEAD_PITCH] = params(JOINTS::JOINT::HEAD_PITCH);
+  vec[JOINTS::JOINT::HEAD_YAW] = params(JOINTS::JOINT::HEAD_YAW);
+
+  // left
+  for (long i = 0; i < LEG_JOINT_COUNT; i++) {
+    vec[JOINTS::JOINT::L_HIP_YAW_PITCH + i] = params(2 + i);
+    vec[JOINTS::JOINT::R_HIP_YAW_PITCH + i] = params(2 + LEG_JOINT_COUNT + i);
+  }
+  return true;
+}
+
+inline bool rawPoseToJointCalibParams(const std::vector<float> &vec,
+                                      Eigen::VectorXf &params) {
+  if (vec.size() < JOINTS::JOINT::JOINTS_MAX) {
+    return false;
+  }
+  if (params.size() < COMPACT_JOINT_CALIB_PARAM_COUNT) {
+    params.resize(COMPACT_JOINT_CALIB_PARAM_COUNT);
+  }
+  params(JOINTS::JOINT::HEAD_PITCH) = vec[JOINTS::JOINT::HEAD_PITCH];
+  params(JOINTS::JOINT::HEAD_YAW) = vec[JOINTS::JOINT::HEAD_YAW];
+
+  for (long i = 0; i < LEG_JOINT_COUNT; i++) {
+    params(2 + i) = vec[JOINTS::JOINT::L_HIP_YAW_PITCH + i];
+    params(2 + LEG_JOINT_COUNT + i) = vec[JOINTS::JOINT::R_HIP_YAW_PITCH + i];
+  }
+  return true;
+}
+
 // struct JointCalibCapture{
 //    NaoPose<float> pose;
 //    Correspondance3D2DList capturedCorrespondances;
@@ -106,7 +154,7 @@ struct JointCalibrator : Functor<float> {
 
   /**
    * @brief operator () Almost the flavour liked by Eigen's solvers
-   * @param calibrationValsStdVec testParameters, as std::vector
+   * @param calibrationValsStdVec testParameters, as std::vector, FULL LENGTH***
    * @param errorVec residual vector
    * @return state of the function.
    */
@@ -142,15 +190,15 @@ struct JointCalibrator : Functor<float> {
    * @brief operator () Flavour liked by Eigen's solvers (it needs
    * Eigen::VectorXx)
    * This just maps the eigen::vector to std::vector and call above func.
-   * @param calibrationVals same as above function, but Eig::VectorXf
+   * @param calibrationVals same as above function, but Eig::VectorXf AND
+   * SHORTENED, only head and leg angles!!!
    * @param errorVec residual vector
    * @return return of above func
    */
   int operator()(const Eigen::VectorXf &calibrationVals,
                  Eigen::VectorXf &errorVec) const {
-    rawPoseT calibrationValsStdVec(static_cast<size_t>(calibrationVals.size()));
-    Eigen::VectorXf::Map(&calibrationValsStdVec[0], calibrationVals.size()) =
-        calibrationVals;
+    rawPoseT calibrationValsStdVec(JOINTS::JOINT::JOINTS_MAX);
+    jointCalibParamsToRawPose(calibrationVals, calibrationValsStdVec);
     return this->operator()(calibrationValsStdVec, errorVec);
   }
 
@@ -206,7 +254,7 @@ struct JointCalibrator : Functor<float> {
         naoModel(model) {}
 
   // Means the parameter count = 26~ in our case
-  int inputs() const { return JOINTS::JOINT::JOINTS_MAX; }
+  int inputs() const { return COMPACT_JOINT_CALIB_PARAM_COUNT; }
   // size of sample/ correspondance set
   size_t values() const { return captureDataSetSize; }
 };

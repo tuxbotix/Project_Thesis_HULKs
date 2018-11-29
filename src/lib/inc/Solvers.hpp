@@ -5,9 +5,9 @@
 
 #include <unsupported/Eigen/NonLinearOptimization>
 
-#include "cppoptlib/boundedproblem.h"
-#include "cppoptlib/meta.h"
-#include "cppoptlib/solver/lbfgsbsolver.h"
+//#include "cppoptlib/boundedproblem.h"
+//#include "cppoptlib/meta.h"
+//#include "cppoptlib/solver/lbfgsbsolver.h"
 
 namespace ObservationSolvers {
 
@@ -81,26 +81,26 @@ template <typename _Scalar = float> struct Pose2DFunctor : Functor<_Scalar> {
  */
 
 // we will solve ||Xb-y|| s.t. b>=0
-template <typename T>
-class Pose2DLeastSquares : public cppoptlib::BoundedProblem<T> {
-public:
-  using Superclass = cppoptlib::BoundedProblem<T>;
-  using typename Superclass::TVector;
-  using TMatrix = typename Superclass::THessian;
+//template <typename T>
+//class Pose2DLeastSquares : public cppoptlib::BoundedProblem<T> {
+//public:
+//  using Superclass = cppoptlib::BoundedProblem<T>;
+//  using typename Superclass::TVector;
+//  using TMatrix = typename Superclass::THessian;
 
-  const TMatrix X;
-  const TVector y;
+//  const TMatrix X;
+//  const TVector y;
 
-public:
-  Pose2DLeastSquares(const TMatrix &X_, const TVector y_)
-      : Superclass(X_.cols()), X(X_), y(y_) {}
+//public:
+//  Pose2DLeastSquares(const TMatrix &X_, const TVector y_)
+//      : Superclass(X_.cols()), X(X_), y(y_) {}
 
-  T value(const TVector &beta) { return (X * beta - y).dot(X * beta - y); }
+//  T value(const TVector &beta) { return (X * beta - y).dot(X * beta - y); }
 
-  void gradient(const TVector &beta, TVector &grad) {
-    grad = X.transpose() * 2 * (X * beta - y);
-  }
-};
+//  void gradient(const TVector &beta, TVector &grad) {
+//    grad = X.transpose() * 2 * (X * beta - y);
+//  }
+//};
 
 /**
  * This is quick n dirty way to call this..

@@ -66,12 +66,17 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   JointCalibSolvers::JointCalibResult result;
 
   // Map the error vector into an Eigen vector
-  const Eigen::VectorXf inducedErrorEig =
-      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
-          inducedErrorStdVec.data(), inducedErrorStdVec.size());
+  Eigen::VectorXf inducedErrorEigCompact;
+  std::cout << JointCalibSolvers::rawPoseToJointCalibParams(
+                   inducedErrorStdVec, inducedErrorEigCompact)
+            << std::endl;
+  //  =
+  //      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
+  //          inducedErrorStdVec.data(),
+  //          static_cast<Eigen::Index>(inducedErrorStdVec.size()));
 
   // Initialize residual of joint calibration (this isn't squared*)
-  Eigen::VectorXf jointCalibResidual = inducedErrorEig;
+  Eigen::VectorXf jointCalibResidual = inducedErrorEigCompact;
 
   // Make a copy of nao sensor model
   auto naoJointSensorModel(naoModel);
@@ -128,14 +133,15 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   auto calibrator =
       JointCalibSolvers::JointCalibrator(frameCaptures, naoJointSensorModel);
 
-  rawPoseT calVec(JOINTS::JOINT::JOINTS_MAX, 0.0);
-
   Eigen::VectorXf errorVec(calibrator.values());
   Eigen::VectorXf finalErrorVec(calibrator.values());
 
-  calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(calVec.data(),
-                                                           calVec.size()),
-             errorVec);
+  // Setting zero is very important.
+  Eigen::VectorXf calibratedParams(static_cast<Eigen::Index>(
+      JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
+  calibratedParams.setZero();
+
+  calibrator(calibratedParams, errorVec);
 
   /*
    * Run Lev-Mar to optimize
@@ -151,10 +157,6 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
     return status;
   };
 
-  // Setting zero is very important.
-  Eigen::VectorXf calibratedParams((int)JOINTS::JOINT::JOINTS_MAX);
-  calibratedParams.setZero();
-
   /// Run the Levenberg-Marquardt solver
   int status = runLevMar(calibratedParams);
   //  Get reprojection error
@@ -165,11 +167,12 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Do stochastic fixing?
   if (stochasticFix) {
     // This will hold best params in case looping is needed
-    Eigen::VectorXf oldParams((int)JOINTS::JOINT::JOINTS_MAX);
+    Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
+        JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
     size_t count = 0;                     // counter for the while loop
     std::default_random_engine generator; // random gen
     /// TODO make this distribution configurable
-    std::uniform_real_distribution<float> distribution(-5, 5);
+    std::uniform_real_distribution<float> distribution(-6.5, 6.5);
 
     /*
      * If status is 2 or 5, most likely we are at a local minima
@@ -179,19 +182,21 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
       // save state
       oldParams = calibratedParams;
       // get cost
-      double finalCost = finalErrorVec.squaredNorm();
+      float finalCost = finalErrorVec.squaredNorm();
 
       /// Populate the starting point with random values
 
       calibratedParams(JOINTS::JOINT::HEAD_PITCH) = std::min(
-          0.0f, static_cast<float>(distribution(generator)) / 2 * TO_RAD);
+          0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD);
       calibratedParams(JOINTS::JOINT::HEAD_YAW) =
           distribution(generator) * TO_RAD;
 
       // todo make this dual leg supported..
-      for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
-           i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
-        calibratedParams(i) = distribution(generator) * TO_RAD;
+      /// We are now using the compact form
+      for (size_t i = 2; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+           i++) {
+        calibratedParams(static_cast<Eigen::Index>(i)) =
+            distribution(generator) * TO_RAD;
       }
       /// Run Lev-Mar again
       status = runLevMar(calibratedParams);
@@ -209,10 +214,15 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
           //                    (status == 2 || status == 5) ||
           finalCost < finalErrorVec.squaredNorm()) {
         calibratedParams = oldParams;
+        // Get the new cost
+        calibrator(calibratedParams, finalErrorVec);
       }
       count++;
     }
   }
+
+  /// Run Lev-Mar again
+  status = runLevMar(calibratedParams);
 
   /*
    * END lev-mar
@@ -233,12 +243,13 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
   // Determine success or failure
   if (std::isnan(minCoeff) || std::isnan(maxCoeff) ||
-      finalErrAbsMax > imageSize.minCoeff() * 0.1 ||
-      errorNorm > errorVec.norm()) {
-    std::cout << "Calibration failure\n"
-              << calibratedParams.transpose() << "\n"
-              << inducedErrorEig.transpose() << "\n"
-              << finalErrorVec.norm() << std::endl;
+      finalErrAbsMax > imageSize.minCoeff() * 0.1f ||
+      errorNorm > errorVec.norm() || jointCalibResAbsMax > tolerance) {
+    //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+    //    std::cout << "Calibration failure\n"
+    //              << calibratedParams.transpose() << "\n"
+    //              << inducedErrorEig.transpose() << "\n"
+    //              << finalErrorVec.norm() << std::endl;
     success = false;
   } else {
     success = true;
@@ -254,23 +265,23 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   //      {
 
   std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-  std::cout << "errAbsMax: " << std::max(std::abs(minCoeff), std::abs(maxCoeff))
-            << " "
+  std::cout << "orig: " << inducedErrorEigCompact.transpose() << "\n"
+            << "calib: " << calibratedParams.transpose() << "\n errAbsMax: "
+            << std::max(std::abs(minCoeff), std::abs(maxCoeff)) << " "
             << " errorNorm: " << jointCalibResAbsMax
             << " errorAvg: " << jointCalibResAbsMax
             << " jointCalibResAbsMax: " << jointCalibResAbsMax / TO_RAD
-            << " Status: " << status << " stochastic & success?: "
-            << (stochasticFix && loopedAndBroken &&
-                jointCalibResAbsMax <= tolerance)
-            << std::endl;
+            << " Status: " << status << std::endl;
   //  }
 
   // Update the result object
   result.status = status;
   result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
-  for (int i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
-    result.jointParams[i] = calibratedParams(i);
-  }
+  JointCalibSolvers::jointCalibParamsToRawPose(calibratedParams,
+                                               result.jointParams);
+  //  for (int i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
+  //    result.jointParams[static_cast<size_t>(i)] = calibratedParams(i);
+  //  }
   result.reprojectionErrorNorm = errorNorm;
   result.reprojectionErrorNorm = errorAvg;
 

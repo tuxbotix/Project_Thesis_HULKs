@@ -59,7 +59,8 @@ template <typename T> struct CalibEvalResiduals {
   Residual<T> postX;
   Residual<T> postY;
 
-  std::array<Residual<T>, JOINTS::JOINT::JOINTS_MAX> jointResiduals;
+  std::array<Residual<T>, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
+      jointResiduals;
 
   /**
    * @brief joinEvalResiduals move-insert ops for all vectors. Src list is
@@ -80,7 +81,8 @@ template <typename T> struct CalibEvalResiduals {
     dest.postY.insert(dest.postY.end(),
                       std::make_move_iterator(src.postY.begin()),
                       std::make_move_iterator(src.postY.end()));
-    for (size_t i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
+    for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+         ++i) {
       auto &srcjoint = src.jointResiduals[i];
       auto &dstjoint = dest.jointResiduals[i];
       dstjoint.insert(dstjoint.end(), std::make_move_iterator(srcjoint.begin()),
@@ -107,13 +109,16 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   JointCalibSolvers::JointCalibResult result;
 
   // Map the error vector into an Eigen vector
-  const Eigen::VectorXf inducedErrorEig =
-      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
-          inducedErrorStdVec.data(),
-          static_cast<Eigen::Index>(inducedErrorStdVec.size()));
+  Eigen::VectorXf inducedErrorEigCompact;
+  JointCalibSolvers::rawPoseToJointCalibParams(inducedErrorStdVec,
+                                               inducedErrorEigCompact);
+  //  =
+  //      Eigen::Map<const Eigen::VectorXf, Eigen::Unaligned>(
+  //          inducedErrorStdVec.data(),
+  //          static_cast<Eigen::Index>(inducedErrorStdVec.size()));
 
   // Initialize residual of joint calibration (this isn't squared*)
-  Eigen::VectorXf jointCalibResidual = inducedErrorEig;
+  Eigen::VectorXf jointCalibResidual = inducedErrorEigCompact;
 
   // Make a copy of nao sensor model
   auto naoJointSensorModel(naoModel);
@@ -170,14 +175,15 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   auto calibrator =
       JointCalibSolvers::JointCalibrator(frameCaptures, naoJointSensorModel);
 
-  rawPoseT calVec(JOINTS::JOINT::JOINTS_MAX, 0.0);
-
   Eigen::VectorXf errorVec(calibrator.values());
   Eigen::VectorXf finalErrorVec(calibrator.values());
 
-  calibrator(Eigen::Map<Eigen::VectorXf, Eigen::Unaligned>(
-                 calVec.data(), static_cast<Eigen::Index>(calVec.size())),
-             errorVec);
+  // Setting zero is very important.
+  Eigen::VectorXf calibratedParams(static_cast<Eigen::Index>(
+      JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
+  calibratedParams.setZero();
+
+  calibrator(calibratedParams, errorVec);
 
   /*
    * Run Lev-Mar to optimize
@@ -193,11 +199,6 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
     return status;
   };
 
-  // Setting zero is very important.
-  Eigen::VectorXf calibratedParams(
-      static_cast<Eigen::Index>(JOINTS::JOINT::JOINTS_MAX));
-  calibratedParams.setZero();
-
   /// Run the Levenberg-Marquardt solver
   int status = runLevMar(calibratedParams);
   //  Get reprojection error
@@ -208,8 +209,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Do stochastic fixing?
   if (stochasticFix) {
     // This will hold best params in case looping is needed
-    Eigen::VectorXf oldParams(
-        static_cast<Eigen::Index>(JOINTS::JOINT::JOINTS_MAX));
+    Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
+        JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
     size_t count = 0;                     // counter for the while loop
     std::default_random_engine generator; // random gen
     /// TODO make this distribution configurable
@@ -233,8 +234,9 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
           distribution(generator) * TO_RAD;
 
       // todo make this dual leg supported..
-      for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
-           i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
+      /// We are now using the compact form
+      /// TODO THERE ARE THINGS TO FIX
+      for (size_t i = 2; i < 2 + JointCalibSolvers::LEG_JOINT_COUNT; i++) {
         calibratedParams(static_cast<Eigen::Index>(i)) =
             distribution(generator) * TO_RAD;
       }
@@ -315,9 +317,11 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Update the result object
   result.status = status;
   result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
-  for (int i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
-    result.jointParams[static_cast<size_t>(i)] = calibratedParams(i);
-  }
+  JointCalibSolvers::jointCalibParamsToRawPose(calibratedParams,
+                                               result.jointParams);
+  //  for (int i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
+  //    result.jointParams[static_cast<size_t>(i)] = calibratedParams(i);
+  //  }
   result.reprojectionErrorNorm = errorNorm;
   result.reprojectionErrorNorm = errorAvg;
 
@@ -385,7 +389,8 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
     }
     // Convert to degrees
     jointCalibResiduals /= TO_RAD;
-    for (long i = 0; i < JOINTS::JOINT::JOINTS_MAX; ++i) {
+    for (long i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+         ++i) {
       // TODO FIX THIS
       //      residuals.jointResiduals[static_cast<size_t>(i)].push_back(
       //          jointCalibResiduals(i));
@@ -478,7 +483,7 @@ int main(int argc, char *argv[]) {
   //  std::normal_distribution<float> distribution(0.0, 2);
 
   /// Sample Size
-  const size_t JOINT_ERR_LST_DESIRED_COUNT = 10000;
+  const size_t JOINT_ERR_LST_DESIRED_COUNT = 1000;
 
   std::set<rawPoseT> uniqueJointErrList;
 
