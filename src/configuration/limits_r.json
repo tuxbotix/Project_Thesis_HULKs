@@ -1,6 +1,6 @@
 {
     "min_headYawPitch":[-60, 0],
-    "min_torsoPos": [-0.05, -0.05, 0.2],
+    "min_torsoPos": [-0.05, -0.05, 0.15],
     "min_torsoRot": [-10, -20, -5],
     "min_oFootPos": [-0.02, 0.09, 0.1],
     "min_oFootRot": [0, 0, 0],

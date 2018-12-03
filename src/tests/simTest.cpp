@@ -34,7 +34,7 @@
 #include "TUHHMin.hpp"
 #include "constants.hpp"
 
-#define DEBUG_CAM_OBS 1
+#define DEBUG_SIM_TEST 0
 
 #include "CameraObservationModel.hpp"
 #include "JointCalibSolver.hpp"
@@ -103,6 +103,8 @@ std::tuple<JointCalibSolvers::JointCalibResult, Eigen::VectorXf,
            Eigen::VectorXf, Eigen::VectorXf>
 evalJointErrorSet(const NaoJointAndSensorModel naoModel,
                   const poseAndRawAngleListT &poseList,
+                  const SUPPORT_FOOT supFoot,
+                  const std::vector<Camera> &camNames,
                   const rawPoseT &inducedErrorStdVec, const bool &stochasticFix,
                   bool &success) {
   // Create result object
@@ -124,9 +126,6 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   auto naoJointSensorModel(naoModel);
   // set the error state
   naoJointSensorModel.setCalibValues(inducedErrorStdVec);
-
-  // TODO get this from somewhere else?
-  auto camNames = {Camera::BOTTOM};
 
   // List of captures
   JointCalibSolvers::CaptureList frameCaptures;
@@ -150,20 +149,26 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
           frameCaptures.emplace_back(correspondances, poseAndAngles.angles,
                                      camName, poseAndAngles.pose.supportFoot);
         } else {
+#if DEBUG_SIM_TEST
           std::lock_guard<std::mutex> lg(utils::mtx_cout_);
           std::cout << "No suitable ground points" << std::endl;
+#endif
         }
       } else {
+#if DEBUG_SIM_TEST
         std::lock_guard<std::mutex> lg(utils::mtx_cout_);
         std::cerr << "Obtaining ground grid failed" << std::endl;
+#endif
       }
     }
   }
 
   // If no frames are captured, consider this as a failure
   if (frameCaptures.size() <= 0) {
+#if DEBUG_SIM_TEST
     std::lock_guard<std::mutex> lg(utils::mtx_cout_);
     std::cerr << "No suitable frame captures !!" << std::endl;
+#endif
     success = false;
     return {result, jointCalibResidual, Eigen::VectorXf(0), Eigen::VectorXf(0)};
   }
@@ -220,6 +225,15 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
      * If status is 2 or 5, most likely we are at a local minima
      * So to give some push-start random start positions will be attempted
      */
+    const size_t legsInitialIdx =
+        (supFoot == SUPPORT_FOOT::SF_DOUBLE || supFoot == SUPPORT_FOOT::SF_LEFT)
+            ? 2
+            : 2 + JointCalibSolvers::LEG_JOINT_COUNT;
+    const size_t legsEndIdx =
+        (supFoot == SUPPORT_FOOT::SF_DOUBLE ||
+         supFoot == SUPPORT_FOOT::SF_RIGHT)
+            ? JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT
+            : 2 + JointCalibSolvers::LEG_JOINT_COUNT;
     while ((status == 2 || status == 5) && count < 100) {
       // save state
       oldParams = calibratedParams;
@@ -235,8 +249,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
       // todo make this dual leg supported..
       /// We are now using the compact form
-      /// TODO THERE ARE THINGS TO FIX
-      for (size_t i = 2; i < 2 + JointCalibSolvers::LEG_JOINT_COUNT; i++) {
+
+      for (size_t i = legsInitialIdx; i < legsEndIdx; i++) {
         calibratedParams(static_cast<Eigen::Index>(i)) =
             distribution(generator) * TO_RAD;
       }
@@ -261,6 +275,12 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
       }
       count++;
     }
+#if DEBUG_SIM_TEST
+    {
+      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+      std::cout << "i " << count << std::endl;
+    }
+#endif
   }
 
   /// Run Lev-Mar again
@@ -297,11 +317,12 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
     success = true;
   }
 
-  // if failed OR if loop broken BUT calibration is bad
-  /*
-   * NOTE: Local minima if reprojection errr is small but jointResidual isn't
-   * low!
-   */
+// if failed OR if loop broken BUT calibration is bad
+/*
+ * NOTE: Local minima if reprojection errr is small but jointResidual isn't
+ * low!
+ */
+#if DEBUG_SIM_TEST
   if (!success ||
       (stochasticFix && loopedAndBroken && jointCalibResAbsMax > tolerance)) {
 
@@ -313,7 +334,7 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
               << " jointCalibResAbsMax: " << jointCalibResAbsMax / TO_RAD
               << " Status: " << status << std::endl;
   }
-
+#endif
   // Update the result object
   result.status = status;
   result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
@@ -341,6 +362,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
  */
 void threadedFcn(CalibEvalResiduals<double> &residuals,
                  const poseAndRawAngleListT &poseList,
+                 const SUPPORT_FOOT supFoot,
+                 const std::vector<Camera> &camNames,
                  const NaoJointAndSensorModel &naoJointSensorModel,
                  const std::vector<rawPoseT>::iterator jointErrItrBegin,
                  const std::vector<rawPoseT>::iterator jointErrItrEnd,
@@ -360,8 +383,8 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
     Eigen::VectorXf jointCalibResiduals;
     // Call evaluator for this error config.
     std::tie(result, jointCalibResiduals, preResiduals, postResiduals) =
-        evalJointErrorSet(naoJointSensorModel, poseList, errorSet,
-                          stochasticFix, success);
+        evalJointErrorSet(naoJointSensorModel, poseList, supFoot, camNames,
+                          errorSet, stochasticFix, success);
 
     if (!success) {
       // if a failure, update the counter.
@@ -453,6 +476,8 @@ int main(int argc, char *argv[]) {
   /*
    * Read poses
    */
+  SUPPORT_FOOT supFeet = SUPPORT_FOOT::SF_NONE;
+
   poseAndRawAngleListT poseList;
   poseList.reserve(MAX_POSES_TO_CALIB);
   poseAndRawAngleT poseAndAngles;
@@ -461,6 +486,22 @@ int main(int argc, char *argv[]) {
                      utils::JointsAndPosesStream::getNextPoseAndRawAngles(
                          inFile, poseAndAngles);
        ++i) {
+    std::cout << "Pose " << i << poseAndAngles << std::endl;
+    if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
+      --i;
+      continue;
+    }
+    // if already double, skip
+    if (supFeet != SUPPORT_FOOT::SF_DOUBLE) {
+      // if none, first try..
+      if (supFeet == SUPPORT_FOOT::SF_NONE) {
+        supFeet = poseAndAngles.pose.supportFoot;
+      } else if (supFeet != poseAndAngles.pose.supportFoot) { // if differs but
+                                                              // not none, then
+                                                              // double it is ;)
+        supFeet = SUPPORT_FOOT::SF_DOUBLE;
+      }
+    }
     poseList.push_back(poseAndAngles);
   }
   std::cout << " reading of poses done" << std::endl;
@@ -498,9 +539,19 @@ int main(int argc, char *argv[]) {
 
     /// Leg Angles
     // TODO make this dual leg supported..
-    for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
-         i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
-      elem[i] = distribution(generator) * TO_RAD /* * plusOrMinus() */;
+    if (supFeet == SUPPORT_FOOT::SF_DOUBLE ||
+        supFeet == SUPPORT_FOOT::SF_LEFT) {
+      for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
+           i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
+        elem[i] = distribution(generator) * TO_RAD /* * plusOrMinus() */;
+      }
+    }
+    if (supFeet == SUPPORT_FOOT::SF_DOUBLE ||
+        supFeet == SUPPORT_FOOT::SF_RIGHT) {
+      for (size_t i = JOINTS::JOINT::R_HIP_YAW_PITCH;
+           i <= JOINTS::JOINT::R_ANKLE_ROLL; i++) {
+        elem[i] = distribution(generator) * TO_RAD /* * plusOrMinus() */;
+      }
     }
     uniqueJointErrList.insert(elem);
   }
@@ -536,6 +587,9 @@ int main(int argc, char *argv[]) {
   // Setup offsets for iterators
   size_t threadingOffsets = JOINT_ERR_LST_COUNT / MAX_THREADS;
 
+  // cameras to evaluate
+  std::vector<Camera> camNames = {Camera::BOTTOM /*, Camera::TOP*/};
+
   // Start the threads
   for (size_t i = 0; i < MAX_THREADS; ++i) {
 
@@ -550,10 +604,10 @@ int main(int argc, char *argv[]) {
 
     std::cout << "starting thread: " << i << std::endl;
     // Initialize the thread. Maybe use futures later?
-    threadList[i] =
-        std::thread(threadedFcn, std::ref(calibResidualList[i]),
-                    std::ref(poseList), std::ref(naoJointSensorModel), begin,
-                    end, stochasticFix, std::ref(badCases));
+    threadList[i] = std::thread(threadedFcn, std::ref(calibResidualList[i]),
+                                std::ref(poseList), supFeet, std::ref(camNames),
+                                std::ref(naoJointSensorModel), begin, end,
+                                stochasticFix, std::ref(badCases));
   }
 
   /*
