@@ -266,6 +266,7 @@ With the above set of sensitivities per joint per pose, it is possible to sort a
 
 \todo{Write more about how this is defined, how others have done it, etc}
 \subsection{Ambiguities of observations}
+\label{subsec:ambiguities}
 
 Since there are 14 Joints in interest (excluding arms), but only 3 dimensions (simplest model) for the sensitivity in camera based joint error observation model (mentioned in above subsection), there is a high possibility that the sensitivity of multiple joints at a given pose have similar direction vector. This effect will be refered as "ambiguity" for the rest of this thesis.
  
@@ -424,9 +425,31 @@ By applying this ability, it is possible to conclude if two observations are "si
 
 \subsection{Extracting optimal poses}
 
-Considering the above mentioned need for dissimilar observation vectors for each joint observation for a given pose, and other factors, it was evident that filtering the poses with a cost function would be beneficial.
+Considering the above mentioned need for dissimilar observation vectors for each joint observation for a given pose, and other factors, it was evident that filtering the poses with a cost function would be beneficial. 
+
+However, once the evaluation was performed \cref{subsec:simGroundTest}, it was noticed that the rate of local minima convergence was high (70\% approx). Therefore an alternative or an improvement over the cost function method was needed to list a set of poses that complement the observation capabilities of each other. This approach is presented in \cref{subsec:posepose}.
 
 \subsubsection{Cost function \& weights}
+\label{subsec:costFunc}
+
+\todo{define the cost function and other info}
+\todo{ Explain the situation of angle}
+
+\subsubsection{Pose-Pose interaction based sorting}
+\label{subsec:posepose}
+
+As explained in the section about ambiguities \cref{subsec:ambiguities}, multiple error configurations can have the similar observation from the camera, thus there will be multiple error configurations which can lead to low ($\pm2px$) average reprojection error, causing the solver to converge at a local minima. The aim of the above cost function was to choose poses that have minimum amount of joint observation ambiguities. However, one major problem of this approach was that it only considered the joint observation interactions within a pose. Since it did not consider if two poses have similar set of joint observation ambiguities, choosing a sample of "best" poses from this cost function did not yield good results as shown in \cref{subsec:simGroundTest}.
+
+Therefore, a method to formulate the ability to the ambiguities of different poses was nessesary. The following terminology is introduced and then the process is detailed.
+ 
+ \begin{enumerate}
+ 	\item joint-joint interaction vector: This vector contains the angle obtained from cosine similarity comparison mentioned in \cref{subsec:costFunc} for each joint-joint comparison. This was a later addition to PoseCost struct.
+ 	\item pose-pose interaction vector: This vector is of same size as joint-joint interaction vector. This contains values which indicate if the poses under consideration can complement joint-joint interaction case. Ideally, this value will be 0 meaning the two poses don't have similar ambiguity issue for the same pair of joints.
+ 	\item Interaction count: this value indicate how many non-complementing cases are there for a pose-pose interaction or joint-joint interaction. Ideally this should be 0.
+ 	\item pose-pose interaction cos: Similar in concept to joint interaction cost, it is the sum of above mentioned pose-pose interaction vector.
+ \end{enumerate}
+
+
 
 \todo{define the cost function and other info}
 \todo{ Explain the situation of angle}
@@ -449,7 +472,7 @@ Further information about the tools and software is available in the team resear
 \section{Calibration tests}
 \todo{Intro para}
 \subsection{Simulation: Entire ground plane as a calibration pattern}
-
+\label{subsec:simGroundTest}
 In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process is as follows.
 
 \todo{Replace this with psuedocode listing}
