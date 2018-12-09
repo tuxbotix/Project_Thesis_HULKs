@@ -85,10 +85,10 @@ struct PoseInteraction {
   double cost;
   PoseInteractionId combinedId; // id1, id2 in order
   // In this case, my approach is elementwise multiplication
-//  InteractionCost
-//      poseInteractionCostVec; // p1 vs p2, p1 vs p3, ... for all joint
-                              // configs under calibration
-  int interactionCount;       // count of non-zero elements of interaction cost
+  //  InteractionCost
+  //      poseInteractionCostVec; // p1 vs p2, p1 vs p3, ... for all joint
+  // configs under calibration
+  int interactionCount; // count of non-zero elements of interaction cost
   PoseInteraction(PoseCost &c1, PoseCost &c2) {
     if (c1.id > c2.id) {
       combinedId = {c2.id, c1.id};
@@ -381,278 +381,291 @@ int main(int argc, char **argv) {
   }
 
   /// Start the real threading..
-  {
-    std::vector<std::thread> threadList(usableThreads);
-    std::vector<std::atomic<size_t>> iterCount(usableThreads);
 
-    // threads -> sensors -> joints -> peakList (PerJointPerSensorPerThread)
-    std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
-    SensorWeights sensorMagnitudeWeights;
-    sensorMagnitudeWeights.fill(2);
+  std::vector<std::thread> threadList(usableThreads);
+  std::vector<std::atomic<size_t>> iterCount(usableThreads);
 
-    if (favouredSensor.compare("t") == 0) {
-      sensorMagnitudeWeights[SENSOR_NAME::TOP_CAMERA] = 4;
-    } else if (favouredSensor.compare("b") == 0) {
-      sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
-    } else if (favouredSensor.compare("all") == 0) {
-      sensorMagnitudeWeights[SENSOR_NAME::TOP_CAMERA] = 4;
-      sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
-    }
+  // threads -> sensors -> joints -> peakList (PerJointPerSensorPerThread)
+  std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
+  SensorWeights sensorMagnitudeWeights;
+  sensorMagnitudeWeights.fill(2);
 
-    // TODO change this as needed.
-    JointWeights jointWeights;
-    jointWeights.fill(1);
-    if (jointNum > 0 &&
-        jointNum < static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
-      jointWeights[jointNum] = 4;
-    }
+  if (favouredSensor.compare("t") == 0) {
+    sensorMagnitudeWeights[SENSOR_NAME::TOP_CAMERA] = 4;
+  } else if (favouredSensor.compare("b") == 0) {
+    sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
+  } else if (favouredSensor.compare("all") == 0) {
+    sensorMagnitudeWeights[SENSOR_NAME::TOP_CAMERA] = 4;
+    sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
+  }
 
-    const float wOrthoGeneric = 3;
-    const float observableJointCountWeight = 1;
+  // TODO change this as needed.
+  JointWeights jointWeights;
+  jointWeights.fill(1);
+  if (jointNum > 0 && jointNum < static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
+    jointWeights[jointNum] = 4;
+  }
 
-    for (unsigned int i = 0; i < usableThreads; i++) {
+  const float wOrthoGeneric = 3;
+  const float observableJointCountWeight = 1;
 
-      // void poseFilterFunc(std::istream &inputStream,
-      //                     // std::ostream &outputStream,
-      //                     std::vector<PoseCost> &poseCosts,
-      //                     const SensorWeights sensorMagnitudeWeights,
-      //                     const JointWeights jointWeights,
-      //                     const float orthogonalityWeight,
-      //                     std::atomic<size_t> &iterations, bool lastPortion)
+  for (unsigned int i = 0; i < usableThreads; i++) {
 
-      threadList[i] = std::thread(
-          poseFilterFunc, std::ref(inputPoseAndJointStreams[i]),
-          // std::ref(outputFileList[i]),
-          std::ref(poseCostListList[i]), sensorMagnitudeWeights, jointWeights,
-          wOrthoGeneric, observableJointCountWeight, std::ref(iterCount[i]));
-    }
+    // void poseFilterFunc(std::istream &inputStream,
+    //                     // std::ostream &outputStream,
+    //                     std::vector<PoseCost> &poseCosts,
+    //                     const SensorWeights sensorMagnitudeWeights,
+    //                     const JointWeights jointWeights,
+    //                     const float orthogonalityWeight,
+    //                     std::atomic<size_t> &iterations, bool lastPortion)
+
+    threadList[i] = std::thread(
+        poseFilterFunc, std::ref(inputPoseAndJointStreams[i]),
+        // std::ref(outputFileList[i]),
+        std::ref(poseCostListList[i]), sensorMagnitudeWeights, jointWeights,
+        wOrthoGeneric, observableJointCountWeight, std::ref(iterCount[i]));
+  }
 #if ENABLE_PROGRESS
-    bool continueTicker = true;
-    std::thread tTick = std::thread([&]() {
-      int elapsed = 0;
-      const size_t interval = 5;
-      while (continueTicker) {
-        size_t iterSum =
-            std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
-        if (elapsed % 100) {
-          std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-          std::cout << "Elapsed: " << elapsed
-                    << "s Iterations: " << std::scientific << (double)iterSum
-                    << std::endl;
-        } else {
-          std::stringstream t;
-          t << "Elapsed: " << elapsed << " ";
-          for (size_t i = 0; i < usableThreads; i++) {
-            t << "T" << i << " :" << iterCount[i].load() << " ";
-          }
-          {
-            std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-            std::cout << t.str() << std::endl;
-          }
-        }
-        elapsed += interval;
-        std::this_thread::sleep_for(
-            std::chrono::seconds(interval)); // 100Hz -> 10ms
-      }
-    });
-#endif
-    /// Join all :P
-    for (auto &t : threadList) {
-      if (t.joinable()) {
-        t.join();
-      }
-    }
-#if ENABLE_PROGRESS
-    continueTicker = false;
-    if (tTick.joinable()) {
-      tTick.join();
-    }
-#endif
-
-    /// Write the remaining buffers to file
-    std::cout << "flushing all " << std::endl;
-#if DO_COMMIT
-
-    // first join all
-    std::cout << poseCostListList[0].size() << " ";
-    for (size_t t = 1; t < usableThreads; t++) // per thread
-    {
-      std::cout << poseCostListList[t].size() << " ";
-      poseCostListList[0].insert(
-          poseCostListList[0].end(),
-          std::make_move_iterator(poseCostListList[t].begin()),
-          std::make_move_iterator(poseCostListList[t].end()));
-    }
-    std::cout << std::endl;
-    std::vector<PoseCost> &sortedPoseCostVec = poseCostListList[0];
-
-    std::cout << "total filtered pose count " << sortedPoseCostVec.size()
-              << std::endl;
-    std::map<size_t, poseAndRawAngleT> poseMap;
-    std::map<size_t, poseAndRawAngleT>::iterator poseMapIter;
-
-    std::fstream genPoseListFile;
-
-    size_t outFileNum = 0;
-    std::cout << "opening " << outFileNum << std::endl;
-    genPoseListFile.open(
-        (inFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"),
-        std::ios::in);
-
-    for (size_t idx = 0; idx < sortedPoseCostVec.size(); idx++) // per thread
-    {
-      auto &elem = sortedPoseCostVec[idx];
-
-      std::string curString = "";
-      std::string dummy = "";
-      size_t id = 0;
-      bool elementFound = false;
-
-      poseAndRawAngleT tempPose;
-
-      while (std::getline(genPoseListFile, curString)) {
-        //                triedLines ++;
-
-        std::stringstream curStream(curString);
-
-        curStream >> dummy >> dummy >> id;
-        if (elem.id == id) {
-          elementFound = true;
-          curStream.seekg(0, curStream.beg);
-
-          curStream >> tempPose;
-          poseMap.emplace(id, std::move(tempPose));
-          //                    curStream >> poseList[idx];
-          break;
-        }
-      }
-
-      if (!genPoseListFile.good()) {
-        genPoseListFile.close();
-        outFileNum++;
-        if (outFileNum < usableThreads) {
-          if (!elementFound) {
-            idx--; // go back one index
-          }
-          std::cout << "opening " << outFileNum << std::endl;
-          genPoseListFile.open((inFileName + "_GeneratedPoses_" +
-                                std::to_string(outFileNum) + ".txt"),
-                               std::ios::in);
-        } else {
-          if (idx + 1 < sortedPoseCostVec.size()) {
-            std::cout << "No more files to read " << idx << " "
-                      << sortedPoseCostVec.size() << std::endl;
-          }
-          break;
-        }
+  bool continueTicker = true;
+  std::thread tTick = std::thread([&]() {
+    int elapsed = 0;
+    const size_t interval = 5;
+    while (continueTicker) {
+      size_t iterSum =
+          std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
+      if (elapsed % 100) {
+        std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+        std::cout << "Elapsed: " << elapsed
+                  << "s Iterations: " << std::scientific << (double)iterSum
+                  << std::endl;
       } else {
-        if (!elementFound) {
-          std::cout << "element not found" << elem.id << std::endl;
+        std::stringstream t;
+        t << "Elapsed: " << elapsed << " ";
+        for (size_t i = 0; i < usableThreads; i++) {
+          t << "T" << i << " :" << iterCount[i].load() << " ";
+        }
+        {
+          std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+          std::cout << t.str() << std::endl;
         }
       }
+      elapsed += interval;
+      std::this_thread::sleep_for(
+          std::chrono::seconds(interval)); // 100Hz -> 10ms
     }
-    // close the file
-    genPoseListFile.close();
-
-    /*
-     * Sort the pose costs..
-     */
-    std::cout << "Sort pose costs" << std::endl;
-    std::sort(sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
-              [](PoseCost &i, PoseCost &j) {
-                // count is smaller, if same, then get lower cost.
-                return i.interactionCount < j.interactionCount ||
-                       (i.interactionCount == j.interactionCount &&
-                        i.jointCost < j.jointCost);
-              });
-
-    if (poseMap.size() != sortedPoseCostVec.size()) {
-      std::cerr << "PoseMap and PoseCostVec doesnt match in size"
-                << poseMap.size() << " " << sortedPoseCostVec.size()
-                << std::endl;
-      return 1;
+  });
+#endif
+  /// Join all :P
+  for (auto &t : threadList) {
+    if (t.joinable()) {
+      t.join();
     }
-    {
-      /*
-       * Trim poseVec based on closest-neighbour-like clustering.
-       */
-      NaoPose<float> &curTopPose = poseMap.at(sortedPoseCostVec[0].id).pose;
-      HeadYawPitch hYPbounds(1, 1);
-      float torsoPosBound = 2.8f;
-      float torsoRotBound = 5.1f;
+  }
+#if ENABLE_PROGRESS
+  continueTicker = false;
+  if (tTick.joinable()) {
+    tTick.join();
+  }
+#endif
 
-      std::remove_if(
-          sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
-          [&curTopPose, &hYPbounds, &torsoPosBound, &torsoRotBound,
-           &poseMap](PoseCost &poseCost) {
+  // first join all
+  std::cout << poseCostListList[0].size() << " ";
+  for (size_t t = 1; t < usableThreads; t++) // per thread
+  {
+    std::cout << poseCostListList[t].size() << " ";
+    poseCostListList[0].insert(
+        poseCostListList[0].end(),
+        std::make_move_iterator(poseCostListList[t].begin()),
+        std::make_move_iterator(poseCostListList[t].end()));
+  }
+  std::cout << std::endl;
+  std::vector<PoseCost> &sortedPoseCostVec = poseCostListList[0];
 
-            NaoPose<float> &pose = poseMap.at(poseCost.id).pose;
-            // remove poses that are near to the given bounds
-            if (curTopPose.isNear(hYPbounds, torsoPosBound, torsoRotBound,
-                                  pose)) {
-              return true;
-            } else { // if out of the range, update this as curTopPose..
-              curTopPose = pose;
-              return false;
-            }
+  std::cout << "total filtered pose count " << sortedPoseCostVec.size()
+            << std::endl;
+  std::map<size_t, poseAndRawAngleT> poseMap;
+  std::map<size_t, poseAndRawAngleT>::iterator poseMapIter;
 
-          });
-    }
-    /*
-     * Secondary sort run with poseInteractionns
-     */
+  std::fstream genPoseListFile;
 
-    size_t approxMaxPosesToTry =
-        std::min(sortedPoseCostVec.size(),
-                 static_cast<size_t>(
-                     std::round(std::sqrt(maxPoseInteractionCount * 2))));
+  size_t outFileNum = 0;
+  std::cout << "opening " << outFileNum << std::endl;
+  genPoseListFile.open(
+      (inFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"),
+      std::ios::in);
 
-    std::cout << approxMaxPosesToTry << std::endl;
+  for (size_t idx = 0; idx < sortedPoseCostVec.size(); idx++) // per thread
+  {
+    auto &elem = sortedPoseCostVec[idx];
 
-    std::vector<PoseInteraction> poseInteractionList;
-    poseInteractionList.reserve(getTriangleNum(approxMaxPosesToTry));
+    std::string curString = "";
+    std::string dummy = "";
+    size_t id = 0;
+    bool elementFound = false;
 
-    for (size_t i = 0; i < approxMaxPosesToTry; ++i) {
-      auto &poseCostI = sortedPoseCostVec[i];
-      for (size_t j = i + 1; j < approxMaxPosesToTry; ++j) {
-        auto currentInteraction =
-            PoseInteraction(poseCostI, sortedPoseCostVec[j]);
-        // update the interaction cost for a pose.
-        poseCostI.interactionCount += currentInteraction.cost;
-        poseInteractionList.emplace_back(std::move(currentInteraction));
+    poseAndRawAngleT tempPose;
+
+    while (std::getline(genPoseListFile, curString)) {
+      //                triedLines ++;
+
+      std::stringstream curStream(curString);
+
+      curStream >> dummy >> dummy >> id;
+      if (elem.id == id) {
+        elementFound = true;
+        curStream.seekg(0, curStream.beg);
+
+        curStream >> tempPose;
+        poseMap.emplace(id, std::move(tempPose));
+        //                    curStream >> poseList[idx];
+        break;
       }
     }
-    /*
-     * Sort the pose interactions..
-     * 1st priority, lowest interaction joint count
-     * 2nd priority, lowest interaction cost
-     * 3rd priotity, lowest grand total of interaction costs for that joint.
-     * TODO implement the last..
-     */
-    std::cout << "Sort poseInteractions" << std::endl;
-    std::sort(poseInteractionList.begin(), poseInteractionList.end(),
-              [](PoseInteraction &i, PoseInteraction &j) {
-                // count is smaller, if same, then get lower cost.
-                return i.interactionCount < j.interactionCount ||
-                       (i.interactionCount == j.interactionCount &&
-                        i.cost < j.cost);
-              });
 
-    /*
-     * Now write to file..
-     */
-    std::unordered_set<size_t> poseIdSet; // this keeps the poses as ordered
-                                          // before. But being a set, we ensure
-                                          // only a unique set of elems are
-                                          // here.
-    for (auto &elem : poseInteractionList) {
-      poseIdSet.insert(elem.combinedId.first);
-      poseIdSet.insert(elem.combinedId.second);
+    if (!genPoseListFile.good()) {
+      genPoseListFile.close();
+      outFileNum++;
+      if (outFileNum < usableThreads) {
+        if (!elementFound) {
+          idx--; // go back one index
+        }
+        std::cout << "opening " << outFileNum << std::endl;
+        genPoseListFile.open((inFileName + "_GeneratedPoses_" +
+                              std::to_string(outFileNum) + ".txt"),
+                             std::ios::in);
+      } else {
+        if (idx + 1 < sortedPoseCostVec.size()) {
+          std::cout << "No more files to read " << idx << " "
+                    << sortedPoseCostVec.size() << std::endl;
+        }
+        break;
+      }
+    } else {
+      if (!elementFound) {
+        std::cout << "element not found" << elem.id << std::endl;
+      }
     }
-    std::cout << "Commit to file.." << poseIdSet.size() << " "
+  }
+  // close the file
+  genPoseListFile.close();
+
+  /*
+   * Sort the pose costs..
+   */
+  std::cout << "Sort pose costs" << std::endl;
+  std::sort(sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
+            [](PoseCost &i, PoseCost &j) {
+              // count is smaller, if same, then get lower cost.
+              return i.interactionCount < j.interactionCount ||
+                     (i.interactionCount == j.interactionCount &&
+                      i.jointCost < j.jointCost);
+            });
+
+  if (poseMap.size() != sortedPoseCostVec.size()) {
+    std::cerr << "PoseMap and PoseCostVec doesnt match in size"
+              << poseMap.size() << " " << sortedPoseCostVec.size() << std::endl;
+    return 1;
+  }
+  {
+    /*
+     * Trim poseVec based on closest-neighbour-like clustering.
+     */
+    NaoPose<float> &curTopPose = poseMap.at(sortedPoseCostVec[0].id).pose;
+    HeadYawPitch hYPbounds(1, 1);
+    float torsoPosBound = 2.8f;
+    float torsoRotBound = 5.1f;
+
+    std::remove_if(
+        sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
+        [&curTopPose, &hYPbounds, &torsoPosBound, &torsoRotBound,
+         &poseMap](PoseCost &poseCost) {
+
+          NaoPose<float> &pose = poseMap.at(poseCost.id).pose;
+          // remove poses that are near to the given bounds
+          if (curTopPose.isNear(hYPbounds, torsoPosBound, torsoRotBound,
+                                pose)) {
+            return true;
+          } else { // if out of the range, update this as curTopPose..
+            curTopPose = pose;
+            return false;
+          }
+
+        });
+  }
+  /*
+   * Secondary sort run with poseInteractionns
+   */
+
+  size_t approxMaxPosesToTry = std::min(
+      sortedPoseCostVec.size(),
+      static_cast<size_t>(std::round(std::sqrt(maxPoseInteractionCount * 2))));
+
+  std::cout << approxMaxPosesToTry << std::endl;
+
+  std::vector<PoseInteraction> poseInteractionList;
+  poseInteractionList.reserve(getTriangleNum(approxMaxPosesToTry));
+
+  for (size_t i = 0; i < approxMaxPosesToTry - 1; ++i) {
+    auto &poseCostI = sortedPoseCostVec[i];
+    for (size_t j = i + 1; j < approxMaxPosesToTry; ++j) {
+      auto currentInteraction =
+          PoseInteraction(poseCostI, sortedPoseCostVec[j]);
+      // update the interaction cost for a pose.
+      poseCostI.interactionCount += currentInteraction.cost;
+      poseInteractionList.emplace_back(std::move(currentInteraction));
+    }
+  }
+  /*
+   * Sort the pose interactions..
+   * 1st priority, lowest interaction joint count
+   * 2nd priority, lowest interaction cost
+   * 3rd priotity, lowest grand total of interaction costs for that joint.
+   * TODO implement the last..
+   */
+  std::cout << "Sort poseInteractions" << std::endl;
+  std::sort(poseInteractionList.begin(), poseInteractionList.end(),
+            [](PoseInteraction &i, PoseInteraction &j) {
+              // count is smaller, if same, then get lower cost.
+              return i.interactionCount < j.interactionCount ||
+                     (i.interactionCount == j.interactionCount &&
+                      i.cost < j.cost);
+            });
+
+  /*
+   * Now write to file..
+   */
+  std::vector<size_t> poseIdVec;
+  {
+    std::unordered_set<size_t> poseIdSet;   // this keeps the poses as ordered
+    poseIdVec.reserve(approxMaxPosesToTry); // reserve the vec
+    poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
+    // before. But being a set, we ensure
+    // only a unique set of elems are
+    // here.
+    for (auto &elem : poseInteractionList) {
+      auto res = poseIdSet.insert(elem.combinedId.first);
+      if (res.second) {
+        poseIdVec.emplace_back(elem.combinedId.first);
+      }
+      res = poseIdSet.insert(elem.combinedId.second);
+      if (res.second) {
+        poseIdVec.emplace_back(elem.combinedId.second);
+      }
+    }
+
+    if (poseIdVec[0] == poseInteractionList[0].combinedId.first &&
+        poseIdVec[1] == poseInteractionList[0].combinedId.second) {
+      std::cout << "good" << std::endl;
+    }
+  }
+  {
+/// Write the remaining buffers to file
+#if DO_COMMIT
+    std::cout << "flushing all " << std::endl;
+    std::cout << "Commit to file.." << poseIdVec.size() << " "
               << poseInteractionList.size() << std::endl;
     size_t iter = 0;
-    for (auto &id : poseIdSet) {
+    for (auto &id : poseIdVec) {
       auto pose = poseMap.at(id);
       try {
         auto result =
@@ -678,7 +691,6 @@ int main(int argc, char **argv) {
     outCostsFile.close();
     outFilteredPosesFile.close();
 #endif
-
     std::cout << "All done\n" << std::endl;
   }
   return 0;
