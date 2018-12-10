@@ -49,7 +49,6 @@
 #include "utils.hpp"
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
-const unsigned int MAX_POSES_TO_CALIB = 10;
 
 template <class T> using Residual = std::vector<T>;
 
@@ -242,17 +241,18 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
       /// Populate the starting point with random values
 
-      calibratedParams(JOINTS::JOINT::HEAD_PITCH) = std::min(
-          0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD);
+      calibratedParams(JOINTS::JOINT::HEAD_PITCH) =
+          std::min(0.0f, static_cast<float>(distribution(generator)) / 2.0f *
+                             TO_RAD_FLT);
       calibratedParams(JOINTS::JOINT::HEAD_YAW) =
-          distribution(generator) * TO_RAD;
+          distribution(generator) * TO_RAD_FLT;
 
       // todo make this dual leg supported..
       /// We are now using the compact form
 
       for (size_t i = legsInitialIdx; i < legsEndIdx; i++) {
         calibratedParams(static_cast<Eigen::Index>(i)) =
-            distribution(generator) * TO_RAD;
+            distribution(generator) * TO_RAD_FLT;
       }
       /// Run Lev-Mar again
       status = runLevMar(calibratedParams);
@@ -290,8 +290,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
    * END lev-mar
    */
 
-  jointCalibResidual -= calibratedParams; // Joint residual
-  const float tolerance = 0.5f * TO_RAD;  // Ad-hoc tolerance
+  jointCalibResidual -= calibratedParams;    // Joint residual
+  const float tolerance = 0.5f * TO_RAD_FLT; // Ad-hoc tolerance
 
   // Get min-max info for error checking
   auto minCoeff = finalErrorVec.minCoeff();
@@ -411,7 +411,7 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
       }
     }
     // Convert to degrees
-    jointCalibResiduals /= TO_RAD;
+    jointCalibResiduals /= TO_RAD_FLT;
     for (long i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
          ++i) {
       // TODO FIX THIS
@@ -432,16 +432,29 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
  */
 int main(int argc, char *argv[]) {
   std::string inFileName((argc > 1 ? argv[1] : "out"));
+  std::string maxPosesToCalib((argc > 2 ? argv[2] : "10"));
   // Default is true..
   bool stochasticFix =
-      argc > 2 ? (std::string(argv[2]).compare("s") == 0) : true;
-  std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
+      argc > 3 ? (std::string(argv[3]).compare("s") == 0) : true;
+
+  std::string confRoot((argc > 4 ? argv[4] : "../../nao/home/"));
 
   std::fstream inFile(inFileName);
   if (!inFile.is_open()) {
     std::cerr << "Input file cannot be opened, exiting.." << std::endl;
     return 1;
   }
+
+  const int MAX_POSES_TO_CALIB = [&maxPosesToCalib]() -> int {
+    int t = 0;
+    try {
+      t = std::stoi(maxPosesToCalib);
+    } catch (...) {
+      t = 10;
+      std::cerr << "Pose count invalid, defaulting to " << t << std::endl;
+    }
+    return t;
+  }();
 
   /*
    * Initializing model & Nao provider
@@ -533,9 +546,9 @@ int main(int argc, char *argv[]) {
 
     /// Do head angles seperately..
     elem[JOINTS::JOINT::HEAD_PITCH] = std::min(
-        0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD);
+        0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD_FLT);
     elem[JOINTS::JOINT::HEAD_YAW] =
-        distribution(generator) * TO_RAD /* * plusOrMinus() */;
+        distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
 
     /// Leg Angles
     // TODO make this dual leg supported..
@@ -543,14 +556,14 @@ int main(int argc, char *argv[]) {
         supFeet == SUPPORT_FOOT::SF_LEFT) {
       for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
            i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
-        elem[i] = distribution(generator) * TO_RAD /* * plusOrMinus() */;
+        elem[i] = distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
       }
     }
     if (supFeet == SUPPORT_FOOT::SF_DOUBLE ||
         supFeet == SUPPORT_FOOT::SF_RIGHT) {
       for (size_t i = JOINTS::JOINT::R_HIP_YAW_PITCH;
            i <= JOINTS::JOINT::R_ANKLE_ROLL; i++) {
-        elem[i] = distribution(generator) * TO_RAD /* * plusOrMinus() */;
+        elem[i] = distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
       }
     }
     uniqueJointErrList.insert(elem);
@@ -667,7 +680,7 @@ int main(int argc, char *argv[]) {
   for (const auto &elem : jointErrList) {
     std::vector<double> newElem;
     for (auto &i : elem) {
-      float val = i / TO_RAD;
+      float val = i / TO_RAD_FLT;
       if (val > 0.01f || val < -0.01f) {
         newElem.push_back(static_cast<double>(val));
       }
