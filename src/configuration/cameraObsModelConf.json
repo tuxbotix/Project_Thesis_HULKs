@@ -1,0 +1,6 @@
+{
+    "imSize": [640, 480],
+    "gridSideCount": 50,
+    "gridSpacing": 0.05,
+    "dimensionExtremum": 1000
+}
