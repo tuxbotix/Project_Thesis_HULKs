@@ -211,7 +211,7 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
   // Just to note if the loop was done and broken with success
   bool loopedAndBroken = false;
   // Do stochastic fixing?
-  if (stochasticFix) {
+  if (stochasticFix && status != 4) {
     // This will hold best params in case looping is needed
     Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
         JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
@@ -241,11 +241,12 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
       /// Populate the starting point with random values
 
-      calibratedParams(JOINTS::JOINT::HEAD_PITCH) =
-          std::min(0.0f, static_cast<float>(distribution(generator)) / 2.0f *
-                             TO_RAD_FLT);
-      calibratedParams(JOINTS::JOINT::HEAD_YAW) =
-          distribution(generator) * TO_RAD_FLT;
+      //      calibratedParams(JOINTS::JOINT::HEAD_PITCH) =
+      //          std::min(0.0f, static_cast<float>(distribution(generator)) /
+      //          2.0f *
+      //                             TO_RAD_FLT);
+      //      calibratedParams(JOINTS::JOINT::HEAD_YAW) =
+      //          distribution(generator) * TO_RAD_FLT;
 
       // todo make this dual leg supported..
       /// We are now using the compact form
@@ -433,11 +434,13 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
 int main(int argc, char *argv[]) {
   std::string inFileName((argc > 1 ? argv[1] : "out"));
   std::string maxPosesToCalib((argc > 2 ? argv[2] : "10"));
+  // default is false..
+  bool mirrorPose = argc > 3 ? (std::string(argv[3]).compare("m") == 0) : false;
   // Default is true..
   bool stochasticFix =
-      argc > 3 ? (std::string(argv[3]).compare("s") == 0) : true;
+      argc > 4 ? (std::string(argv[4]).compare("s") == 0) : true;
 
-  std::string confRoot((argc > 4 ? argv[4] : "../../nao/home/"));
+  std::string confRoot((argc > 5 ? argv[5] : "../../nao/home/"));
 
   std::fstream inFile(inFileName);
   if (!inFile.is_open()) {
@@ -445,7 +448,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  const int MAX_POSES_TO_CALIB = [&maxPosesToCalib]() -> int {
+  const size_t MAX_POSES_TO_CALIB = [&maxPosesToCalib]() -> size_t {
     int t = 0;
     try {
       t = std::stoi(maxPosesToCalib);
@@ -453,9 +456,15 @@ int main(int argc, char *argv[]) {
       t = 10;
       std::cerr << "Pose count invalid, defaulting to " << t << std::endl;
     }
-    return t;
+    return static_cast<size_t>(t);
   }();
 
+  /*
+   * Print input params
+   */
+  std::cout << "Poses to try:\t" << MAX_POSES_TO_CALIB << "\nMirror Poses:\t"
+            << mirrorPose << "\nStochastic Fix:\t" << stochasticFix
+            << std::endl;
   /*
    * Initializing model & Nao provider
    */
@@ -499,11 +508,15 @@ int main(int argc, char *argv[]) {
                      utils::JointsAndPosesStream::getNextPoseAndRawAngles(
                          inFile, poseAndAngles);
        ++i) {
-    std::cout << "Pose " << i << poseAndAngles << std::endl;
     if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
       --i;
       continue;
     }
+    // Mirror this pose. Nice in testing ;)
+    if (mirrorPose) {
+      poseAndAngles.mirror();
+    }
+    std::cout << "Pose " << i << poseAndAngles << std::endl;
     // if already double, skip
     if (supFeet != SUPPORT_FOOT::SF_DOUBLE) {
       // if none, first try..
@@ -517,7 +530,7 @@ int main(int argc, char *argv[]) {
     }
     poseList.push_back(poseAndAngles);
   }
-  std::cout << " reading of poses done" << std::endl;
+  std::cout << " reading of poses done, SF: " << supFeet << std::endl;
 
   /*
    * Make dataset (joint errors)
@@ -545,25 +558,25 @@ int main(int argc, char *argv[]) {
     rawPoseT elem = rawPoseT(JOINTS::JOINT::JOINTS_MAX, 0.0f);
 
     /// Do head angles seperately..
-    elem[JOINTS::JOINT::HEAD_PITCH] = std::min(
-        0.0f, static_cast<float>(distribution(generator)) / 2.0f * TO_RAD_FLT);
-    elem[JOINTS::JOINT::HEAD_YAW] =
-        distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
+    //    elem[JOINTS::JOINT::HEAD_PITCH] = std::min(
+    //        0.0f, static_cast<float>(distribution(generator)) / 2.0f *
+    //        TO_RAD_FLT);
+    //    elem[JOINTS::JOINT::HEAD_YAW] =
+    //        distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
 
     /// Leg Angles
-    // TODO make this dual leg supported..
     if (supFeet == SUPPORT_FOOT::SF_DOUBLE ||
         supFeet == SUPPORT_FOOT::SF_LEFT) {
       for (size_t i = JOINTS::JOINT::L_HIP_YAW_PITCH;
            i <= JOINTS::JOINT::L_ANKLE_ROLL; i++) {
-        elem[i] = distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
+        elem[i] = distribution(generator) * TO_RAD_FLT /* * plusOrMinus()*/;
       }
     }
     if (supFeet == SUPPORT_FOOT::SF_DOUBLE ||
         supFeet == SUPPORT_FOOT::SF_RIGHT) {
       for (size_t i = JOINTS::JOINT::R_HIP_YAW_PITCH;
            i <= JOINTS::JOINT::R_ANKLE_ROLL; i++) {
-        elem[i] = distribution(generator) * TO_RAD_FLT /* * plusOrMinus() */;
+        elem[i] = distribution(generator) * TO_RAD_FLT /* * plusOrMinus()*/;
       }
     }
     uniqueJointErrList.insert(elem);

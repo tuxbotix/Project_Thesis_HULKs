@@ -165,6 +165,48 @@ public:
 class PoseUtils {
 public:
   template <typename T>
+  /**
+   * @brief mirrorJoints In place mirroring
+   * @param params
+   */
+  static void mirrorJoints(std::vector<T> &params) {
+    // swap arms
+    std::swap_ranges(params.begin() + JOINTS::L_SHOULDER_PITCH,
+                     params.begin() + JOINTS::L_HAND + 1,
+                     params.begin() + JOINTS::R_SHOULDER_PITCH);
+    // swap legs
+    std::swap_ranges(params.begin() + JOINTS::L_HIP_YAW_PITCH,
+                     params.begin() + JOINTS::L_ANKLE_ROLL + 1,
+                     params.begin() + JOINTS::R_HIP_YAW_PITCH);
+    /*
+     * change signs of all except:
+     *  shoulder pitches
+     *  hip-yaw-pitch (same actuator currently)
+     *  all leg pitches
+     */
+    for (int j = JOINTS_L_ARM::L_SHOULDER_ROLL; j < JOINTS_L_ARM::L_ARM_MAX;
+         j++) {
+      params[JOINTS::L_SHOULDER_ROLL + j] *= -1;
+      params[JOINTS::R_SHOULDER_ROLL + j] *= -1;
+    }
+    params[JOINTS::L_HIP_ROLL] *= -1;
+    params[JOINTS::R_HIP_ROLL] *= -1;
+    params[JOINTS::L_ANKLE_ROLL] *= -1;
+    params[JOINTS::R_ANKLE_ROLL] *= -1;
+  }
+
+  template <typename T>
+  /**
+   * @brief mirrorJoints
+   * @param params
+   * @return
+   */
+  static Vector3<T> mirrorJoints(const std::vector<T> &params) {
+    std::vector<T> output(params);
+    mirrorJoints(output);
+    return output;
+  }
+  template <typename T>
   static Vector3<T> getTorsoPosVFromParams(const std::vector<T> &params) {
     return Vector3<T>(params[P_TORSO_POS_X], params[P_TORSO_POS_Y],
                       params[P_TORSO_POS_Z]);
@@ -355,6 +397,25 @@ public:
     // else
     return true;
   }
+
+  /**
+   * @brief mirror the pose to other support foot.
+   * supportFoot changes. (No change for NONE or Double)
+   * torso & other foot posY change sign
+   * torso & other foot rotX change sign
+   */
+  inline void mirror() {
+    if (supportFoot == SUPPORT_FOOT::SF_LEFT) {
+      supportFoot = SUPPORT_FOOT::SF_RIGHT;
+    } else if (supportFoot == SUPPORT_FOOT::SF_RIGHT) {
+      supportFoot = SUPPORT_FOOT::SF_LEFT;
+    }
+
+    torsoPosV.y() *= -1;
+    otherFootPosV.y() *= -1;
+    torsoRotV.x() *= -1;
+    otherFootRotV.x() *= -1;
+  }
 };
 
 template <typename T = angleT> class NaoPoseAndRawAngles {
@@ -413,6 +474,11 @@ public:
     return in;
   }
   inline bool isGood() { return valid; }
+
+  inline void mirror() {
+    pose.mirror();
+    PoseUtils::mirrorJoints(angles);
+  }
 };
 
 typedef NaoPoseAndRawAngles<dataT> poseAndRawAngleT;
