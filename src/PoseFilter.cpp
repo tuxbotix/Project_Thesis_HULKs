@@ -154,10 +154,10 @@ poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
   interactionCost.setZero();
   double accum =
       static_cast<double>(observableJointCountWeight) * p.getObservableCount();
-  if (std::isnan(accum)) {
+  if (std::isnan(accum) || p.getObservableCount() <= 0) {
     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-    std::cout << p.getId() << " is NAN 0 stage" << std::endl;
-    return {std::numeric_limits<double>::max(), interactionCost};
+    std::cout << p.getId() << " is NAN 0 stage || obsCount = 0" << std::endl;
+    return {10E10, interactionCost};
   }
   /*
    * We'll go like a triangle, as pj.pk = pk.pj, only n*(n+1)/2 iterations
@@ -798,9 +798,11 @@ int main(int argc, char **argv) {
   std::string inFileName((argc > 1 ? argv[1] : "out"));
   std::string favouredJoint((argc > 2 ? argv[2] : "-1"));
   std::string favouredSensor((argc > 3 ? argv[3] : "all")); // t, b, all
+  // default is false..
+  bool mirrorPose = argc > 4 ? (std::string(argv[4]).compare("m") == 0) : false;
   std::string chainingModeStr(
-      (argc > 4 ? argv[4] : "n")); // n, s, m - chaining modes.
-  std::string confRoot((argc > 5 ? argv[5] : "../../nao/home/"));
+      (argc > 5 ? argv[5] : "n")); // n, s, m - chaining modes.
+  std::string confRoot((argc > 6 ? argv[6] : "../../nao/home/"));
 
   int jointNum = std::stoi(favouredJoint);
   if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
@@ -814,6 +816,15 @@ int main(int argc, char **argv) {
   } else if (chainingModeStr.compare("m") == 0) {
     chainingMode = 2;
   }
+
+  /*
+   * Print input params
+   */
+  std::cout << "Favoured Joint:\t"
+            << (favouredJoint == "-1" ? "Generic" : favouredJoint)
+            << "Favoured sensor:\t"
+            << (favouredSensor == "all" ? "All" : favouredSensor)
+            << "\nMirror Poses:\t" << mirrorPose << std::endl;
 
   const std::string outCostsFileName(
       inFileName + "_" + constants::FilteredPoseCostsFileName + "_" +
