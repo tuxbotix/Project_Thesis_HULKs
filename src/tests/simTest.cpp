@@ -27,6 +27,7 @@
 #include <Tools/Storage/Image.hpp>
 #include <Tools/Storage/Image422.hpp>
 
+#include "MiniConfigHandle.hpp"
 #include "NaoJointAndSensorModel.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
@@ -105,7 +106,8 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
                   const SUPPORT_FOOT supFoot,
                   const std::vector<Camera> &camNames,
                   const rawPoseT &inducedErrorStdVec, const bool &stochasticFix,
-                  bool &success) {
+                  bool &success, const float jointCalibQualityTol,
+                  const float reprojErrTolPercent) {
   // Create result object
   JointCalibSolvers::JointCalibResult result;
 
@@ -291,8 +293,7 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
    * END lev-mar
    */
 
-  jointCalibResidual -= calibratedParams;    // Joint residual
-  const float tolerance = 0.5f * TO_RAD_FLT; // Ad-hoc tolerance
+  jointCalibResidual -= calibratedParams; // Joint residual
 
   // Get min-max info for error checking
   auto minCoeff = finalErrorVec.minCoeff();
@@ -306,8 +307,9 @@ evalJointErrorSet(const NaoJointAndSensorModel naoModel,
 
   // Determine success or failure
   if (std::isnan(minCoeff) || std::isnan(maxCoeff) ||
-      finalErrAbsMax > imageSize.minCoeff() * 0.1f ||
-      errorNorm > errorVec.norm() || jointCalibResAbsMax > tolerance) {
+      finalErrAbsMax > imageSize.minCoeff() * reprojErrTolPercent ||
+      errorNorm > errorVec.norm() ||
+      jointCalibResAbsMax > jointCalibQualityTol) {
     //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
     //    std::cout << "Calibration failure\n"
     //              << calibratedParams.transpose() << "\n"
@@ -368,7 +370,9 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
                  const NaoJointAndSensorModel &naoJointSensorModel,
                  const std::vector<rawPoseT>::iterator jointErrItrBegin,
                  const std::vector<rawPoseT>::iterator jointErrItrEnd,
-                 bool stochasticFix, std::atomic<size_t> &badCases) {
+                 bool stochasticFix, std::atomic<size_t> &badCases,
+                 const float jointCalibQualityTol,
+                 const float reprojErrTolPercent) {
 
   size_t tempBadCases = 0; // temp storage
   for (auto errSetIter = jointErrItrBegin; errSetIter != jointErrItrEnd;
@@ -385,7 +389,8 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
     // Call evaluator for this error config.
     std::tie(result, jointCalibResiduals, preResiduals, postResiduals) =
         evalJointErrorSet(naoJointSensorModel, poseList, supFoot, camNames,
-                          errorSet, stochasticFix, success);
+                          errorSet, stochasticFix, success,
+                          jointCalibQualityTol, reprojErrTolPercent);
 
     if (!success) {
       // if a failure, update the counter.
@@ -448,27 +453,53 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  const size_t MAX_POSES_TO_CALIB = [&maxPosesToCalib]() -> size_t {
+  /*
+   * Initializing model & Nao provider
+   */
+  TUHH tuhhInstance(confRoot);
+
+  /// Get config values.
+  Uni::Value confValue;
+  if (!MiniConfigHandle::mountFile("configuration/simGridEvalConf.json",
+                                   confValue)) {
+    std::cout << "couldn't open the conf file" << std::endl;
+    exit(1);
+  }
+
+  const size_t MAX_POSES_TO_CALIB = [&maxPosesToCalib, &confValue]() -> size_t {
     int t = 0;
     try {
       t = std::stoi(maxPosesToCalib);
     } catch (...) {
-      t = 10;
+      t = confValue["calibPoseNumDefault"].asInt64();
       std::cerr << "Pose count invalid, defaulting to " << t << std::endl;
     }
     return static_cast<size_t>(t);
   }();
 
   /*
+   * Populate config values
+   */
+  const float MIN_ERR_VAL =
+      static_cast<float>(confValue["errRangeMinMax"].at(0).asDouble());
+  const float MAX_ERR_VAL =
+      static_cast<float>(confValue["errRangeMinMax"].at(1).asDouble());
+  /// Sample Size
+  const size_t JOINT_ERR_LST_DESIRED_COUNT =
+      static_cast<size_t>(confValue["testErrorCount"].asInt64());
+
+  const float JOINT_CALIB_QUALITY_TOL_RAD = static_cast<float>(
+      confValue["jointCalibQualityTol"].asDouble() * TO_RAD_DBL);
+  const float REPROJ_ERR_TOL_PERCENT = static_cast<float>(
+      confValue["reprojErrTolPercent"].asDouble() * TO_RAD_DBL);
+
+  /*
    * Print input params
    */
-  std::cout << "Poses to try:\t" << MAX_POSES_TO_CALIB << "\nMirror Poses:\t"
-            << mirrorPose << "\nStochastic Fix:\t" << stochasticFix
-            << std::endl;
-  /*
-   * Initializing model & Nao provider
-   */
-  TUHH tuhhInstance(confRoot);
+  std::cout << "Poses to try:\t" << MAX_POSES_TO_CALIB
+            << "\nMinMax Error val:\t" << MIN_ERR_VAL << ", " << MAX_ERR_VAL
+            << "\nMirror Poses:\t" << mirrorPose << "\nStochastic Fix:\t"
+            << stochasticFix << std::endl;
 
   Vector2f fc, cc, fov;
 
@@ -538,8 +569,6 @@ int main(int argc, char *argv[]) {
 
   // TODO check if uniform distribution is the right choice?
   std::default_random_engine generator;
-  const float MAX_ERR_VAL = 6.5;
-  const float MIN_ERR_VAL = -MAX_ERR_VAL;
   /// New change, try 1 to 6, -1 to -6 only
   std::uniform_real_distribution<float> distribution(MIN_ERR_VAL, MAX_ERR_VAL);
 
@@ -548,9 +577,6 @@ int main(int argc, char *argv[]) {
   //    return binDistribution(generator) ? 1.0f : -1.0f;
   //  };
   //  std::normal_distribution<float> distribution(0.0, 2);
-
-  /// Sample Size
-  const size_t JOINT_ERR_LST_DESIRED_COUNT = 1000;
 
   std::set<rawPoseT> uniqueJointErrList;
 
@@ -630,10 +656,11 @@ int main(int argc, char *argv[]) {
 
     std::cout << "starting thread: " << i << std::endl;
     // Initialize the thread. Maybe use futures later?
-    threadList[i] = std::thread(threadedFcn, std::ref(calibResidualList[i]),
-                                std::ref(poseList), supFeet, std::ref(camNames),
-                                std::ref(naoJointSensorModel), begin, end,
-                                stochasticFix, std::ref(badCases));
+    threadList[i] = std::thread(
+        threadedFcn, std::ref(calibResidualList[i]), std::ref(poseList),
+        supFeet, std::ref(camNames), std::ref(naoJointSensorModel), begin, end,
+        stochasticFix, std::ref(badCases), JOINT_CALIB_QUALITY_TOL_RAD,
+        REPROJ_ERR_TOL_PERCENT);
   }
 
   /*
