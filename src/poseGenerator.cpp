@@ -61,15 +61,16 @@ public:
   inline void getHeadPitchLimits(const dataT &headYaw, dataT &minLim,
                                  dataT &maxLim, dataT &increment) const // 19
   {
-    minLim = std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD), 0.0f) /
-             TO_RAD;
-    maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD) / TO_RAD;
+    minLim =
+        std::max(NaoProvider::minRangeHeadPitch(headYaw * TO_RAD_FLT), 0.0f) /
+        TO_RAD_FLT;
+    maxLim = NaoProvider::maxRangeHeadPitch(headYaw * TO_RAD_FLT) / TO_RAD_FLT;
     increment = incHeadYawPitch[1];
   }
 
   inline void getLimits(const paramNameT &paramIndex, dataT &minLim,
                         dataT &maxLim, dataT &increment) const {
-    if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX) || paramIndex < 0) {
+    if (paramIndex >= static_cast<PARAMS>(PARAMS::P_MAX)) {
       minLim = 0;
       maxLim = 0;
       increment = 0;
@@ -188,16 +189,16 @@ void jointIterFuncWithLim(
           }
 
           rawAnglesT jointAngles = defaultPose;
-          bool poseGenSuccess =
-              NaoTorsoPose::getPose(jointAngles, *torsoPos, torsoRot * TO_RAD,
-                                    OFootPos, OFootRot * TO_RAD, supFoot);
+          bool poseGenSuccess = NaoTorsoPose::getPose(
+              jointAngles, *torsoPos, torsoRot * TO_RAD_FLT, OFootPos,
+              OFootRot * TO_RAD_FLT, supFoot);
           // if pose gen success and pose is statically stable
           // and if the pose doesn't cause collisions
           // if (poseGenSuccess && collisionModel.updateAndTest(jointAngles))
           if (poseGenSuccess) {
             for (const auto &headYawPitch : headYawPitchList) {
-              jointAngles[JOINTS::HEAD_YAW] = headYawPitch.yaw * TO_RAD;
-              jointAngles[JOINTS::HEAD_PITCH] = headYawPitch.pitch * TO_RAD;
+              jointAngles[JOINTS::HEAD_YAW] = headYawPitch.yaw * TO_RAD_FLT;
+              jointAngles[JOINTS::HEAD_PITCH] = headYawPitch.pitch * TO_RAD_FLT;
               float com2CentroidDist = 0;
               if (poseValidator(jointAngles, supFoot, com2CentroidDist,
                                 supportPoly)) {
@@ -243,7 +244,7 @@ int main(int argc, char **argv) {
   tuhhInstance.config_.mount("Projection", "Projection.json",
                              ConfigurationType::HEAD);
 
-  ///
+  /// Get config values.
   Uni::Value confValue;
   if (!MiniConfigHandle::mountFile(
           "configuration/limits_" + supportFootName + ".json", confValue)) {
@@ -319,15 +320,16 @@ int main(int argc, char **argv) {
         std::cout << "something is wrong" << std::endl;
       }
     }
-    std::cout << "Max iters -> " << std::scientific << (double)maxIterCount
-              << std::endl;
+    std::cout << "Max iters -> " << std::scientific
+              << static_cast<double>(maxIterCount) << std::endl;
   }
   /// Start threading work.
   std::cout << "Start Threading" << std::endl;
-  const unsigned int count = torsoPosList.size();
+  const size_t count = torsoPosList.size();
 
   const dataT splitVal = count >= MAX_THREADS
-                             ? (std::floor((dataT)count / (dataT)MAX_THREADS))
+                             ? (std::floor(static_cast<dataT>(count) /
+                                           static_cast<dataT>(MAX_THREADS)))
                              : 1;
   std::cout << "1st level count " << std::defaultfloat << count << " "
             << splitVal << std::endl;
@@ -354,7 +356,7 @@ int main(int argc, char **argv) {
       }
       const bool lastIter = (i + 1 == THREADS_USED);
 
-      dataT start = (0 + ((dataT)i * splitVal));
+      dataT start = static_cast<dataT>(i * splitVal);
       dataT end = lastIter ? count : (0 + (i + 1) * splitVal);
 
       std::cout << "Start, end, lastIter " << start << " " << end << " "
@@ -385,13 +387,15 @@ int main(int argc, char **argv) {
       int elapsed = 0;
       const size_t interval = 5;
       while (continueTicker) {
-        size_t iterSum =
-            std::accumulate(iterCount.begin(), iterCount.end(), (size_t)0);
+        size_t iterSum = std::accumulate(iterCount.begin(), iterCount.end(),
+                                         static_cast<size_t>(0));
         if (elapsed % 100) {
           std::lock_guard<std::mutex> lock(utils::mtx_cout_);
           std::cout << "Elapsed: " << elapsed << "s Iterations: "
-                    << ((double)iterSum * 100 / maxIterCount) << "% g. poses "
-                    << (long double)poseCount.load() << std::endl; // "\r";
+                    << (static_cast<double>(iterSum) * 100 / maxIterCount)
+                    << "% g. poses "
+                    << static_cast<long double>(poseCount.load())
+                    << std::endl; // "\r";
         } else {
           std::stringstream t;
           t << "Elapsed: " << elapsed << " ";
@@ -433,7 +437,7 @@ int main(int argc, char **argv) {
     std::cout << "Redistributing data" << std::endl;
     // redistribute the written lines.
     {
-      const size_t linesPerFile = poseCount / (size_t)THREADS_USED;
+      const size_t linesPerFile = poseCount / THREADS_USED;
       size_t outFileNum = 0;
       std::fstream inStream;
       std::fstream outStream =
