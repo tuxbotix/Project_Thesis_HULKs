@@ -14,9 +14,21 @@ constexpr const T &clamp(const T &v, const T &lo, const T &hi) {
 }
 
 /**
- * To be precise, this give sensitivity of camera observation :P
+ * @brief CameraObservationModel::name This give sensitivity of camera
+ * observation :P
  */
 const std::string CameraObservationModel::name = "CameraObservationModel";
+
+/**
+ * @brief CameraObservationModel::CameraObservationModel
+ * @param imSize
+ * @param fc
+ * @param cc
+ * @param fov
+ * @param dimensionExtremum
+ * @param maxGridPointsPerSide
+ * @param gridSpacing
+ */
 CameraObservationModel::CameraObservationModel(
     const Vector2i &imSize, const Vector2f &fc, const Vector2f &cc,
     const Vector2f &fov, uint64_t dimensionExtremum,
@@ -31,72 +43,13 @@ CameraObservationModel::CameraObservationModel(
 {}
 
 /**
-   * Update the state of the robot.
-   */
+ * Update the state of the robot.
+ */
 void CameraObservationModel::updateState(const rawPoseT &jointAngles,
                                          const SUPPORT_FOOT &sf,
                                          const Camera &camName) {
   naoJointSensorModel.setPoseCamUpdateOnly(jointAngles, sf, camName);
 }
-
-///**
-// * Get 3D grid with given grid spacing relative to robot's ground coord.
-// * Obviously, camera matrix must be updated before calling this.
-// * 1. This has a hard range limit of 2m
-// */
-//// TODO  Make this private.
-// VecVector2<float> CameraObservationModel::getGroundGrid(const Camera
-// &camName, bool &success)
-//{
-//  VecVector2<float> output;
-//  Vector2f robotCoords;
-
-//  // Check if horizon line is above bottom of camera view.
-//  bool proceed = !naoJointSensorModel.isCameraAboveHorizon(camName);
-//  if (proceed)
-//  {
-//    proceed = naoJointSensorModel.projectCamCenterAxisToGround(camName,
-//    robotCoords) && robotCoords.norm() <= maxViewDist;
-//  }
-//#if DEBUG_CAM_OBS
-//  else
-//  {
-//    std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB
-//    << std::endl;
-//    std::cout << " Out of horizon!" << std::endl;
-//    std::cout << camMat.pixelToRobot(Vector2i(0, 0), robotCoords) << "(" <<
-//    robotCoords.x() << ", " << robotCoords.y() << ")\t";
-//    std::cout << camMat.pixelToRobot(Vector2i(imSize.x(), 0), robotCoords) <<
-//    "(" << robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
-//    std::cout << camMat.pixelToRobot(Vector2i(0, imSize.y()), robotCoords) <<
-//    "(" << robotCoords.x() << ", " << robotCoords.y() << ")\t";
-//    std::cout << camMat.pixelToRobot(imSize, robotCoords) << "(" <<
-//    robotCoords.x() << ", " << robotCoords.y() << ")" << std::endl;
-//  }
-//#endif
-//  if (proceed)
-//  {
-//    Vector2f tempCoord;
-//    // Eigen::Translation<float, 2> trans(tempCoord.x(), tempCoord.y());
-//    float theta = std::atan2(robotCoords.y(), robotCoords.x());
-//    Eigen::Rotation2D<float> rot2(theta);
-//    for (const auto &i : basicGrid)
-//    {
-//      tempCoord = robotCoords + (rot2 * i);
-//      output.push_back(tempCoord);
-//    }
-//  }
-//#if DEBUG_CAM_OBS
-//  else
-//  {
-//    std::cout << "CamCenterRayToGround: " << robotCoords.norm() << " " <<
-//    robotCoords.x() << ", " << robotCoords.y() << std::endl;
-//    std::cout << "Too far view dist!" << std::endl;
-//  }
-//#endif
-//  success = proceed;
-//  return output;
-//}
 
 /**
  * Get observability (sensitivity?) of a given joint for a given camera at a
@@ -237,8 +190,8 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(
 }
 
 /**
-   * Get sensitivities for each joint and each sensor
-   */
+ * Get sensitivities for each joint and each sensor
+ */
 std::vector<PoseSensitivity<Vector3f>> CameraObservationModel::getSensitivities(
     const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
     const std::vector<SENSOR_NAME> &sensorNames) {
