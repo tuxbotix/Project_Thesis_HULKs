@@ -451,10 +451,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /*
-   * Initializing model & Nao provider
-   */
-  TUHH tuhhInstance(confRoot);
 
   /// Get config values.
   Uni::Value confValue;
@@ -483,8 +479,10 @@ int main(int argc, char *argv[]) {
   const size_t JOINT_ERR_LST_DESIRED_COUNT =
       static_cast<size_t>(confValue["testErrorCount"].asInt64());
 
-  const float JOINT_CALIB_QUALITY_TOL_RAD = static_cast<float>(
-      confValue["jointCalibQualityTol"].asDouble() * TO_RAD_DBL);
+  const double JOINT_CALIB_QUALITY_TOL_DEG =
+      confValue["jointCalibQualityTol"].asDouble();
+  const float JOINT_CALIB_QUALITY_TOL_RAD =
+      static_cast<float>(JOINT_CALIB_QUALITY_TOL_DEG * TO_RAD_DBL);
   const float REPROJ_ERR_TOL_PERCENT = static_cast<float>(
       confValue["reprojErrTolPercent"].asDouble() * TO_RAD_DBL);
 
@@ -496,8 +494,12 @@ int main(int argc, char *argv[]) {
             << "\nMinMax Error val:\t" << MIN_ERR_VAL << ", " << MAX_ERR_VAL
             << "\nMirror Poses:\t" << mirrorPose << "\nStochastic Fix:\t"
             << stochasticFix << "\nJoint Calib Tol (deg) :\t"
-            << JOINT_CALIB_QUALITY_TOL_RAD / TO_RAD_DBL << std::endl;
+            << JOINT_CALIB_QUALITY_TOL_DEG << std::endl;
 
+  /*
+   * Initializing model & Nao provider
+   */
+  TUHH tuhhInstance(confRoot);
   Vector2f fc, cc, fov;
 
   tuhhInstance.config_.mount("Projection", "Projection.json",
@@ -636,7 +638,7 @@ int main(int argc, char *argv[]) {
   size_t threadingOffsets = JOINT_ERR_LST_COUNT / MAX_THREADS;
 
   // cameras to evaluate
-  std::vector<Camera> camNames = {Camera::BOTTOM /*, Camera::TOP*/};
+  std::vector<Camera> camNames = {Camera::BOTTOM, Camera::TOP};
 
   // Start the threads
   for (size_t i = 0; i < MAX_THREADS; ++i) {
@@ -692,19 +694,31 @@ int main(int argc, char *argv[]) {
    * Print stats for each joint
    */
   {
-    auto printStats = [&JOINT_CALIB_QUALITY_TOL_RAD](Residual<double> &resVec) {
+    auto printStats = [&JOINT_CALIB_QUALITY_TOL_DEG,
+                       &JOINT_ERR_LST_COUNT](Residual<double> &resVec) {
+      if (resVec.size() > JOINT_ERR_LST_COUNT) {
+        std::cerr << "Something is wrong, resVec.size() > JOINT_ERR_LST_COUNT"
+                  << std::endl;
+        throw("Something is wrong, resVec.size() > JOINT_ERR_LST_COUNT");
+      }
 
-      auto minMax = std::minmax_element(resVec.begin(), resVec.end());
-      utils::SimpleHistogram<double> tempHist(300, *minMax.first - 1,
-                                              *minMax.second + 1);
+      //      auto minMax = std::minmax_element(resVec.begin(), resVec.end());
+      //      utils::SimpleHistogram<double> tempHist(300, *minMax.first - 1,
+      //                                              *minMax.second + 1);
       double avg =
           std::accumulate(resVec.begin(), resVec.end(), 0.0) / resVec.size();
-      tempHist.update(resVec);
+      //      tempHist.update(resVec);
+      size_t badCount = 0;
+      for (auto &elem : resVec) {
+        if (std::fabs(elem) > JOINT_CALIB_QUALITY_TOL_DEG) {
+          badCount++;
+        }
+      }
       std::cout << "avg: " << avg << " bad%: "
-                << tempHist.getPercentAboveAbsValue(
-                       JOINT_CALIB_QUALITY_TOL_RAD / TO_RAD_DBL)
+                << badCount * 100 / static_cast<double>(JOINT_ERR_LST_COUNT)
                 << std::endl;
     };
+
     for (size_t i = 0; i < finalResidualSet.jointResiduals.size(); ++i) {
       std::cout << "Joint " << Sensor::ALL_OBS_JOINTS[i];
       printStats(finalResidualSet.jointResiduals[i]);

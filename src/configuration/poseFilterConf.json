@@ -5,7 +5,7 @@
 //        "PENALIZE_0_AND_180", // scaled to fit to 0 - 180 range.
 //    ],
     "currentPolicy": "PENALIZE_0_AND_180",
-    "enableInteractionCostWeighting": true,
+    "enableInteractionCostWeighting": false,
 //    "sensorMagnitudeWeightNormal": 2,
 //    "sensorMagnitudeWeightPrioritized": 4,
 //    "jointWeightNormal": 1,
