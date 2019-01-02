@@ -20,17 +20,17 @@ public:
 private:
   // static const float angleTol = 2*TO_RAD;
   static constexpr float distTol = 8; // 5 mm
-  /**
-   * @brief compute body angles
-   * @param bodyAngles - output
-   * @param target torso position relative to support foot.
-   * @param target torso rotation relative to support foot.
-   * @param other foot's position relative to support foot
-   * @param other foot's rotation relative to support foot
-   * @param Support foot (-1 right, 0 double, 1 left)
-   *
-   * **Warning** No safety checks done!!!
-   */
+                                      /**
+                                       * @brief compute body angles
+                                       * @param bodyAngles - output
+                                       * @param target torso position relative to support foot.
+                                       * @param target torso rotation relative to support foot.
+                                       * @param other foot's position relative to support foot
+                                       * @param other foot's rotation relative to support foot
+                                       * @param Support foot (-1 right, 0 double, 1 left)
+                                       *
+                                       * **Warning** No safety checks done!!!
+                                       */
   static bool leanToTorsoPose(jointAnglesT &jointAngles,
                               const KinematicMatrix &targetTorso2supportFoot,
                               const Vector3f &otherFootPos2supportFoot,
@@ -98,7 +98,7 @@ private:
       return false;
     }
     /// put computed leg angles in joint angle vector for whole body
-    for (int j = 0; j < JOINTS_L_LEG::L_LEG_MAX; j++) {
+    for (size_t j = 0; j < JOINTS_L_LEG::L_LEG_MAX; j++) {
       jointAngles[JOINTS::L_HIP_YAW_PITCH + j] = lLegAngles[j];
       jointAngles[JOINTS::R_HIP_YAW_PITCH + j] = rLegAngles[j];
     }
