@@ -373,8 +373,9 @@ public:
   }
   inline bool isGood() { return valid; }
 
-  inline bool isNear(const HeadYawPitch &headYPBounds, const T &torsoPosBounds,
-                     const T &torsoRotBounds, NaoPose<T> pose) {
+  inline bool isNear(const HeadYawPitch &headYPBounds,
+                     const Vector3f &torsoPosBounds,
+                     const Vector3f &torsoRotBounds, NaoPose<T> pose) {
     if (pose.supportFoot != this->supportFoot) {
       return false;
     }
@@ -387,11 +388,13 @@ public:
 
         std::abs(pose.headYawPitch.yaw) > headYPBounds.yaw ||
 
-        std::max(std::abs(pose.torsoPosV.maxCoeff()),
-                 std::abs(pose.torsoPosV.minCoeff())) > torsoPosBounds ||
+        std::abs(pose.torsoPosV.x()) > torsoPosBounds.x() ||
+        std::abs(pose.torsoPosV.y()) > torsoPosBounds.y() ||
+        std::abs(pose.torsoPosV.z()) > torsoPosBounds.z() ||
 
-        std::max(std::abs(pose.torsoRotV.maxCoeff()),
-                 std::abs(pose.torsoRotV.minCoeff())) > torsoRotBounds) {
+        std::abs(pose.torsoRotV.x()) > torsoRotBounds.x() ||
+        std::abs(pose.torsoRotV.y()) > torsoRotBounds.y() ||
+        std::abs(pose.torsoRotV.z()) > torsoRotBounds.z()) {
       return false;
     }
     // else

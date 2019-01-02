@@ -11,21 +11,17 @@
 #include <Modules/Configuration/Configuration.h>
 #include <Modules/Configuration/UnixSocketConfig.hpp>
 #include <Modules/NaoProvider.h>
-#include <Modules/Poses.h>
 
 #include <Hardware/RobotInterface.hpp>
-#include <Tools/Kinematics/KinematicMatrix.h>
-#include <Tools/Storage/Image.hpp>
-#include <Tools/Storage/Image422.hpp>
 
+#include <cxxopts/include/cxxopts.hpp>
+
+#include "Interactions.hpp"
+#include "MiniConfigHandle.hpp"
 #include "NaoPoseInfo.hpp"
-#include "NaoStability.hpp"
-#include "NaoTorsoPose.hpp"
+#include "ObservationSensitivityProvider.hpp"
 #include "TUHHMin.hpp"
 #include "constants.hpp"
-// #define DEBUG_CAM_OBS 1
-#include "JointCalibSolver.hpp"
-#include "ObservationSensitivityProvider.hpp"
 
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
@@ -41,95 +37,28 @@ static const size_t MAX_MEM_FOR_PIP =
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 static const int SENSOR_COUNT = 2;
 
-using PoseMap = std::map<size_t, poseAndRawAngleT>;
-
 using JointWeights = std::array<float, JOINTS::JOINT::JOINTS_MAX>;
 using SensorWeights = std::array<float, SENSOR_COUNT>;
 using SensMagAndPoseId =
     std::pair<int, size_t>; // Sensor Name should be maintained externally.
 
-const size_t TOT_OBS_JOINT_COUNT =
-    JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
-const size_t TOT_AMBIGUITY_COMBOS =
-    TOT_OBS_JOINT_COUNT * (TOT_OBS_JOINT_COUNT - 1) / 2;
-
-using InteractionCost = Eigen::Matrix<int, TOT_AMBIGUITY_COMBOS, 1>;
-using PoseInteractionId = std::pair<size_t, size_t>; // id1, id2 in order
-
-struct PoseCost {
-  double jointCost;
-  // this accumilate total costs found based on below pose interaction cost, in
-  // practice, this only holds the costs encountered so far while making
-  // poseInteractions
-  double poseInteractionCost;
-  size_t id;
-  InteractionCost
-      jointInteractionCostVec; // j1 vs j2, j1 vs j3, ... for all joint
-                               // configs under calibration
-  int interactionCount;        // count of non-zero elements of interaction cost
-
-  PoseCost(const double &cost, const size_t &id)
-      : jointCost(cost), poseInteractionCost(0), id(id), interactionCount(0) {
-    jointInteractionCostVec.setZero();
-  }
-  void reset() {
-    jointCost = 0;
-    poseInteractionCost = 0;
-    id = 0;
-    jointInteractionCostVec.setZero();
-    interactionCount = 0;
-  }
-};
-
-inline PoseInteractionId makeCombinedId(const size_t &id1, const size_t &id2) {
-  return (id1 < id2) ? PoseInteractionId{id1, id2}
-                     : PoseInteractionId{id2, id1};
-}
-
-struct PoseInteraction {
-  PoseInteractionId combinedId; // id1, id2 in order
-  double cost;
-  int interactionCount; // count of non-zero elements of interaction cost
-  // In this case, my approach is elementwise multiplication
-  //  InteractionCost
-  //      poseInteractionCostVec; // p1 vs p2, p1 vs p3, ... for all joint
-  // configs under calibration
-  PoseInteraction(const PoseCost &c1, const PoseCost &c2) {
-
-    combinedId = (c1.id < c2.id) ? PoseInteractionId{c1.id, c2.id}
-                                 : PoseInteractionId{c2.id, c1.id};
-
-    //    interactionCost = (c1.interactionCost - c2.interactionCost).
-    InteractionCost
-        poseInteractionCostVec; // p1 vs p2, p1 vs p3, ... for all joint
-    for (Eigen::Index i = 0;
-         i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-      poseInteractionCostVec(i) =
-          c1.jointInteractionCostVec(i) * c2.jointInteractionCostVec(i);
-      if (poseInteractionCostVec(i) > 0) {
-        interactionCount++;
-      }
-    }
-    cost = poseInteractionCostVec.sum();
-  }
-
-  inline static void
-  getInteractionVecAndCount(InteractionCost &interactionCostVec,
-                            int &interactionCount, const PoseCost &c1,
-                            const PoseCost &c2) {
-    for (Eigen::Index i = 0;
-         i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-      interactionCostVec(i) =
-          c1.jointInteractionCostVec(i) * c2.jointInteractionCostVec(i);
-      if (interactionCostVec(i) > 0) {
-        interactionCount++;
-      }
-    }
-  }
-};
+/**
+ *
+ */
+using namespace Interactions;
 
 const size_t maxPoseInteractionCount =
     MAX_MEM_FOR_PIP / sizeof(PoseInteraction);
+
+enum SimilarityCostPolicy {
+  NONE,
+  PENALIZE_0_ONLY,
+  PENALIZE_0_AND_180 // scaled to fit to 0 - 180 range.
+};
+const std::map<std::string, SimilarityCostPolicy> SimilarityCostPolicyMap{
+    {"NONE", NONE},
+    {"PENALIZE_0_ONLY", PENALIZE_0_ONLY},
+    {"PENALIZE_0_AND_180", PENALIZE_0_AND_180}};
 
 /**
  * Cost function for ranking a given pose for a given sensor.
@@ -146,10 +75,13 @@ const size_t maxPoseInteractionCount =
  * and orthogonality weighting respectively.
  */
 template <typename T>
-std::pair<double, InteractionCost>
-poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
-                   const JointWeights &wJoints, const float &wOrthoGeneric,
-                   const float &observableJointCountWeight) {
+std::pair<double, InteractionCost> poseFilterCostFunc(
+    const PoseSensitivity<T> &p, const float &wSensorMag,
+    const JointWeights &wJoints, const float &wOrthoGeneric,
+    const float &observableJointCountWeight,
+    const SimilarityCostPolicy &policy = SimilarityCostPolicy::PENALIZE_0_ONLY,
+    const bool &enableInteractionCostWeighting = true) {
+
   InteractionCost interactionCost;
   interactionCost.setZero();
   double accum =
@@ -161,20 +93,16 @@ poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
   }
   /*
    * We'll go like a triangle, as pj.pk = pk.pj, only n*(n+1)/2 iterations
-   * needed
-   * ex:
-   * p1p2 p1p3 p1p4
-   * p2p3 p2p4
-   * p3p4
+   * needed. See Interactions::encodeLowerTriangle...
    */
 
-  for (size_t j = 0; j < TOT_OBS_JOINT_COUNT - 1; j++) {
-    const JOINTS::JOINT joint = static_cast<JOINTS::JOINT>(j);
+  for (size_t row = 1; row < TOT_OBS_JOINT_COUNT; row++) {
+    const JOINTS::JOINT joint = Sensor::ALL_OBS_JOINTS[row];
     if (!p.isJointObservable(joint)) {
       continue;
     }
-    const double wMag = static_cast<double>(wSensorMag * wJoints[j]);
-    const double wOrtho = static_cast<double>(wOrthoGeneric * wJoints[j]);
+    const double wMag = static_cast<double>(wSensorMag * wJoints[joint]);
+    const double wOrtho = static_cast<double>(wOrthoGeneric * wJoints[joint]);
     T val;
     bool obs;
     p.getSensitivity(joint, val, obs);
@@ -182,14 +110,14 @@ poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
     accum += wMag * static_cast<double>(val.norm());
     if (std::isnan(val.norm()) || std::isnan(accum)) {
       std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-      std::cout << p.getId() << " is NAN 1st stage joint: " << j << " val "
+      std::cout << p.getId() << " is NAN 1st stage joint: " << joint << " val "
                 << val.norm() << std::endl;
       continue;
     }
 
     double v1Norm = static_cast<double>(val.norm());
-    for (size_t k = j + 1; k < TOT_OBS_JOINT_COUNT; k++) {
-      const JOINTS::JOINT innerJoint = static_cast<JOINTS::JOINT>(k);
+    for (size_t col = 0; col < row; col++) {
+      const JOINTS::JOINT innerJoint = Sensor::ALL_OBS_JOINTS[col];
       // skip own-joint and unobservable joints..
       if (!p.isJointObservable(innerJoint)) {
         continue;
@@ -209,20 +137,39 @@ poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
         dot = -1.0;
       }
       // get the linear angle value.. closer to 90deg, the better.
+      const double similarityAngle = std::acos(dot) / TO_RAD_DBL;
+      const long curIdx = encodeInteractionVecIndex<Eigen::Index>(row, col);
 
-      double curCost = wOrtho * std::fabs(std::acos(dot) / TO_RAD_DBL);
-      const long curIdx = utils::getIndexUpperTriangle<Eigen::Index>(
-          j, k, TOT_AMBIGUITY_COMBOS);
-      interactionCost(curIdx) = static_cast<int>(std::round(curCost));
+      /*
+       * Below are a few policies..
+       * bets means cheapest (lowest cost)
+       * TODO investigate how would not penalizing 180 goes on.
+       */
+      if (policy == SimilarityCostPolicy::PENALIZE_0_ONLY) {
+        /// [0, 180] 180 is best, 90 is better and 0 is worst
+        interactionCost(curIdx) = std::fabs(180.0 - similarityAngle);
+      } else if (policy == SimilarityCostPolicy::PENALIZE_0_AND_180) {
+        /// [0, 90*2] 90 is best, 180 (wrapped to 0) and 0 are worst
+        interactionCost(curIdx) = std::fabs(90.0 - similarityAngle) * 2;
+      } else {
+        /// [0, 180] Original - wrong outcome;
+        interactionCost(curIdx) = std::fabs(similarityAngle);
+      }
 
-      accum += curCost;
+      // we accumilate the "fitness" or negative cost; so the negative sign
+      accum += wOrtho * -interactionCost(curIdx);
+
+      if (enableInteractionCostWeighting) {
+        interactionCost(curIdx) *= wOrtho;
+      }
+
       if (dot > static_cast<double>(1.0) || dot < static_cast<double>(-1.0) ||
-          std::isnan(dot) || std::isnan(accum)) {
+          std::isnan(dot) || std::isnan(similarityAngle) || std::isnan(accum)) {
         std::lock_guard<std::mutex> lock(utils::mtx_cout_);
-        std::cout << p.getId() << " is NAN 2nd stage [domain err] " << j << " "
-                  << k << " dot " << dot << " aco " << std::acos(dot)
-                  << " wOrtho " << wOrtho << " fabs "
-                  << std::fabs(std::acos(dot) / TO_RAD_DBL) << std::endl;
+        std::cout << p.getId() << " is NAN 2nd stage [domain err] " << joint
+                  << " " << innerJoint << " dot " << dot << " aco "
+                  << std::acos(dot) << " wOrtho " << wOrtho << " fabs "
+                  << std::fabs(similarityAngle) << std::endl;
         continue;
       }
     }
@@ -234,21 +181,18 @@ poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
  * This runs the cost function :)
  * @param poseCosts list of all cost minimas (local minimas).
  */
-void poseFilterFunc(std::istream &inputStream, std::vector<PoseCost> &poseCosts,
-                    const SensorWeights sensorMagnitudeWeights,
-                    const JointWeights jointWeights,
-                    const float orthogonalityWeight,
-                    const float observableJointCountWeight,
-                    std::atomic<size_t> &iterations) {
+void poseFilterFunc(
+    std::istream &inputStream, std::vector<PoseCost> &poseCosts,
+    const SensorWeights sensorMagnitudeWeights, const JointWeights jointWeights,
+    const float orthogonalityWeight, const float observableJointCountWeight,
+    std::atomic<size_t> &iterations,
+    const SimilarityCostPolicy policy = SimilarityCostPolicy::PENALIZE_0_ONLY,
+    const bool enableInteractionCostWeighting = true) {
   bool direction = false;
   PoseCost previousCostVal(100, 0);
   PoseCost curCostVal(100, 0);
-  // Per pose, multiple sensors are there,..
-  //  size_t curPoseId = 0;
+
   bool first = true;
-  // if at least one sensor had observations at that pose. If not, drop that
-  // pose from this level.
-  // bool anySensorObserved = false;
 
   PoseSensitivity<Vector3f> p;
   size_t sensorAsIndex;
@@ -267,7 +211,7 @@ void poseFilterFunc(std::istream &inputStream, std::vector<PoseCost> &poseCosts,
       curCostVal.interactionCount = 0;
       for (Eigen::Index i = 0;
            i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-        if (curCostVal.jointInteractionCostVec(i) != 0) {
+        if (std::abs(curCostVal.jointInteractionCostVec(i)) > __DBL_EPSILON__) {
           curCostVal.interactionCount++;
         }
       }
@@ -288,7 +232,8 @@ void poseFilterFunc(std::istream &inputStream, std::vector<PoseCost> &poseCosts,
     sensorAsIndex = static_cast<size_t>(p.getSensorName());
     auto costInfos = poseFilterCostFunc<Vector3f>(
         p, sensorMagnitudeWeights[sensorAsIndex], jointWeights,
-        orthogonalityWeight, observableJointCountWeight);
+        orthogonalityWeight, observableJointCountWeight, policy,
+        enableInteractionCostWeighting);
 
     curCostVal.jointCost += costInfos.first;
     curCostVal.jointInteractionCostVec += costInfos.second;
@@ -310,7 +255,9 @@ void filterAndSortPosesThreaded(
     std::vector<std::fstream> &inputPoseAndJointStreams,
     const SensorWeights &sensorMagnitudeWeights,
     const JointWeights &jointWeights, const float &wOrthoGeneric,
-    const float &observableJointCountWeight, std::vector<PoseCost> &poseCosts) {
+    const float &observableJointCountWeight, std::vector<PoseCost> &poseCosts,
+    const SimilarityCostPolicy &policy = SimilarityCostPolicy::PENALIZE_0_ONLY,
+    const bool &enableInteractionCostWeighting = true) {
 
   std::vector<std::thread> threadList(usableThreads);
   std::vector<std::atomic<size_t>> iterCount(usableThreads);
@@ -319,21 +266,12 @@ void filterAndSortPosesThreaded(
   std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
   // launch the threads
   for (unsigned int i = 0; i < usableThreads; i++) {
-
-    //     void poseFilterFunc(std::istream &inputStream,
-    //                         // std::ostream &outputStream,
-    //                         std::vector<PoseCost> &poseCosts,
-    //                         const SensorWeights sensorMagnitudeWeights,
-    //                         const JointWeights jointWeights,
-    //                         const float orthogonalityWeight,
-    //                         std::atomic<size_t> &iterations, bool
-    //                         lastPortion)
-
     threadList[i] = std::thread(
         poseFilterFunc, std::ref(inputPoseAndJointStreams[i]),
         // std::ref(outputFileList[i]),
         std::ref(poseCostListList[i]), sensorMagnitudeWeights, jointWeights,
-        wOrthoGeneric, observableJointCountWeight, std::ref(iterCount[i]));
+        wOrthoGeneric, observableJointCountWeight, std::ref(iterCount[i]),
+        policy, enableInteractionCostWeighting);
   }
 
 #if ENABLE_PROGRESS
@@ -397,412 +335,19 @@ void filterAndSortPosesThreaded(
   std::cout << std::endl;
 }
 
-/**
- * @brief mapPoseCostToPoses
- * @param poseMap
- * @param inFileName
- * @param sortedPoseCostVec
- * @param usableThreads
- * @return
- */
-bool mapPoseCostToPoses(PoseMap &poseMap, const std::string &inFileName,
-                        const std::vector<PoseCost> &sortedPoseCostVec,
-                        const size_t &usableThreads) {
-  /*
-   * Start mapping pose cost to poses
-   */
-
-  std::fstream genPoseListFile;
-
-  size_t outFileNum = 0;
-  std::cout << "opening " << outFileNum << std::endl;
-  genPoseListFile.open(
-      (inFileName + "_GeneratedPoses_" + std::to_string(outFileNum) + ".txt"),
-      std::ios::in);
-
-  // Read each generated pose file and match with the posecost vector.
-  for (size_t idx = 0; idx < sortedPoseCostVec.size(); idx++) // per thread
-  {
-    auto &elem = sortedPoseCostVec[idx];
-
-    std::string curString = "";
-    std::string dummy = "";
-    size_t id = 0;
-    bool elementFound = false;
-
-    poseAndRawAngleT tempPose;
-
-    while (std::getline(genPoseListFile, curString)) {
-      std::stringstream curStream(curString);
-      curStream >> dummy >> dummy >> id;
-      if (elem.id == id) {
-        elementFound = true;
-        curStream.seekg(0, curStream.beg);
-        curStream >> tempPose;
-        poseMap.emplace(id, std::move(tempPose));
-        break;
-      }
-    }
-
-    if (!genPoseListFile.good()) {
-      genPoseListFile.close();
-      outFileNum++;
-      if (outFileNum < usableThreads) {
-        if (!elementFound) {
-          idx--; // go back one index
-        }
-        std::cout << "opening " << outFileNum << std::endl;
-        genPoseListFile.open((inFileName + "_GeneratedPoses_" +
-                              std::to_string(outFileNum) + ".txt"),
-                             std::ios::in);
-      } else {
-        if (idx + 1 < sortedPoseCostVec.size()) {
-          std::cout << "No more files to read " << idx << " "
-                    << sortedPoseCostVec.size() << std::endl;
-        }
-        break;
-      }
-    } else {
-      if (!elementFound) {
-        std::cerr << "element not found" << elem.id << std::endl;
-      }
-    }
-  }
-  // close the file
-  genPoseListFile.close();
-
-  if (poseMap.size() != sortedPoseCostVec.size()) {
-    std::cerr << "PoseMap and PoseCostVec doesnt match in size"
-              << poseMap.size() << " " << sortedPoseCostVec.size() << std::endl;
-    return false;
-  }
-  return true;
-}
-
-/**
- * @brief sortAndTrimPoseCosts
- * @param poseMap
- * @param sortedPoseCostVec
- * @param hYPbounds
- * @param torsoPosBound
- * @param torsoRotBound
- * @return
- */
-bool sortAndTrimPoseCosts(PoseMap &poseMap,
-                          std::vector<PoseCost> &sortedPoseCostVec,
-                          const HeadYawPitch &hYPbounds,
-                          const float &torsoPosBound,
-                          const float &torsoRotBound) {
-  /*
-   * Sort the pose costs..
-   * 1. Interaction count
-   * 2. joint cost -> sum of interaction vector.
-   */
-  std::cout << "Sort pose costs" << std::endl;
-
-  //  std::sort(sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
-  //            [](const PoseCost &i, const PoseCost &j) {
-  //              // count is smaller, if same, then get lower cost.
-  //              return i.interactionCount < j.interactionCount ||
-  //                     (i.interactionCount == j.interactionCount &&
-  //                      i.jointCost < j.jointCost);
-  //            });
-
-  ptrdiff_t grainSize = sortedPoseCostVec.size() / MAX_THREADS;
-  utils::parallel_sort(sortedPoseCostVec.begin(), sortedPoseCostVec.size(),
-                       grainSize, [](const PoseCost &i, const PoseCost &j) {
-                         // count is smaller, if same, then get lower cost.
-                         return i.interactionCount < j.interactionCount ||
-                                (i.interactionCount == j.interactionCount &&
-                                 i.jointCost < j.jointCost);
-                       });
-  /*
-   * Trim poseVec based on closest-neighbour-like clustering.
-   */
-  NaoPose<float> curTopPose = poseMap.at(sortedPoseCostVec[0].id).pose;
-
-  std::remove_if(
-      sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
-      [&curTopPose, &hYPbounds, &torsoPosBound, &torsoRotBound,
-       &poseMap](PoseCost &poseCost) {
-
-        const NaoPose<float> &pose = poseMap.at(poseCost.id).pose;
-        // remove poses that are near to the given bounds
-        if (curTopPose.isNear(hYPbounds, torsoPosBound, torsoRotBound, pose)) {
-          poseMap.erase(poseCost.id);
-          return true;
-        } else { // if out of the range, update this as curTopPose..
-          curTopPose = pose;
-          return false;
-        }
-
-      });
-
-  return true;
-}
-
-/**
- * @brief populatePoseInteractions
- * @param poseInteractionList
- * @param sortedPoseCostVec
- * @return
- */
-size_t
-populatePoseInteractions(std::vector<PoseInteraction> &poseInteractionList,
-                         const std::vector<PoseCost> &sortedPoseCostVec) {
-
-  size_t approxMaxPosesToTry = std::min(
-      sortedPoseCostVec.size(),
-      static_cast<size_t>(std::round(std::sqrt(maxPoseInteractionCount * 2))));
-
-  std::cout << approxMaxPosesToTry << std::endl;
-
-  poseInteractionList.reserve(utils::getTriangleNum(approxMaxPosesToTry));
-
-  for (size_t i = 0; i < approxMaxPosesToTry - 1; ++i) {
-    auto &poseCostI = sortedPoseCostVec[i];
-    for (size_t j = i + 1; j < approxMaxPosesToTry; ++j) {
-      auto currentInteraction =
-          PoseInteraction(poseCostI, sortedPoseCostVec[j]);
-      // update the interaction cost for a pose.
-      //      poseCostI.poseInteractionCost += currentInteraction.cost;
-      poseInteractionList.emplace_back(std::move(currentInteraction));
-    }
-  }
-  return approxMaxPosesToTry;
-}
-
-/**
- * @brief finalPoseFilteringAndChaining
- * Sort the pose interactions..
- * 1st priority, lowest interaction joint count
- * 2nd priority, lowest interaction cost
- * TODO 3rd priotity, lowest grand total of interaction costs for that joint.
- * @param poseInteractionList
- */
-void poseToPoseInteractionSort(
-    std::vector<PoseInteraction> &poseInteractionList) {
-  /*
-   *
-   */
-  std::cout << "Sort poseInteractions" << std::endl;
-  std::sort(poseInteractionList.begin(), poseInteractionList.end(),
-            [](const PoseInteraction &i, const PoseInteraction &j) -> bool {
-              // count is smaller, if same, then get lower cost.
-              return i.interactionCount < j.interactionCount ||
-                     (i.interactionCount == j.interactionCount &&
-                      i.cost < j.cost);
-            });
-  //  ptrdiff_t grainSize = poseInteractionList.size() / MAX_THREADS;
-
-  //  utils::parallel_sort(
-  //      poseInteractionList.begin(), poseInteractionList.size(), grainSize,
-  //      [](const PoseInteraction &i, const PoseInteraction &j) -> bool {
-  //        // count is smaller, if same, then get lower cost.
-  //        return i.interactionCount < j.interactionCount ||
-  //               (i.interactionCount == j.interactionCount && i.cost <
-  //               j.cost);
-  //      });
-}
-
-/**
- * @brief poseToPoseChainingMultiplication
- * @param idSet
- * @param poseInteractionList
- * @param levels
- * @return
- */
-bool poseToPoseChaining(const PoseInteraction &rootInteraction,
-                        std::vector<size_t> &idSet,
-                        //    std::vector<PoseInteraction> &poseInteractionList,
-                        //    const PoseMap &poseMap,
-                        const std::vector<PoseCost> &poseCostVec,
-                        const bool multiplicationMode = true,
-                        size_t levels = 10) {
-
-  std::vector<size_t> output;
-  if (idSet.size() == 0 || poseCostVec.size() == 0) {
-    return false;
-  }
-
-  auto finePoseCostById = [&poseCostVec](const size_t &id) {
-    return std::find_if(poseCostVec.begin(), poseCostVec.end(),
-                        [&id](const PoseCost &elem) { return elem.id == id; });
-
-  };
-  std::mutex idSetMtx;
-  auto findCandidateForLevel = [&idSetMtx, &poseCostVec, &multiplicationMode,
-                                &finePoseCostById](
-      const std::vector<size_t>::iterator begin,
-      const std::vector<size_t>::iterator end,
-      const InteractionCost &curInteractionCostVec,
-      unsigned int &globalTotalCount, unsigned int &globalTotalCost,
-      size_t &globalBestCandidate) {
-
-    unsigned int minTotalCount = 10E5;
-    unsigned int minTotalCost = 10E5;
-    size_t curBestCandidate = 0;
-
-    for (auto candidateIdIter = begin; candidateIdIter != end;
-         ++candidateIdIter) {
-      size_t &candidateId = *candidateIdIter;
-      if (candidateId == 0) {
-        continue;
-      }
-
-      InteractionCost interactionCostVec;
-      interactionCostVec.setZero();
-
-      auto candidatePoseCost = finePoseCostById(candidateId);
-
-      if (candidatePoseCost == poseCostVec.end()) {
-        std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-        std::cerr << "Can't locate the pose" << std::endl;
-        continue;
-      }
-
-      // get nonZeroCount
-      unsigned int tempCost =
-          static_cast<unsigned int>(std::abs(interactionCostVec.sum()));
-      unsigned int tempCount = 0;
-
-      for (Eigen::Index i = 0;
-           i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-        if (multiplicationMode) {
-          interactionCostVec(i) =
-              candidatePoseCost->jointInteractionCostVec(i) *
-              curInteractionCostVec(i);
-        } else {
-          interactionCostVec(i) =
-              candidatePoseCost->jointInteractionCostVec(i) +
-              curInteractionCostVec(i);
-        }
-        if (interactionCostVec(i) > 0) {
-          tempCount++;
-        }
-      }
-
-      // check if better than current best.
-      if (tempCount < minTotalCount ||
-          (tempCount == minTotalCount && tempCost < minTotalCost)) {
-        minTotalCount = tempCount;
-        minTotalCost = tempCost;
-        curBestCandidate = candidateId;
-        // remove this from the set
-        {
-          std::lock_guard<std::mutex> lg(idSetMtx);
-          candidateId = 0;
-        }
-        //        idSet.erase(idSet.begin() + i);
-      }
-    }
-    // compare the current best vs global best
-    {
-      std::lock_guard<std::mutex> lg(idSetMtx);
-      // check if better than current best.
-      if (minTotalCount < globalTotalCount ||
-          (minTotalCount == globalTotalCount &&
-           minTotalCost < globalTotalCost)) {
-        globalTotalCount = minTotalCount;
-        globalTotalCost = minTotalCost;
-        globalBestCandidate = curBestCandidate;
-      }
-    }
-  };
-
-  //  auto first = poseInteractionList[0];
-  if (rootInteraction.combinedId.first != idSet[0] ||
-      rootInteraction.combinedId.second != idSet[1]) {
-    std::cout << rootInteraction.combinedId.first << " "
-              << rootInteraction.combinedId.second << "\n"
-              << idSet[0] << " " << idSet[1] << "\n"
-              << idSet[idSet.size() - 1] << " " << idSet[idSet.size() - 2]
-              << std::endl;
-  }
-  std::cout << "Level 1 " << idSet[0] << "\nLevel 2 " << idSet[1] << std::endl;
-
-  //  idSet.erase(idSet.begin(), idSet.begin() + 2); // remove top two
-  output.emplace_back(idSet[0]);
-  output.emplace_back(idSet[1]);
-  idSet[0] = 0;
-  idSet[1] = 0;
-
-  size_t threadingOffsets = (idSet.size() - 2) / MAX_THREADS;
-
-  // record the interaction cost of the initial chain
-  InteractionCost curInteractionCostVec;
-  {
-    curInteractionCostVec.setZero();
-    auto poseCost1 = finePoseCostById(rootInteraction.combinedId.first);
-    auto poseCost2 = finePoseCostById(rootInteraction.combinedId.second);
-    if (poseCost1 != poseCostVec.end() && poseCost2 != poseCostVec.end()) {
-      int count = 0;
-      PoseInteraction::getInteractionVecAndCount(curInteractionCostVec, count,
-                                                 *poseCost1, *poseCost2);
-    } else {
-      std::cerr << "Can't map interaction costs for root again" << std::endl;
-      return false;
-    }
-  }
-
-  for (size_t levelIdx = 2; levelIdx < levels; ++levelIdx) {
-    unsigned int minTotalCount = 10E5;
-    unsigned int minTotalCost = 10E5;
-    size_t curBestCandidate = 0;
-
-    // update interaction cost of current chain
-    {
-      auto &candidateId = output.back(); // get the latest element
-      auto poseCost = finePoseCostById(candidateId);
-      for (Eigen::Index i = 0;
-           i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-        curInteractionCostVec(i) =
-            poseCost->jointInteractionCostVec(i) * curInteractionCostVec(i);
-      }
-    }
-    // Start the threads
-    std::vector<std::thread> threadList(MAX_THREADS);
-
-    for (size_t i = 0; i < MAX_THREADS; ++i) {
-
-      std::vector<size_t>::iterator begin = idSet.begin() + 2;
-      std::advance(begin, (threadingOffsets * i));
-      std::vector<size_t>::iterator end = idSet.begin();
-      if (i + 1 >= MAX_THREADS) {
-        end = idSet.end();
-      } else {
-        std::advance(end, (threadingOffsets * (i + 1)));
-      }
-
-      //      std::cout << "starting thread: " << i << std::endl;
-      // Initialize the thread. Maybe use futures later?
-      threadList[i] =
-          std::thread(findCandidateForLevel, begin, end,
-                      std::ref(curInteractionCostVec), std::ref(minTotalCount),
-                      std::ref(minTotalCost), std::ref(curBestCandidate));
-    }
-    for (auto &thread : threadList) {
-      if (thread.joinable()) {
-        thread.join();
-      }
-    }
-    output.emplace_back(curBestCandidate);
-    std::cout << "Level " << levelIdx << " " << curBestCandidate << " "
-              << minTotalCount << " " << minTotalCost << std::endl;
-  }
-  idSet = output;
-  return true;
-}
-
 int main(int argc, char **argv) {
+
+  //    auto idx = encodeLowerTriangleIndex(10, 5);
+  //    auto p = decodeLowerTriangleIndex(idx);
+
+  //    std::cout << idx << " " << p.first << " " << p.second << std::endl;
+  //    return 1;
   std::string inFileName((argc > 1 ? argv[1] : "out"));
   std::string favouredJoint((argc > 2 ? argv[2] : "-1"));
   std::string favouredSensor((argc > 3 ? argv[3] : "all")); // t, b, all
-  // default is false..
-  bool mirrorPose = argc > 4 ? (std::string(argv[4]).compare("m") == 0) : false;
   std::string chainingModeStr(
-      (argc > 5 ? argv[5] : "n")); // n, s, m - chaining modes.
-  std::string confRoot((argc > 6 ? argv[6] : "../../nao/home/"));
+      (argc > 4 ? argv[4] : "n")); // n, s, m - chaining modes.
+  std::string confRoot((argc > 5 ? argv[5] : "../../nao/home/"));
 
   int jointNum = std::stoi(favouredJoint);
   if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
@@ -818,13 +363,39 @@ int main(int argc, char **argv) {
   }
 
   /*
+   * Get config values.
+   */
+  Uni::Value confValue;
+  if (!MiniConfigHandle::mountFile("configuration/poseFilterConf.json",
+                                   confValue)) {
+    std::cout << "couldn't open the conf file" << std::endl;
+    exit(1);
+  }
+
+  std::string policyStr = confValue["currentPolicy"].asString();
+  SimilarityCostPolicy policy = SimilarityCostPolicyMap.at(policyStr);
+  bool enableInteractionCostWeighting =
+      confValue["enableInteractionCostWeighting"].asBool();
+
+  Uni::Value nearestNeighbourBounds = confValue["nearestNeighbourBounds"];
+  HeadYawPitch hYPbounds(
+      static_cast<float>(
+          nearestNeighbourBounds["headYawPitch"].at(0).asDouble()),
+      static_cast<float>(
+          nearestNeighbourBounds["headYawPitch"].at(1).asDouble()));
+  Vector3f torsoPosBound;
+  Vector3f torsoRotBound;
+  nearestNeighbourBounds["torsoPos"] >> torsoPosBound;
+  nearestNeighbourBounds["torsoRot"] >> torsoRotBound;
+  /*
    * Print input params
    */
-  std::cout << "Favoured Joint:\t"
+  std::cout << "Favoured Joint:\t "
             << (favouredJoint == "-1" ? "Generic" : favouredJoint)
-            << "Favoured sensor:\t"
+            << "\nFavoured sensor:\t"
             << (favouredSensor == "all" ? "All" : favouredSensor)
-            << "\nMirror Poses:\t" << mirrorPose << std::endl;
+            << "\nFilter policy:\t" << policyStr << "\nInterCostWeight:\t"
+            << enableInteractionCostWeighting << std::endl;
 
   const std::string outCostsFileName(
       inFileName + "_" + constants::FilteredPoseCostsFileName + "_" +
@@ -897,10 +468,10 @@ int main(int argc, char **argv) {
   /*
    * send the input streams and get the sorted poses
    */
-  filterAndSortPosesThreaded(usableThreads, inputPoseAndJointStreams,
-                             sensorMagnitudeWeights, jointWeights,
-                             wOrthoGeneric, observableJointCountWeight,
-                             sortedPoseCostVec);
+  filterAndSortPosesThreaded(
+      usableThreads, inputPoseAndJointStreams, sensorMagnitudeWeights,
+      jointWeights, wOrthoGeneric, observableJointCountWeight,
+      sortedPoseCostVec, policy, enableInteractionCostWeighting);
   /*
      * Start mapping pose cost to poses
      */
@@ -910,22 +481,37 @@ int main(int argc, char **argv) {
   /*
    * Sort the pose costs..
    */
-  // TODO get this from config.
-  HeadYawPitch hYPbounds(1, 1);
-  float torsoPosBound = 2.8f;
-  float torsoRotBound = 5.1f;
 
   // if fails, we have a problem
   if (!sortAndTrimPoseCosts(poseMap, sortedPoseCostVec, hYPbounds,
                             torsoPosBound, torsoRotBound)) {
     return 1;
   }
+  {
+    for (size_t iter = 0; iter < 20; ++iter) {
+      auto &poseCost = sortedPoseCostVec[iter];
+
+      std::cout << poseCost.id << " InteractionCosts: ";
+      for (Eigen::Index i = 0;
+           i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
+        if (std::abs(poseCost.jointInteractionCostVec(i)) > __DBL_EPSILON__) {
+          auto idxPair = decodeInteractionVecIndex(i);
+          std::cout << i << " (" << Sensor::ALL_OBS_JOINTS[idxPair.first]
+                    << " vs " << Sensor::ALL_OBS_JOINTS[idxPair.second]
+                    << "): " << static_cast<int>(std::round(
+                                    poseCost.jointInteractionCostVec(i)))
+                    << ", ";
+        }
+      }
+      std::cout << std::endl;
+    }
+  }
   /*
    * Secondary sort run with poseInteractionns
    */
   std::vector<PoseInteraction> poseInteractionList;
-  size_t approxMaxPosesToTry =
-      populatePoseInteractions(poseInteractionList, sortedPoseCostVec);
+  size_t approxMaxPosesToTry = populatePoseInteractions(
+      poseInteractionList, sortedPoseCostVec, maxPoseInteractionCount);
   poseToPoseInteractionSort(poseInteractionList);
 
   // populate Id vec
@@ -933,10 +519,11 @@ int main(int argc, char **argv) {
       poseInteractionList[0]; // this is the best
   std::vector<size_t> poseIdVec;
   {
-    std::unordered_set<size_t> poseIdSet; // this keeps the poses as ordered
-    // before. But being a set, we ensure
-    // only a unique set of elems are
-    // here.
+    /*
+     * this keeps the poses as ordered before. But being a set, we ensure only a
+     * unique set of elems are here.
+     */
+    std::unordered_set<size_t> poseIdSet;
     poseIdVec.reserve(approxMaxPosesToTry); // reserve the vec
     poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
     for (auto &elem : poseInteractionList) {
@@ -969,7 +556,7 @@ int main(int argc, char **argv) {
               << " Chaining" << std::endl;
 
     if (!poseToPoseChaining(rootPoseInteraction, poseIdVec, sortedPoseCostVec,
-                            multiplicationMode, 20)) {
+                            multiplicationMode, 20, MAX_THREADS)) {
       std::cerr << "Something went wrong in pose chaining" << std::endl;
       return 1;
     }

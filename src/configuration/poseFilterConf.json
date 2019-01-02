@@ -1,5 +1,21 @@
 {
-    "nearestPosVBounds":[0.028,0.028,0.028],
-    "nearestRosVBounds":[3.1,3.1,3.1],
-    "nearestHeadYawPitch":[5,1]
+//    "availablePolicies": [
+//        "NONE",
+//        "PENALIZE_0_ONLY",
+//        "PENALIZE_0_AND_180", // scaled to fit to 0 - 180 range.
+//    ],
+    "currentPolicy": "PENALIZE_0_AND_180",
+    "enableInteractionCostWeighting": true,
+//    "sensorMagnitudeWeightNormal": 2,
+//    "sensorMagnitudeWeightPrioritized": 4,
+//    "jointWeightNormal": 1,
+//    "jointWeightPrioritized": 4,
+//    "orthogonalWeight": 3,
+//    "observableJointCountWeight": 1,
+
+    "nearestNeighbourBounds":{
+        "headYawPitch": [1, 1],
+        "torsoPos": [0.028, 0.028, 0.028],
+        "torsoRot": [5.1, 5.1, 5.1]
+    }
 }
