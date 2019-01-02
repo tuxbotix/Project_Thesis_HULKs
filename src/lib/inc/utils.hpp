@@ -226,6 +226,16 @@ public:
     }
   }
 
+  T getPercentAboveAbsValue(const T &val) const {
+    T count = 0;
+    for (int i = 0; i < binCount; ++i) {
+      auto bin = std::fabs((T)i * binSize + minRange);
+      if (bin > val) {
+        count += histogram[i];
+      }
+    }
+    return count * 100 / binCount;
+  }
   /**
    * @brief getPercentileBounds
    * @param percentile (approached from both sides until this is exceeded)
@@ -301,10 +311,21 @@ inline size_t getTriangleNum(const size_t &sizeOfSize) {
  */
 template <typename T = size_t>
 inline T getIndexUpperTriangle(const size_t &i, const size_t &j,
-                               const size_t &TOT_AMBIGUITY_COMBOS) {
-  return static_cast<T>(TOT_AMBIGUITY_COMBOS - getSmallerTriangleNum(i) + j -
-                        2);
+                               const size_t &sideLen) {
+  return static_cast<T>(((i * sideLen + j) / 2) + 1);
 }
+
+/**
+ * @brief TRIANGLE_NUMS_30
+ * An array of triangular numbers.
+ */
+static const std::array<size_t, 30> TRIANGLE_NUMS_30 = []() {
+  std::array<size_t, 30> vals;
+  for (size_t i = 0; i < vals.size(); i++) {
+    vals[i] = getTriangleNum(i);
+  }
+  return vals;
+}();
 
 template<class T, typename F>
 /**
