@@ -210,12 +210,13 @@ poseFilterCostFunc(const PoseSensitivity<T> &p, const float &wSensorMag,
       }
       // get the linear angle value.. closer to 90deg, the better.
 
-      double curCost = wOrtho * std::fabs(std::acos(dot) / TO_RAD_DBL);
+      double similarityAngle = std::fabs(std::acos(dot) / TO_RAD_DBL);
       const long curIdx = utils::getIndexUpperTriangle<Eigen::Index>(
           j, k, TOT_AMBIGUITY_COMBOS);
-      interactionCost(curIdx) = static_cast<int>(std::round(curCost));
+      interactionCost(curIdx) =
+          static_cast<int>(std::round(std::abs(180.0 - similarityAngle)));
 
-      accum += curCost;
+      accum += wOrtho * similarityAngle;
       if (dot > static_cast<double>(1.0) || dot < static_cast<double>(-1.0) ||
           std::isnan(dot) || std::isnan(accum)) {
         std::lock_guard<std::mutex> lock(utils::mtx_cout_);
