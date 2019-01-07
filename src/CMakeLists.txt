@@ -77,10 +77,15 @@ set(test3 obsTest)
 add_executable(${test3} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${test3} observability utils naoPose tuhh)
 
-# Obs Tests
+# CalibSolver Tests
 set(test4 calibSolverTest)
 add_executable(${test4} tests/JointCalibSolverTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${test4} observability utils naoPose tuhh)
+
+# InteractionVector Tests
+set(test5 InteractionTests)
+add_executable(${test5} tests/interactiontest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${test5} observability utils naoPose tuhh)
 
 ### Post build
 
