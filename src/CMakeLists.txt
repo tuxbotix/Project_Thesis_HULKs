@@ -83,9 +83,9 @@ add_executable(${test4} tests/JointCalibSolverTest.cpp ${TUHHSDK_SOURCES} ${TUHH
 target_link_libraries(${test4} observability utils naoPose tuhh)
 
 # InteractionVector Tests
-set(test5 InteractionTests)
-add_executable(${test5} tests/interactiontest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_link_libraries(${test5} observability utils naoPose tuhh)
+#set(test5 InteractionTests)
+#add_executable(${test5} tests/interactiontest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+#target_link_libraries(${test5} observability utils naoPose tuhh)
 
 ### Post build
 
