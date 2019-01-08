@@ -306,6 +306,18 @@ inline T getIndexUpperTriangle(const size_t &i, const size_t &j,
                         2);
 }
 
+/**
+ * @brief TRIANGLE_NUMS_30
+ * An array of triangular numbers.
+ */
+static const std::array<size_t, 30> TRIANGLE_NUMS_30 = []() {
+  std::array<size_t, 30> vals;
+  for (size_t i = 0; i < vals.size(); i++) {
+    vals[i] = getTriangleNum(i);
+  }
+  return vals;
+}();
+
 template<class T, typename F>
 /**
  * @brief parallel_sort - taken from https://codereview.stackexchange.com/questions/22744/multi-threaded-sort
