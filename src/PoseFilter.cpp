@@ -275,9 +275,8 @@ void filterAndSortPosesThreaded(
   }
 
 #if ENABLE_PROGRESS
-  /*
-   * Progress tracking enabled
-   */
+  /// Progress tracking enabled
+
   bool continueTicker = true;
   std::thread tTick = std::thread([&]() {
     int elapsed = 0;
@@ -307,9 +306,8 @@ void filterAndSortPosesThreaded(
     }
   });
 #endif
-  /*
-   * Join the worker threads
-   */
+
+  // Join the worker threads
   for (auto &t : threadList) {
     if (t.joinable()) {
       t.join();
@@ -337,30 +335,25 @@ void filterAndSortPosesThreaded(
 
 int main(int argc, char **argv) {
 
-  //    auto idx = encodeLowerTriangleIndex(10, 5);
-  //    auto p = decodeLowerTriangleIndex(idx);
+  cxxopts::Options options("PoseFilter - Filter and link poses to hopefully "
+                           "give the best pose set");
+  options.add_options()("f,file-prefix", "I/O File prefix",
+                        cxxopts::value<std::string>())(
+      "j,joint", "Favoured Joint", cxxopts::value<int>()->default_value("-1"))(
+      "s,sensor", "Favoured Sensor",
+      cxxopts::value<std::string>()->default_value("all"))(
+      "l,linking", "linking (Chaining) Mode",
+      cxxopts::value<std::string>()->default_value("m"))(
+      "c,confRoot", "Conf path",
+      cxxopts::value<std::string>()->default_value("../../nao/home/"));
 
-  //    std::cout << idx << " " << p.first << " " << p.second << std::endl;
-  //    return 1;
-  std::string inFileName((argc > 1 ? argv[1] : "out"));
-  std::string favouredJoint((argc > 2 ? argv[2] : "-1"));
-  std::string favouredSensor((argc > 3 ? argv[3] : "all")); // t, b, all
-  std::string chainingModeStr(
-      (argc > 4 ? argv[4] : "n")); // n, s, m - chaining modes.
-  std::string confRoot((argc > 5 ? argv[5] : "../../nao/home/"));
+  auto result = options.parse(argc, argv);
 
-  int jointNum = std::stoi(favouredJoint);
-  if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
-    jointNum = -1;
-  }
-
-  // 1= sum, 2 = multi
-  int chainingMode = 0;
-  if (chainingModeStr.compare("s") == 0) {
-    chainingMode = 1;
-  } else if (chainingModeStr.compare("m") == 0) {
-    chainingMode = 2;
-  }
+  int jointNum = result["joint"].as<int>();
+  std::string inFileName = result["file-prefix"].as<std::string>();
+  std::string favouredSensor = result["sensor"].as<std::string>();
+  std::string chainingModeStr = result["linking"].as<std::string>();
+  std::string confRoot = result["confRoot"].as<std::string>();
 
   /*
    * Get config values.
@@ -387,16 +380,29 @@ int main(int argc, char **argv) {
   Vector3f torsoRotBound;
   nearestNeighbourBounds["torsoPos"] >> torsoPosBound;
   nearestNeighbourBounds["torsoRot"] >> torsoRotBound;
+
   /*
-   * Print input params
+   * Clean & Print input params
    */
+  if (jointNum < 0 || jointNum >= static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
+    jointNum = -1;
+  }
+
+  // 1= sum, 2 = multi
+  int chainingMode = 0;
+  if (chainingModeStr.compare("s") == 0) {
+    chainingMode = 1;
+  } else if (chainingModeStr.compare("m") == 0) {
+    chainingMode = 2;
+  }
   std::cout << "Favoured Joint:\t "
-            << (favouredJoint == "-1" ? "Generic" : favouredJoint)
+            << (jointNum == -1 ? "Generic" : std::to_string(jointNum))
             << "\nFavoured sensor:\t"
             << (favouredSensor == "all" ? "All" : favouredSensor)
             << "\nFilter policy:\t" << policyStr << "\nInterCostWeight:\t"
             << enableInteractionCostWeighting << std::endl;
 
+  /// Setup output file names
   const std::string outCostsFileName(
       inFileName + "_" + constants::FilteredPoseCostsFileName + "_" +
       (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
@@ -404,10 +410,10 @@ int main(int argc, char **argv) {
       inFileName + "_" + constants::FilteredPosesFileName + "_" +
       (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
+  /// TUHH conf.
   TUHH tuhhInstance(confRoot);
 
-  std::cout << "init" << std::endl;
-
+  /// Threading matters
   size_t usableThreads = 0;
 
   std::vector<std::fstream> inputPoseAndJointStreams;
@@ -433,11 +439,10 @@ int main(int argc, char **argv) {
     std::cerr << "output file creation failed. Aborting!!!" << std::endl;
     exit(1);
   }
-
-  /// Start the real threading..
-
   std::vector<std::thread> threadList(usableThreads);
   std::vector<std::atomic<size_t>> iterCount(usableThreads);
+
+  /// Setup weights
 
   // threads -> sensors -> joints -> peakList (PerJointPerSensorPerThread)
   std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
@@ -465,6 +470,7 @@ int main(int argc, char **argv) {
 
   // Sorted PoseCost vector
   std::vector<PoseCost> sortedPoseCostVec;
+
   /*
    * send the input streams and get the sorted poses
    */
@@ -472,17 +478,12 @@ int main(int argc, char **argv) {
       usableThreads, inputPoseAndJointStreams, sensorMagnitudeWeights,
       jointWeights, wOrthoGeneric, observableJointCountWeight,
       sortedPoseCostVec, policy, enableInteractionCostWeighting);
-  /*
-     * Start mapping pose cost to poses
-     */
+
+  /// Start mapping pose cost to poses
   std::map<size_t, poseAndRawAngleT> poseMap;
   mapPoseCostToPoses(poseMap, inFileName, sortedPoseCostVec, usableThreads);
 
-  /*
-   * Sort the pose costs..
-   */
-
-  // if fails, we have a problem
+  /// Sort the pose costs.. if fails, we have a problem
   if (!sortAndTrimPoseCosts(poseMap, sortedPoseCostVec, hYPbounds,
                             torsoPosBound, torsoRotBound)) {
     return 1;
@@ -506,6 +507,7 @@ int main(int argc, char **argv) {
       std::cout << std::endl;
     }
   }
+
   /*
    * Secondary sort run with poseInteractionns
    */
@@ -519,10 +521,9 @@ int main(int argc, char **argv) {
       poseInteractionList[0]; // this is the best
   std::vector<size_t> poseIdVec;
   {
-    /*
-     * this keeps the poses as ordered before. But being a set, we ensure only a
-     * unique set of elems are here.
-     */
+    /// This keeps the poses as ordered before. But being a set, we ensure only
+    /// a unique set of elems are here.
+
     std::unordered_set<size_t> poseIdSet;
     poseIdVec.reserve(approxMaxPosesToTry); // reserve the vec
     poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
@@ -546,9 +547,7 @@ int main(int argc, char **argv) {
         poseInteractionList); // Actually force it to dealloc the memory
   }
 
-  /*
-   * Chain the poses!!
-   */
+  /// Chain the poses!!
   if (chainingMode != 0) {
     bool multiplicationMode = (chainingMode == 2);
     std::cout << "Start "
@@ -560,12 +559,12 @@ int main(int argc, char **argv) {
       std::cerr << "Something went wrong in pose chaining" << std::endl;
       return 1;
     }
+  } else {
+    std::cout << "No Chaining" << std::endl;
   }
-  /*
-   * Now write to file..
-   */
+
+  /// Write the remaining buffers to file
   {
-/// Write the remaining buffers to file
 #if DO_COMMIT
     std::cout << "flushing all " << std::endl;
     std::cout << "Commit to file.." << poseIdVec.size() << std::endl;
@@ -594,7 +593,6 @@ int main(int argc, char **argv) {
     std::cout << "commited % "
               << (iter * 100) / static_cast<double>(sortedPoseCostVec.size())
               << std::endl;
-    // outputFileList[t].close();
     outCostsFile.close();
     outFilteredPosesFile.close();
 #endif
