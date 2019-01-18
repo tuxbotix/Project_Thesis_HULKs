@@ -553,9 +553,15 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
           interactionCostVec, candidatePoseCost->jointInteractionCostVec,
           curInteractionCostVec);
 
+      //      double tempCost = (interactionCostVec.cast<double>()
+      //                             .abs()
+      //                             .pow(1.0 / curLevel1Index)
+      //                             .sum() /
+      //                         static_cast<double>(TOT_AMBIGUITY_COMBOS));
       double tempCost = pow((interactionCostVec.cast<double>().abs().sum() /
                              TOT_AMBIGUITY_COMBOS),
                             1.0 / curLevel1Index);
+
       // get geometric mean~
       //      tempCost = pow(tempCost / TOT_AMBIGUITY_COMBOS, 1 /
       //      curLevel1Index);
@@ -666,7 +672,8 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
 
     if (curMinCostCount < minTotalCount ||
         (curMinCostCount == minTotalCount && curMinTotalCost < minTotalCost)) {
-      std::cout << " This level is not good; exiting chaining." << std::endl;
+      std::cout << "Attempted level " << levelIdx + 1
+                << " No convergence; exiting chaining." << std::endl;
       break;
     } else {
       curMinCostCount = minTotalCount;
