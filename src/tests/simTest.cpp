@@ -27,6 +27,8 @@
 #include <Tools/Storage/Image.hpp>
 #include <Tools/Storage/Image422.hpp>
 
+#include <cxxopts/include/cxxopts.hpp>
+
 #include "NaoJointAndSensorModel.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
@@ -435,22 +437,35 @@ void threadedFcn(CalibEvalResiduals<double> &residuals,
  * @return
  */
 int main(int argc, char *argv[]) {
-  std::string inFileName((argc > 1 ? argv[1] : "out"));
-  std::string maxPosesToCalib((argc > 2 ? argv[2] : "10"));
-  // default is false..
-  bool mirrorPose = argc > 3 ? (std::string(argv[3]).compare("m") == 0) : false;
-  // Default is true..
-  bool stochasticFix =
-      argc > 4 ? (std::string(argv[4]).compare("s") == 0) : true;
 
-  std::string confRoot((argc > 5 ? argv[5] : "../../nao/home/"));
+  cxxopts::Options options("PoseFilter - Filter and link poses to hopefully "
+                           "give the best pose set");
+  options.add_options()("f,file-prefix", "I/O File prefix",
+                        cxxopts::value<std::string>())(
+      "n,n-poses", "Poses to calibrate",
+      cxxopts::value<size_t>()->default_value("10"))(
+      "m,mirror", "Mirror the poses",
+      cxxopts::value<std::string>()->default_value("n"))(
+      "c,confRoot", "Conf path",
+      cxxopts::value<std::string>()->default_value("../../nao/home/"))(
+      "s,stochastic", "Stochastic mode?",
+      cxxopts::value<std::string>()->default_value("n"));
+
+  auto result = options.parse(argc, argv);
+
+  const std::string inFileName = result["file-prefix"].as<std::string>();
+  const size_t MAX_POSES_TO_CALIB = result["n-poses"].as<size_t>();
+  // Default is false
+  bool mirrorPose = (result["mirror"].as<std::string>()).compare("m") == 0;
+  std::string confRoot = result["confRoot"].as<std::string>();
+  // Default is false
+  bool stochasticFix = result["stochastic"].as<std::string>().compare("s") == 0;
 
   std::fstream inFile(inFileName);
   if (!inFile.is_open()) {
     std::cerr << "Input file cannot be opened, exiting.." << std::endl;
     return 1;
   }
-
 
   /// Get config values.
   Uni::Value confValue;
@@ -459,17 +474,6 @@ int main(int argc, char *argv[]) {
     std::cout << "couldn't open the conf file" << std::endl;
     exit(1);
   }
-
-  const size_t MAX_POSES_TO_CALIB = [&maxPosesToCalib, &confValue]() -> size_t {
-    int t = 0;
-    try {
-      t = std::stoi(maxPosesToCalib);
-    } catch (...) {
-      t = confValue["calibPoseNumDefault"].asInt64();
-      std::cerr << "Pose count invalid, defaulting to " << t << std::endl;
-    }
-    return static_cast<size_t>(t);
-  }();
 
   const float MIN_ERR_VAL =
       static_cast<float>(confValue["errRangeMinMax"].at(0).asDouble());
@@ -714,15 +718,17 @@ int main(int argc, char *argv[]) {
           badCount++;
         }
       }
-      std::cout << "avg: " << avg << " bad%: "
+      std::cout << " \tbad: "
                 << badCount * 100 / static_cast<double>(JOINT_ERR_LST_COUNT)
-                << std::endl;
+                << "% \tavg: " << avg << "\n";
     };
 
+    std::cout << "\n";
     for (size_t i = 0; i < finalResidualSet.jointResiduals.size(); ++i) {
-      std::cout << "Joint " << Sensor::ALL_OBS_JOINTS[i];
+      std::cout << "Joint " << Sensor::JOINT_NAMES[Sensor::ALL_OBS_JOINTS[i]];
       printStats(finalResidualSet.jointResiduals[i]);
     }
+    std::cout << std::endl;
   }
 
   auto maxOfJointParamsAll =
@@ -734,8 +740,8 @@ int main(int argc, char *argv[]) {
                                       *minMaxPostY.second),
                              maxOfAll);
 
-  std::cout << "absMax Post Errors" << maxOfAll << std::endl;
-  std::cout << "absMax Joint Errors" << maxOfJointParamsAll << std::endl;
+  std::cout << "absMax Post Errors: " << maxOfAll << std::endl;
+  std::cout << "absMax Joint Errors: " << maxOfJointParamsAll << std::endl;
 
   /*
    * Initialize Histograms
@@ -781,7 +787,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  std::cout << "Finishing; Bad cases: "
+  std::cout << "\nFinishing; Bad cases: "
             << badCases.load() * 100 / static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%" << std::endl;
 
@@ -808,8 +814,8 @@ int main(int argc, char *argv[]) {
 
   for (auto elem : {originalResidualDumpX, originalResidualDumpY,
                     calibratedResidualDumpX, calibratedResidualDumpY,
-                    calibratedJointParamResidualDumpY, unCalibJointParams}) {
-    std::cout << "Start dump to : " << elem.second << std::endl;
+                    unCalibJointParams, calibratedJointParamResidualDumpY}) {
+    std::cout << "\nStart dump to : " << elem.second << std::endl;
     std::pair<double, double> bounds = elem.first.getPercentileBounds(0.25);
     std::cout << "75% Of Population in: " << bounds.first << " "
               << bounds.second << std::endl;
