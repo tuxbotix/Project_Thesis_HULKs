@@ -2,10 +2,15 @@
 
 #include <cmath>
 #include <cstddef>
+//#include <gmpxx.h>
 
 #include "JointCalibSolver.hpp"
 #include "NaoPoseInfo.hpp"
 #include "utils.hpp"
+
+#ifndef OVERFLOW_DETECT
+#define OVERFLOW_DETECT 1
+#endif
 
 namespace Interactions {
 
@@ -16,37 +21,113 @@ const size_t TOT_OBS_JOINT_COUNT =
 const size_t TOT_AMBIGUITY_COMBOS =
     TOT_OBS_JOINT_COUNT * (TOT_OBS_JOINT_COUNT - 1) / 2;
 
+const double TOL = 0.999;
+
 /* Aliases */
 using PoseMap = std::map<size_t, poseAndRawAngleT>;
-
-using InteractionCost = Eigen::Matrix<double, TOT_AMBIGUITY_COMBOS, 1>;
+using InteractionCostType = int64_t;
+using InteractionCost =
+    Eigen::Array<InteractionCostType, TOT_AMBIGUITY_COMBOS, 1>;
 using PoseInteractionId = std::pair<size_t, size_t>; // id1, id2 in order
+
+const size_t PartialMeanTriggerLevel = 5; // trigger every 5th level
 
 /**
  * @brief The PoseCost struct
  */
 struct PoseCost {
-  double jointCost;
-  // this accumilate total costs found based on below pose interaction cost, in
-  // practice, this only holds the costs encountered so far while making
-  // poseInteractions
-  double poseInteractionCost;
+  enum DataType { NONE, UINT32, INT32, UINT64, INT64, FLOAT, DOUBLE };
+
+  static DataType getTypeEnum() {
+    if (typeid(InteractionCostType) == typeid(double)) {
+      return DataType::DOUBLE;
+    } else if (typeid(InteractionCostType) == typeid(uint32_t)) {
+      return DataType::UINT32;
+    } else if (typeid(InteractionCostType) == typeid(int32_t)) {
+      return DataType::INT32;
+    } else if (typeid(InteractionCostType) == typeid(uint64_t)) {
+      return DataType::UINT64;
+    } else if (typeid(InteractionCostType) == typeid(int64_t)) {
+      return DataType::INT64;
+    } else if (typeid(InteractionCostType) == typeid(float)) {
+      return DataType::FLOAT;
+    } else {
+      return DataType::NONE;
+    }
+  }
+
   size_t id;
+  double jointCost;
   InteractionCost
       jointInteractionCostVec; // j1 vs j2, j1 vs j3, ... for all joint
                                // configs under calibration
   int interactionCount;        // count of non-zero elements of interaction cost
 
   PoseCost(const double &cost, const size_t &id)
-      : jointCost(cost), poseInteractionCost(0), id(id), interactionCount(0) {
+      : id(id), jointCost(cost), interactionCount(0) {
     jointInteractionCostVec.setZero();
   }
   void reset() {
     jointCost = 0;
-    poseInteractionCost = 0;
     id = 0;
     jointInteractionCostVec.setZero();
     interactionCount = 0;
+  }
+
+  std::ostream &write(std::ostream &out) {
+    char dataType = static_cast<char>(getTypeEnum());
+    out.write(&dataType, sizeof(dataType));
+    out.write(reinterpret_cast<const char *>(&id), sizeof(id));
+    out.write(reinterpret_cast<const char *>(&jointCost), sizeof(jointCost));
+    for (Eigen::Index i = 0; i < jointInteractionCostVec.size(); ++i) {
+      out.write(reinterpret_cast<const char *>(&jointInteractionCostVec(i)),
+                sizeof(jointInteractionCostVec(i)));
+    }
+    out.write(reinterpret_cast<const char *>(&interactionCount),
+              sizeof(interactionCount));
+    return out;
+  }
+
+  std::istream &read(std::istream &in) {
+    char dataType = 0;
+    in.read(&dataType, sizeof(dataType));
+    if (dataType != static_cast<char>(getTypeEnum())) {
+      std::cerr << "Non matching type for pose cost!!!" << std::endl;
+      throw("Non matching type for pose cost!!!");
+    }
+    in.read(reinterpret_cast<char *>(&id), sizeof(id));
+    in.read(reinterpret_cast<char *>(&jointCost), sizeof(jointCost));
+    for (Eigen::Index i = 0; i < jointInteractionCostVec.size(); ++i) {
+      in.read(reinterpret_cast<char *>(&jointInteractionCostVec(i)),
+              sizeof(jointInteractionCostVec(i)));
+    }
+    in.read(reinterpret_cast<char *>(&interactionCount),
+            sizeof(interactionCount));
+    return in;
+  }
+
+  void updateInteractionCount() {
+#if OVERFLOW_DETECT
+    if ((jointInteractionCostVec < 0.0).any()) {
+      std::cout << "OVERFLOW @ updateInteractionCount" << std::endl;
+    }
+#endif
+    interactionCount = static_cast<int>(
+        (jointInteractionCostVec > static_cast<InteractionCostType>(TOL))
+            .count());
+    //    for (Eigen::Index i = 0; i < jointInteractionCostVec.size(); ++i) {
+    //      // 0.99 -> 0 for int and so on. I just need values greater or equal
+    //      to 1.0
+    //      if (std::abs(jointInteractionCostVec(i)) >
+    //          static_cast<InteractionCostType>(TOL)) {
+    //        interactionCount++;
+    //      }
+    //#if OVERFLOW_DETECT
+    //      if (jointInteractionCostVec(i) < 0.0) {
+    //        std::cout << "OVERFLOW @ updateInteractionCount" << std::endl;
+    //      }
+    //#endif
+    //    }
   }
 };
 
@@ -68,23 +149,17 @@ struct PoseInteraction {
   PoseInteractionId combinedId; // id1, id2 in order
   double cost;
   int interactionCount;
-  PoseInteraction(const PoseCost &c1, const PoseCost &c2) {
-
-    combinedId = (c1.id < c2.id) ? PoseInteractionId{c1.id, c2.id}
-                                 : PoseInteractionId{c2.id, c1.id};
+  PoseInteraction(const PoseCost &c1, const PoseCost &c2)
+      : combinedId(makeCombinedId(c1.id, c2.id)), cost(0), interactionCount(0) {
 
     //    interactionCost = (c1.interactionCost - c2.interactionCost).
     InteractionCost
         poseInteractionCostVec; // p1 vs p2, p1 vs p3, ... for all joint
-    for (Eigen::Index i = 0;
-         i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-      poseInteractionCostVec(i) = std::abs(c1.jointInteractionCostVec(i) *
-                                           c2.jointInteractionCostVec(i));
-      if (std::abs(poseInteractionCostVec(i)) > __DBL_EPSILON__) {
-        interactionCount++;
-      }
-    }
-    cost = poseInteractionCostVec.sum();
+    poseInteractionCostVec.setZero();
+
+    cost = PoseInteraction::getInteractionVecAndCount(
+        poseInteractionCostVec, c1.jointInteractionCostVec,
+        c2.jointInteractionCostVec);
   }
 
   /**
@@ -94,23 +169,45 @@ struct PoseInteraction {
    * @param c2
    * @return
    */
-  inline static unsigned int
+  inline static int
   getInteractionVecAndCount(InteractionCost &interactionCostVec,
                             const InteractionCost &c1,
                             const InteractionCost &c2) {
-    unsigned int interactionCount = 0;
+    int interactionCount = 0;
+
+    interactionCostVec = c1 * c2;
+    interactionCostVec.sqrt(); // geometric average between the two poses
+
+// TODO check if .any() is better than this.
+#if OVERFLOW_DETECT
     for (Eigen::Index i = 0;
          i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-      interactionCostVec(i) = std::abs(c1(i) * c2(i));
-      if (std::abs(interactionCostVec(i)) > 0) {
-        interactionCount++;
+      if (interactionCostVec(i) < 0.0 && c1(i) > 0.0 && c2(i) > 0.0) {
+        std::cout << "OVERFLOW @ getInteractionVecAndCount" << std::endl;
       }
     }
+#endif
+    interactionCount = static_cast<int>(
+        (interactionCostVec > static_cast<InteractionCostType>(TOL)).count());
+    //    for (Eigen::Index i = 0;
+    //         i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
+    //      //      interactionCostVec(i) = c1(i) * c2(i);
+    //      if (std::abs(interactionCostVec(i)) >
+    //          static_cast<InteractionCostType>(TOL)) {
+    //        interactionCount++;
+    //      }
+    //#if OVERFLOW_DETECT
+    //      if (interactionCostVec(i) < 0.0 && c1(i) > 0.0 && c2(i) > 0.0) {
+    //        std::cout << "OVERFLOW @ getInteractionVecAndCount" << std::endl;
+    //      }
+    //#endif
+    //    }
     return interactionCount;
   }
 
   /**
-   * @brief getInteractionVecAndCount
+   * @brief getInteractionVecAndCount Getting the geometric average is user's
+   * responsibilioty
    * @param interactionCostVec
    * @param interactionCount
    * @param c1
@@ -118,7 +215,7 @@ struct PoseInteraction {
    */
   inline static void
   getInteractionVecAndCount(InteractionCost &interactionCostVec,
-                            unsigned int &interactionCount, const PoseCost &c1,
+                            int &interactionCount, const PoseCost &c1,
                             const PoseCost &c2) {
     interactionCount = getInteractionVecAndCount(interactionCostVec,
                                                  c1.jointInteractionCostVec,
@@ -307,9 +404,7 @@ bool sortAndTrimPoseCosts(PoseMap &poseMap,
   utils::parallel_sort(sortedPoseCostVec.begin(), sortedPoseCostVec.size(),
                        grainSize, [](const PoseCost &i, const PoseCost &j) {
                          // count is smaller, if same, then get lower cost.
-                         return i.interactionCount < j.interactionCount ||
-                                (i.interactionCount == j.interactionCount &&
-                                 i.jointCost < j.jointCost);
+                         return i.jointCost < j.jointCost;
                        });
   /*
    * Trim poseVec based on closest-neighbour-like clustering.
@@ -407,7 +502,6 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
                         //    std::vector<PoseInteraction> &poseInteractionList,
                         //    const PoseMap &poseMap,
                         const std::vector<PoseCost> &poseCostVec,
-                        const bool multiplicationMode = true,
                         size_t levels = 10, const size_t MAX_THREADS = 4) {
 
   std::vector<size_t> output;
@@ -421,16 +515,18 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
 
   };
   std::mutex idSetMtx;
-  auto findCandidateForLevel = [&idSetMtx, &poseCostVec, &multiplicationMode,
-                                &finePoseCostById](
+  /*
+   * Curlevel is 1 index
+   */
+  auto findCandidateForLevel = [&idSetMtx, &poseCostVec, &finePoseCostById](
       const std::vector<size_t>::iterator begin,
       const std::vector<size_t>::iterator end,
-      const InteractionCost curInteractionCostVec,
-      unsigned int &globalTotalCount, double &globalTotalCost,
-      size_t &globalBestCandidate) {
+      const InteractionCost curInteractionCostVec, int &globalTotalCount,
+      double &globalTotalCost, size_t &globalBestCandidate,
+      size_t curLevel1Index) {
 
-    unsigned int minTotalCount = 10E5;
-    double minTotalCost = 10E5;
+    int minTotalCount = 1E3;
+    double minTotalCost = 1E6;
     size_t curBestCandidate = 0;
 
     for (auto candidateIdIter = begin; candidateIdIter != end;
@@ -452,33 +548,17 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       }
 
       // get nonZeroCount
-      unsigned int tempCount = 0;
-      if (multiplicationMode) {
-        tempCount = PoseInteraction::getInteractionVecAndCount(
-            interactionCostVec, candidatePoseCost->jointInteractionCostVec,
-            curInteractionCostVec);
-        //          for (Eigen::Index i = 0;
-        //               i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS);
-        //               ++i) {
+      int tempCount = 0;
+      tempCount = PoseInteraction::getInteractionVecAndCount(
+          interactionCostVec, candidatePoseCost->jointInteractionCostVec,
+          curInteractionCostVec);
 
-        //          interactionCostVec(i) =
-        //              std::abs(candidatePoseCost->jointInteractionCostVec(i)
-        //              *
-        //                       curInteractionCostVec(i));
-        //        }
-      } else {
-        for (Eigen::Index i = 0;
-             i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-          interactionCostVec(i) =
-              std::abs(candidatePoseCost->jointInteractionCostVec(i) +
-                       curInteractionCostVec(i));
-          if (std::abs(interactionCostVec(i)) > __DBL_EPSILON__) {
-            tempCount++;
-          }
-        }
-      }
-      double tempCost = static_cast<double>(std::abs(interactionCostVec.sum()));
-
+      double tempCost = pow((interactionCostVec.cast<double>().abs().sum() /
+                             TOT_AMBIGUITY_COMBOS),
+                            1.0 / curLevel1Index);
+      // get geometric mean~
+      //      tempCost = pow(tempCost / TOT_AMBIGUITY_COMBOS, 1 /
+      //      curLevel1Index);
       // check if better than current best.
       if (tempCount < minTotalCount ||
           (tempCount == minTotalCount && tempCost < minTotalCost)) {
@@ -505,6 +585,7 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
         globalBestCandidate = curBestCandidate;
       }
     }
+
   };
 
   //  auto first = poseInteractionList[0];
@@ -516,7 +597,6 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
               << idSet[idSet.size() - 1] << " " << idSet[idSet.size() - 2]
               << std::endl;
   }
-  std::cout << "Level 1 " << idSet[0] << "\nLevel 2 " << idSet[1] << std::endl;
 
   // start chaining.
   output.emplace_back(idSet[0]);
@@ -526,7 +606,8 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
 
   size_t threadingOffsets = (idSet.size() - 2) / MAX_THREADS;
 
-  unsigned int curMinCostCount = 0;
+  int curMinCostCount = 0;
+  double curMinTotalCost = 0;
   // record the interaction cost of the initial chain
   InteractionCost curInteractionCostVec;
   {
@@ -540,10 +621,19 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       std::cerr << "Can't map interaction costs for root again" << std::endl;
       return false;
     }
+    curMinTotalCost = std::sqrt(curInteractionCostVec.abs().sum() /
+                                static_cast<double>(TOT_AMBIGUITY_COMBOS));
+
+    std::cout << "Level 1 " << idSet[0] << " " << poseCost1->interactionCount
+              << " "
+              << poseCost1->jointInteractionCostVec.abs().sum() /
+                     static_cast<double>(TOT_AMBIGUITY_COMBOS)
+              << "\nLevel 2 " << idSet[1] << " " << curMinCostCount << " "
+              << curMinTotalCost << std::endl;
   }
 
   for (size_t levelIdx = 2; levelIdx < levels; ++levelIdx) {
-    unsigned int minTotalCount = 10E5;
+    int minTotalCount = 10E5;
     double minTotalCost = 10E5;
     size_t curBestCandidate = 0;
 
@@ -566,7 +656,7 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       threadList[i] =
           std::thread(findCandidateForLevel, begin, end, curInteractionCostVec,
                       std::ref(minTotalCount), std::ref(minTotalCost),
-                      std::ref(curBestCandidate));
+                      std::ref(curBestCandidate), (levelIdx + 1));
     }
     for (auto &thread : threadList) {
       if (thread.joinable()) {
@@ -574,20 +664,32 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       }
     }
 
+    if (curMinCostCount < minTotalCount ||
+        (curMinCostCount == minTotalCount && curMinTotalCost < minTotalCost)) {
+      std::cout << " This level is not good; exiting chaining." << std::endl;
+      break;
+    } else {
+      curMinCostCount = minTotalCount;
+    }
     // update interaction cost of current chain
     {
       auto poseCost = finePoseCostById(curBestCandidate);
       // current chain's cost count
-      curMinCostCount = PoseInteraction::getInteractionVecAndCount(
+      //      if (levelIdx % PartialMeanTriggerLevel != 0) {
+      int laa = PoseInteraction::getInteractionVecAndCount(
           curInteractionCostVec, poseCost->jointInteractionCostVec,
           curInteractionCostVec);
+      if (laa != curMinCostCount) {
+        std::cout << "We got a problem\n";
+      }
+      //      } else {
+      //      }
     }
 
     // print current level, best candidate, totalCount of the chain, best count
     // for this level, best cost for this stage.
-    std::cout << "Level " << levelIdx << " " << curBestCandidate << "\t"
-              << curMinCostCount << " " << minTotalCount << " "
-              << minTotalCost / levelIdx << std::endl;
+    std::cout << "Level " << levelIdx + 1 << " " << curBestCandidate << "\t"
+              << curMinCostCount << " " << minTotalCost / levelIdx << std::endl;
 
     output.emplace_back(curBestCandidate);
   }

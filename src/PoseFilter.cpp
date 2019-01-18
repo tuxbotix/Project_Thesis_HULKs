@@ -139,7 +139,7 @@ std::pair<double, InteractionCost> poseFilterCostFunc(
       // get the linear angle value.. closer to 90deg, the better.
       const double similarityAngle = std::acos(dot) / TO_RAD_DBL;
       const long curIdx = encodeInteractionVecIndex<Eigen::Index>(row, col);
-
+      double ambiguityCost = 0;
       /*
        * Below are a few policies..
        * bets means cheapest (lowest cost)
@@ -147,21 +147,23 @@ std::pair<double, InteractionCost> poseFilterCostFunc(
        */
       if (policy == SimilarityCostPolicy::PENALIZE_0_ONLY) {
         /// [0, 180] 180 is best, 90 is better and 0 is worst
-        interactionCost(curIdx) = std::fabs(180.0 - similarityAngle);
+        ambiguityCost = std::fabs(180.0 - similarityAngle);
       } else if (policy == SimilarityCostPolicy::PENALIZE_0_AND_180) {
         /// [0, 90*2] 90 is best, 180 (wrapped to 0) and 0 are worst
-        interactionCost(curIdx) = std::fabs(90.0 - similarityAngle) * 2;
+        ambiguityCost = std::fabs(90.0 - similarityAngle) * 2;
       } else {
         /// [0, 180] Original - wrong outcome;
-        interactionCost(curIdx) = std::fabs(similarityAngle);
+        ambiguityCost = std::fabs(similarityAngle);
       }
 
       // we accumilate the "fitness" or negative cost; so the negative sign
-      accum += wOrtho * -interactionCost(curIdx);
+      accum += wOrtho * -ambiguityCost;
 
       if (enableInteractionCostWeighting) {
-        interactionCost(curIdx) *= wOrtho;
+        ambiguityCost *= wOrtho;
       }
+      interactionCost(curIdx) =
+          static_cast<Interactions::InteractionCostType>(ambiguityCost);
 
       if (dot > static_cast<double>(1.0) || dot < static_cast<double>(-1.0) ||
           std::isnan(dot) || std::isnan(similarityAngle) || std::isnan(accum)) {
@@ -208,13 +210,7 @@ void poseFilterFunc(
 
     // Things don't match up = new pose loaded, thus commit the previous cost.
     if (first || curCostVal.id != tempId) {
-      curCostVal.interactionCount = 0;
-      for (Eigen::Index i = 0;
-           i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-        if (std::abs(curCostVal.jointInteractionCostVec(i)) > __DBL_EPSILON__) {
-          curCostVal.interactionCount++;
-        }
-      }
+      curCostVal.updateInteractionCount();
       // current pose's total cost is lesser than previous pose's total cost
       bool curDir = (curCostVal.jointCost < previousCostVal.jointCost);
       // falling edge - at a peak, but if first dont commit!
@@ -250,7 +246,7 @@ void poseFilterFunc(
  * @param observableJointCountWeight
  * @param poseCosts
  */
-void filterAndSortPosesThreaded(
+void filterPosesThreaded(
     const size_t &usableThreads,
     std::vector<std::fstream> &inputPoseAndJointStreams,
     const SensorWeights &sensorMagnitudeWeights,
@@ -345,12 +341,18 @@ int main(int argc, char **argv) {
       "l,linking", "linking (Chaining) Mode",
       cxxopts::value<std::string>()->default_value("m"))(
       "c,confRoot", "Conf path",
-      cxxopts::value<std::string>()->default_value("../../nao/home/"));
+      cxxopts::value<std::string>()->default_value("../../nao/home/"))(
+      "o,outputFile", "Output file prefix",
+      cxxopts::value<std::string>()->default_value(""));
 
   auto result = options.parse(argc, argv);
 
   int jointNum = result["joint"].as<int>();
   std::string inFileName = result["file-prefix"].as<std::string>();
+  std::string outFilePrefix = result["outputFile"].as<std::string>();
+  if (outFilePrefix.empty()) {
+    outFilePrefix = inFileName;
+  }
   std::string favouredSensor = result["sensor"].as<std::string>();
   std::string chainingModeStr = result["linking"].as<std::string>();
   std::string confRoot = result["confRoot"].as<std::string>();
@@ -388,13 +390,9 @@ int main(int argc, char **argv) {
     jointNum = -1;
   }
 
-  // 1= sum, 2 = multi
-  int chainingMode = 0;
-  if (chainingModeStr.compare("s") == 0) {
-    chainingMode = 1;
-  } else if (chainingModeStr.compare("m") == 0) {
-    chainingMode = 2;
-  }
+  // true = multiplication chaining
+  bool chainingMode = chainingModeStr.compare("m") == 0;
+
   std::cout << "Favoured Joint:\t "
             << (jointNum == -1 ? "Generic" : std::to_string(jointNum))
             << "\nFavoured sensor:\t"
@@ -404,10 +402,10 @@ int main(int argc, char **argv) {
 
   /// Setup output file names
   const std::string outCostsFileName(
-      inFileName + "_" + constants::FilteredPoseCostsFileName + "_" +
+      outFilePrefix + "_" + constants::FilteredPoseCostsFileName + "_" +
       (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
   const std::string outFilteredPosesFileName(
-      inFileName + "_" + constants::FilteredPosesFileName + "_" +
+      outFilePrefix + "_" + constants::FilteredPosesFileName + "_" +
       (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
   /// TUHH conf.
@@ -474,10 +472,10 @@ int main(int argc, char **argv) {
   /*
    * send the input streams and get the sorted poses
    */
-  filterAndSortPosesThreaded(
-      usableThreads, inputPoseAndJointStreams, sensorMagnitudeWeights,
-      jointWeights, wOrthoGeneric, observableJointCountWeight,
-      sortedPoseCostVec, policy, enableInteractionCostWeighting);
+  filterPosesThreaded(usableThreads, inputPoseAndJointStreams,
+                      sensorMagnitudeWeights, jointWeights, wOrthoGeneric,
+                      observableJointCountWeight, sortedPoseCostVec, policy,
+                      enableInteractionCostWeighting);
 
   /// Start mapping pose cost to poses
   std::map<size_t, poseAndRawAngleT> poseMap;
@@ -495,7 +493,8 @@ int main(int argc, char **argv) {
       std::cout << poseCost.id << " InteractionCosts: ";
       for (Eigen::Index i = 0;
            i < static_cast<Eigen::Index>(TOT_AMBIGUITY_COMBOS); ++i) {
-        if (std::abs(poseCost.jointInteractionCostVec(i)) > __DBL_EPSILON__) {
+        if (std::abs(poseCost.jointInteractionCostVec(i)) >
+            static_cast<Interactions::InteractionCostType>(Interactions::TOL)) {
           auto idxPair = decodeInteractionVecIndex(i);
           std::cout << i << " (" << Sensor::ALL_OBS_JOINTS[idxPair.first]
                     << " vs " << Sensor::ALL_OBS_JOINTS[idxPair.second]
@@ -548,14 +547,11 @@ int main(int argc, char **argv) {
   }
 
   /// Chain the poses!!
-  if (chainingMode != 0) {
-    bool multiplicationMode = (chainingMode == 2);
-    std::cout << "Start "
-              << (multiplicationMode ? "Multiplication" : "Summation")
-              << " Chaining" << std::endl;
+  if (chainingMode) {
+    std::cout << "Start Multiplication Chaining" << std::endl;
 
     if (!poseToPoseChaining(rootPoseInteraction, poseIdVec, sortedPoseCostVec,
-                            multiplicationMode, 20, MAX_THREADS)) {
+                            20, MAX_THREADS)) {
       std::cerr << "Something went wrong in pose chaining" << std::endl;
       return 1;
     }
