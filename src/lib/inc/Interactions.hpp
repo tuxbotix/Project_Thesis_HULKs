@@ -467,6 +467,18 @@ populatePoseInteractions(std::vector<PoseInteraction> &poseInteractionList,
   return approxMaxPosesToTry;
 }
 
+inline bool poseInteractionCriteria(const PoseInteraction &i,
+                                    const PoseInteraction &j) {
+  // count is smaller, if same, then get lower cost.
+  return i.interactionCount < j.interactionCount ||
+         (i.interactionCount == j.interactionCount && i.cost < j.cost);
+};
+
+inline bool poseInteractionCriteria(const int &iCount, const double &iCost,
+                                    const int &jCount, const double &jCost) {
+  // count is smaller, if same, then get lower cost.
+  return (iCount < jCount || (iCount == jCount && iCost < jCost));
+};
 /**
  * @brief finalPoseFilteringAndChaining
  * Sort the pose interactions..
@@ -509,7 +521,7 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
     return false;
   }
 
-  auto finePoseCostById = [&poseCostVec](const size_t &id) {
+  auto findPoseCostById = [&poseCostVec](const size_t &id) {
     return std::find_if(poseCostVec.begin(), poseCostVec.end(),
                         [&id](const PoseCost &elem) { return elem.id == id; });
 
@@ -518,7 +530,7 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
   /*
    * Curlevel is 1 index
    */
-  auto findCandidateForLevel = [&idSetMtx, &poseCostVec, &finePoseCostById](
+  auto findCandidateForLevel = [&idSetMtx, &poseCostVec, &findPoseCostById](
       const std::vector<size_t>::iterator begin,
       const std::vector<size_t>::iterator end,
       const InteractionCost curInteractionCostVec, int &globalTotalCount,
@@ -539,7 +551,7 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       InteractionCost interactionCostVec;
       interactionCostVec.setZero();
 
-      auto candidatePoseCost = finePoseCostById(candidateId);
+      auto candidatePoseCost = findPoseCostById(candidateId);
 
       if (candidatePoseCost == poseCostVec.end()) {
         std::lock_guard<std::mutex> lg(utils::mtx_cout_);
@@ -566,8 +578,8 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       //      tempCost = pow(tempCost / TOT_AMBIGUITY_COMBOS, 1 /
       //      curLevel1Index);
       // check if better than current best.
-      if (tempCount < minTotalCount ||
-          (tempCount == minTotalCount && tempCost < minTotalCost)) {
+      if (poseInteractionCriteria(tempCount, tempCost, minTotalCount,
+                                  minTotalCost)) {
         minTotalCount = tempCount;
         minTotalCost = tempCost;
         curBestCandidate = candidateId;
@@ -583,9 +595,9 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
     {
       std::lock_guard<std::mutex> lg(idSetMtx);
       // check if better than current best.
-      if (minTotalCount < globalTotalCount ||
-          (minTotalCount == globalTotalCount &&
-           minTotalCost < globalTotalCost)) {
+
+      if (poseInteractionCriteria(minTotalCount, minTotalCost, globalTotalCount,
+                                  globalTotalCost)) {
         globalTotalCount = minTotalCount;
         globalTotalCost = minTotalCost;
         globalBestCandidate = curBestCandidate;
@@ -618,8 +630,8 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
   InteractionCost curInteractionCostVec;
   {
     curInteractionCostVec.setZero();
-    auto poseCost1 = finePoseCostById(rootInteraction.combinedId.first);
-    auto poseCost2 = finePoseCostById(rootInteraction.combinedId.second);
+    auto poseCost1 = findPoseCostById(rootInteraction.combinedId.first);
+    auto poseCost2 = findPoseCostById(rootInteraction.combinedId.second);
     if (poseCost1 != poseCostVec.end() && poseCost2 != poseCostVec.end()) {
       PoseInteraction::getInteractionVecAndCount(
           curInteractionCostVec, curMinCostCount, *poseCost1, *poseCost2);
@@ -627,15 +639,18 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       std::cerr << "Can't map interaction costs for root again" << std::endl;
       return false;
     }
-    curMinTotalCost = std::sqrt(curInteractionCostVec.abs().sum() /
-                                static_cast<double>(TOT_AMBIGUITY_COMBOS));
+    curMinTotalCost =
+        std::sqrt(curInteractionCostVec.cast<double>().abs().sum() /
+                  static_cast<double>(TOT_AMBIGUITY_COMBOS));
 
-    std::cout << "Level 1 " << idSet[0] << " " << poseCost1->interactionCount
-              << " "
-              << poseCost1->jointInteractionCostVec.abs().sum() /
+    std::cout << "Level 1 " << output[0]
+              << " poseCostRank: " << (poseCost1 - poseCostVec.begin()) << "\t"
+              << poseCost1->interactionCount << " "
+              << poseCost1->jointInteractionCostVec.cast<double>().abs().sum() /
                      static_cast<double>(TOT_AMBIGUITY_COMBOS)
-              << "\nLevel 2 " << idSet[1] << " " << curMinCostCount << " "
-              << curMinTotalCost << std::endl;
+              << "\nLevel 2 " << output[1]
+              << " poseCostRank: " << (poseCost2 - poseCostVec.begin()) << "\t"
+              << curMinCostCount << " " << curMinTotalCost << std::endl;
   }
 
   for (size_t levelIdx = 2; levelIdx < levels; ++levelIdx) {
@@ -672,15 +687,19 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
 
     if (curMinCostCount < minTotalCount ||
         (curMinCostCount == minTotalCount && curMinTotalCost < minTotalCost)) {
-      std::cout << "Attempted level " << levelIdx + 1
-                << " No convergence; exiting chaining." << std::endl;
+      std::cout
+          << "Attempted level " << levelIdx + 1
+          << " No convergence; exiting chaining. cCount, cost, mCount, cost"
+          << curMinCostCount << " " << curMinTotalCost << " " << minTotalCount
+          << " " << minTotalCost << std::endl;
       break;
     } else {
       curMinCostCount = minTotalCount;
+      curMinTotalCost = minTotalCost;
     }
     // update interaction cost of current chain
     {
-      auto poseCost = finePoseCostById(curBestCandidate);
+      auto poseCost = findPoseCostById(curBestCandidate);
       // current chain's cost count
       //      if (levelIdx % PartialMeanTriggerLevel != 0) {
       int laa = PoseInteraction::getInteractionVecAndCount(
@@ -691,13 +710,15 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       }
       //      } else {
       //      }
+
+      // print current level, best candidate, totalCount of the chain, best
+      // count
+      // for this level, best cost for this stage.
+
+      std::cout << "Level " << levelIdx + 1 << " " << curBestCandidate
+                << " poseCostRank: " << (poseCost - poseCostVec.begin()) << "\t"
+                << curMinCostCount << " " << minTotalCost << std::endl;
     }
-
-    // print current level, best candidate, totalCount of the chain, best count
-    // for this level, best cost for this stage.
-    std::cout << "Level " << levelIdx + 1 << " " << curBestCandidate << "\t"
-              << curMinCostCount << " " << minTotalCost / levelIdx << std::endl;
-
     output.emplace_back(curBestCandidate);
   }
   idSet = output;
