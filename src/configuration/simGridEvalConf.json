@@ -5,7 +5,7 @@
     "mirrorAroundY": false, // if enabled, above min-max is mirrored around y axis. Else above min max strictly observed
 
     "jointCalibQualityTol": 0.5, // degrees
-    "reprojErrTolPercent": 0.05, // 5% of image size is too bad.
+    "reprojErrTolPercent": 0.02, // 5% of image size is too bad.
 
     "preHistLims": [1000, -300, 300], // bins, x min max
     "postHistLims": [100, -300, 300]  // bins, x min max

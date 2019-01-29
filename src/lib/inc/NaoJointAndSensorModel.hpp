@@ -7,10 +7,20 @@
 
 #include "NaoProjectionDataProvider.hpp"
 #include "ObservationModel.hpp"
+#include "utils.hpp"
 
 #ifndef DEBUG_JOINT_AND_SENS
 #define DEBUG_JOINT_AND_SENS 0
 #endif
+
+struct NaoJointAndSensorModelConfig {
+  Vector2i imSize;
+  Vector2f fc;
+  Vector2f cc;
+  Vector2f fov;
+  size_t maxGridPointsPerSide;
+  float gridSpacing;
+};
 
 class NaoJointAndSensorModel {
 private:
@@ -31,10 +41,10 @@ private:
   VecVector2<float> basicGrid;
 
 public:
-  NaoJointAndSensorModel(const Vector2i &imSize, const Vector2f &fc,
-                         const Vector2f &cc, const Vector2f &fov,
-                         const size_t &maxGridPointsPerSide,
-                         const float &gridSpacing)
+  NaoJointAndSensorModel(const Vector2i imSize, const Vector2f fc,
+                         const Vector2f cc, const Vector2f fov,
+                         const size_t maxGridPointsPerSide,
+                         const float gridSpacing)
       : jointCalibOffsets(JOINTS::JOINT::JOINTS_MAX, 0.0),
         commandedPose(JOINTS::JOINT::JOINTS_MAX, 0.0),
         realPose(JOINTS::JOINT::JOINTS_MAX, 0.0), imSize(imSize), basicGrid(0) {
@@ -64,39 +74,48 @@ public:
       }
     }
   }
+
+  NaoJointAndSensorModel(const NaoJointAndSensorModelConfig cfg)
+      : NaoJointAndSensorModel(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
+                               cfg.maxGridPointsPerSide, cfg.gridSpacing) {}
   ~NaoJointAndSensorModel() {}
 
   const Vector2i getImSize() const { return imSize; }
 
   void setPoseCamUpdateOnly(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
-                            const Camera &camName) {
+                            const std::vector<Camera> &camNames) {
     commandedPose = jointAngles;
     // see JointCalibrationProvider? .cpp
     for (size_t i = 0; i < JOINTS::JOINT::JOINTS_MAX; i++) {
       realPose[i] = commandedPose[i] + jointCalibOffsets[i];
     }
 
-    auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
-    // update sensor model based on the REAL pose!!
+    for (const auto &camName : camNames) {
+      auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
+      // update sensor model based on the REAL pose!!
 
-    // Always use supportFootOrigin policy
-    NaoSensorDataProvider::updatedCameraMatrix(realPose, sf, camMat, camName,
-                                               false);
-    // update default horizon
-    horizon[static_cast<int>(camName)] =
-        std::min(std::min(camMat.getHorizonHeight(0),
-                          camMat.getHorizonHeight(imSize.x() - 1)),
-                 imSize.y() - 1);
+      // Always use supportFootOrigin policy
+      NaoSensorDataProvider::updatedCameraMatrix(realPose, sf, camMat, camName,
+                                                 false);
+      // update default horizon
+      horizon[static_cast<int>(camName)] =
+          std::min(std::min(camMat.getHorizonHeight(0),
+                            camMat.getHorizonHeight(imSize.x() - 1)),
+                   imSize.y() - 1);
+    }
   }
 
   void setPose(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf) {
-    setPoseCamUpdateOnly(jointAngles, sf, Camera::TOP);
-    setPoseCamUpdateOnly(jointAngles, sf, Camera::BOTTOM);
+    setPoseCamUpdateOnly(jointAngles, sf, {Camera::TOP, Camera::BOTTOM});
   }
 
-  rawPoseT getRawPose() { return commandedPose; } // for general usage
+  const rawPoseT getRawPose() const {
+    return commandedPose;
+  } // for general usage
 
-  rawPoseT getRealPose() { return realPose; } // used for evaluation only
+  const rawPoseT getRealPose() const {
+    return realPose;
+  } // used for evaluation only
 
   void setCalibValues(const rawPoseT &calibVals) {
     if (calibVals.size() < JOINTS::JOINT::JOINTS_MAX) {
@@ -112,13 +131,13 @@ public:
   rawPoseT getCalibValues() { return jointCalibOffsets; }
 
   bool pixelToRobot(const Camera &camName, const Vector2i &pixelCoords,
-                    Vector2f &robotCoords) {
+                    Vector2f &robotCoords) const {
     auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
     return camMat.pixelToRobot(pixelCoords, robotCoords);
   }
 
   bool projectCamCenterAxisToGround(const Camera &camName,
-                                    Vector2f &robotCoords) {
+                                    Vector2f &robotCoords) const {
     auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
 
     if (camMat.pixelToRobot(camMat.cc.cast<int>(), robotCoords)) {
@@ -129,7 +148,7 @@ public:
     }
   }
 
-  bool isCameraAboveHorizon(const Camera &camName) {
+  bool isCameraAboveHorizon(const Camera &camName) const {
     return horizon[(int)camName] >= (imSize.y() - 1);
   }
   /**
@@ -216,7 +235,8 @@ public:
    * 1. This has a hard range limit of 2m
    */
   // TODO  Make this private.
-  VecVector2<float> getGroundGrid(const Camera &camName, bool &success) {
+  const VecVector2<float> getGroundGrid(const Camera &camName,
+                                        bool &success) const {
     VecVector2<float> output;
     Vector2f robotCoords = {0, 0};
     Vector2f camCenterProjPoint = {0, 0};
@@ -230,6 +250,7 @@ public:
     }
 #if DEBUG_JOINT_AND_SENS
     else {
+      std::lock_guard<std::mutex> lock(utils::mtx_cout_);
       auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
       std::cout << "HorizA" << camMat.horizonA << " horizB " << camMat.horizonB
                 << std::endl;
@@ -247,7 +268,7 @@ public:
     }
 #endif
     if (proceed) {
-      std::array<Vector2f, 4> imageCornerGroundProjections;
+      std::array<Vector2f, 4> imageCornerGroundProjections = {};
       pixelToRobot(camName, Vector2i(0, 0), imageCornerGroundProjections[0]);
       pixelToRobot(camName, Vector2i(0, imSize.y()),
                    imageCornerGroundProjections[1]);
@@ -279,6 +300,7 @@ public:
     }
 #if DEBUG_JOINT_AND_SENS
     else {
+      std::lock_guard<std::mutex> lock(utils::mtx_cout_);
       std::cout << "CamCenterRayToGround: " << camCenterProjPoint.norm() << " "
                 << camCenterProjPoint.x() << ", " << camCenterProjPoint.y()
                 << std::endl;

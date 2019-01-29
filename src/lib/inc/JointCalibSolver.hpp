@@ -15,7 +15,11 @@
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#include <Tools/Math/Eigen.hpp>
 #include <unsupported/Eigen/NonLinearOptimization>
+
+#include <CppNumericalSolvers/include/cppoptlib/problem.h>
+#include <CppNumericalSolvers/include/cppoptlib/solver/cmaessolver.h>
 
 #include "NaoJointAndSensorModel.hpp"
 #include "NaoPoseInfo.hpp"
@@ -41,47 +45,52 @@ const long COMPACT_JOINT_CALIB_PARAM_COUNT =
  * @param params
  * @param vec
  */
-inline bool jointCalibParamsToRawPose(const Eigen::VectorXf &params,
-                                      std::vector<float> &vec) {
+template <typename FromType, typename ToType = FromType>
+inline bool jointCalibParamsToRawPose(const VectorX<FromType> &params,
+                                      std::vector<ToType> &vec) {
   if (params.size() < COMPACT_JOINT_CALIB_PARAM_COUNT) {
     return false;
   }
   if (vec.size() < JOINTS::JOINT::JOINTS_MAX) {
     vec.resize(JOINTS::JOINT::JOINTS_MAX);
   }
-  vec[JOINTS::JOINT::HEAD_PITCH] = params(JOINTS::JOINT::HEAD_PITCH);
-  vec[JOINTS::JOINT::HEAD_YAW] = params(JOINTS::JOINT::HEAD_YAW);
+  vec[JOINTS::JOINT::HEAD_PITCH] =
+      static_cast<ToType>(params(JOINTS::JOINT::HEAD_PITCH));
+  vec[JOINTS::JOINT::HEAD_YAW] =
+      static_cast<ToType>(params(JOINTS::JOINT::HEAD_YAW));
 
   // left
-  for (long i = 0; i < LEG_JOINT_COUNT; i++) {
-    vec[JOINTS::JOINT::L_HIP_YAW_PITCH + i] = params(2 + i);
-    vec[JOINTS::JOINT::R_HIP_YAW_PITCH + i] = params(2 + LEG_JOINT_COUNT + i);
+  for (Eigen::Index i = 0; i < LEG_JOINT_COUNT; i++) {
+    vec[static_cast<size_t>(JOINTS::JOINT::L_HIP_YAW_PITCH + i)] =
+        static_cast<ToType>(params(2 + i));
+    vec[static_cast<size_t>(JOINTS::JOINT::R_HIP_YAW_PITCH + i)] =
+        static_cast<ToType>(params(2 + LEG_JOINT_COUNT + i));
   }
   return true;
 }
 
-inline bool rawPoseToJointCalibParams(const std::vector<float> &vec,
-                                      Eigen::VectorXf &params) {
+template <typename FromType, typename ToType = FromType>
+inline bool rawPoseToJointCalibParams(const std::vector<FromType> &vec,
+                                      VectorX<ToType> &params) {
   if (vec.size() < JOINTS::JOINT::JOINTS_MAX) {
     return false;
   }
   if (params.size() < COMPACT_JOINT_CALIB_PARAM_COUNT) {
     params.resize(COMPACT_JOINT_CALIB_PARAM_COUNT);
   }
-  params(JOINTS::JOINT::HEAD_PITCH) = vec[JOINTS::JOINT::HEAD_PITCH];
-  params(JOINTS::JOINT::HEAD_YAW) = vec[JOINTS::JOINT::HEAD_YAW];
+  params(JOINTS::JOINT::HEAD_PITCH) =
+      static_cast<ToType>(vec[JOINTS::JOINT::HEAD_PITCH]);
+  params(JOINTS::JOINT::HEAD_YAW) =
+      static_cast<ToType>(vec[JOINTS::JOINT::HEAD_YAW]);
 
-  for (long i = 0; i < LEG_JOINT_COUNT; i++) {
-    params(2 + i) = vec[JOINTS::JOINT::L_HIP_YAW_PITCH + i];
-    params(2 + LEG_JOINT_COUNT + i) = vec[JOINTS::JOINT::R_HIP_YAW_PITCH + i];
+  for (Eigen::Index i = 0; i < LEG_JOINT_COUNT; i++) {
+    params(2 + i) =
+        static_cast<ToType>(vec[JOINTS::JOINT::L_HIP_YAW_PITCH + i]);
+    params(2 + LEG_JOINT_COUNT + i) =
+        static_cast<ToType>(vec[JOINTS::JOINT::R_HIP_YAW_PITCH + i]);
   }
   return true;
 }
-
-// struct JointCalibCapture{
-//    NaoPose<float> pose;
-//    Correspondance3D2DList capturedCorrespondances;
-//};
 
 /**
  * @brief The JointCalibCaptureEvalT struct
@@ -92,7 +101,7 @@ struct JointCalibCaptureEvalT {
   SUPPORT_FOOT sf;
   Camera camName;
 
-  JointCalibCaptureEvalT(const CorrespondanceList &correspondances,
+  JointCalibCaptureEvalT(const CorrespondanceList correspondances,
                          const rawPoseT &pose, const Camera camName,
                          const SUPPORT_FOOT sf)
       : capturedCorrespondances(correspondances), pose(pose), sf(sf),
@@ -134,13 +143,13 @@ struct Functor {
   typedef Eigen::Matrix<Scalar, ValuesAtCompileTime, InputsAtCompileTime>
       JacobianType;
 
-  int n_inputs, m_values;
+  size_t n_inputs, m_values;
 
   Functor() : n_inputs(InputsAtCompileTime), m_values(ValuesAtCompileTime) {}
-  Functor(int inputs, int values) : n_inputs(inputs), m_values(values) {}
+  Functor(size_t inputs, size_t values) : n_inputs(inputs), m_values(values) {}
 
-  int inputs() const { return n_inputs; }
-  int values() const { return m_values; }
+  size_t inputs() const { return n_inputs; }
+  size_t values() const { return m_values; }
 };
 
 /**
@@ -150,7 +159,7 @@ struct JointCalibrator : Functor<float> {
 
   const CaptureList captureList;
   const size_t captureDataSetSize;
-  const NaoJointAndSensorModel naoModel;
+  const NaoJointAndSensorModelConfig cfg;
 
   /**
    * @brief operator () Almost the flavour liked by Eigen's solvers
@@ -159,28 +168,29 @@ struct JointCalibrator : Functor<float> {
    * @return state of the function.
    */
   int operator()(const std::vector<float> &calibrationValsStdVec,
-                 Eigen::VectorXf &errorVec) const {
-    auto tempModel = NaoJointAndSensorModel(naoModel);
+                 ValueType &errorVec) const {
 
-    tempModel.setCalibValues(calibrationValsStdVec);
-    //        long totalErrVecSize = 0;
-    //        error.resize(capture.);
-    //        rawPoseListT errorVecVec(captureList.size());
-
-    for (size_t capIdx = 0, iter = 0; capIdx < captureList.size(); capIdx++) {
-      const auto &capture = captureList[capIdx];
+    Eigen::Index iter = 0;
+    for (const auto &capture : captureList) {
       //            auto & errorAtCap = errorVecVec[capIdx];
       //            errorAtCap.reserve(capture.capturedCorrespondances.size());
       const auto &camName = capture.camName;
 
-      tempModel.setPoseCamUpdateOnly(capture.pose, capture.sf, capture.camName);
+      auto naoJointSensorModel = NaoJointAndSensorModel(cfg);
+      naoJointSensorModel.setCalibValues(calibrationValsStdVec);
+      naoJointSensorModel.setPose(capture.pose, capture.sf);
+      //      Vector2d accum;
       for (const auto &correspondance : capture.capturedCorrespondances) {
         Vector2f error(0, 0);
 
-        tempModel.robotToPixelFlt(camName, correspondance.first, error);
+        naoJointSensorModel.robotToPixelFlt(camName, correspondance.first,
+                                            error);
         error = correspondance.second - error;
-        errorVec(iter++) = error.x();
-        errorVec(iter++) = error.y();
+        //        errorVec(iter) = static_cast<Scalar>(error.norm());
+        errorVec(iter) = static_cast<Scalar>(error.x());
+        ++iter;
+        errorVec(iter) = static_cast<Scalar>(error.y());
+        ++iter;
       }
     }
     return 0;
@@ -195,44 +205,13 @@ struct JointCalibrator : Functor<float> {
    * @param errorVec residual vector
    * @return return of above func
    */
-  int operator()(const Eigen::VectorXf &calibrationVals,
-                 Eigen::VectorXf &errorVec) const {
+  int operator()(const InputType &calibrationVals, ValueType &errorVec) const {
     rawPoseT calibrationValsStdVec(JOINTS::JOINT::JOINTS_MAX);
-    jointCalibParamsToRawPose(calibrationVals, calibrationValsStdVec);
-    return this->operator()(calibrationValsStdVec, errorVec);
-  }
-
-  /**
-   * @brief operator () Simpler varient for typical Least Square
-   * @param calibrationVals std::vector with test params
-   * @return sum of error squared
-   */
-  double operator()(const std::vector<float> &calibrationVals) const {
-    double out;
-
-    auto tempModel = NaoJointAndSensorModel(naoModel);
-    auto imSize = tempModel.getImSize();
-
-    tempModel.setCalibValues(calibrationVals);
-    //        long totalErrVecSize = 0;
-    //        error.resize(capture.);
-    //        rawPoseListT errorVecVec(captureList.size());
-
-    for (size_t capIdx = 0; capIdx < captureList.size(); capIdx++) {
-      const auto &capture = captureList[capIdx];
-      //            auto & errorAtCap = errorVecVec[capIdx];
-      //            errorAtCap.reserve(capture.capturedCorrespondances.size());
-      const auto &camName = capture.camName;
-
-      tempModel.setPoseCamUpdateOnly(capture.pose, capture.sf, capture.camName);
-      for (const auto &correspondance : capture.capturedCorrespondances) {
-        Vector2f error(0, 0);
-        tempModel.robotToPixelFlt(camName, correspondance.first, error);
-        error = correspondance.second - error;
-        out += error.squaredNorm();
-      }
+    if (!jointCalibParamsToRawPose<Scalar, float>(calibrationVals,
+                                                  calibrationValsStdVec)) {
+      std::cerr << "Yelp" << std::endl;
     }
-    return out;
+    return this->operator()(calibrationValsStdVec, errorVec);
   }
 
   /**
@@ -240,18 +219,19 @@ struct JointCalibrator : Functor<float> {
    * @param captures captures - 3d-2d correspondances
    * @param model naoJoint model
    */
-  JointCalibrator(CaptureList &captures, NaoJointAndSensorModel &model)
-      : captureList(captures),
+  JointCalibrator(CaptureList &captures, NaoJointAndSensorModelConfig cfg)
+      : Functor(COMPACT_JOINT_CALIB_PARAM_COUNT,
+                [=]() -> size_t {
+                  size_t temp = 0;
+                  for (const auto &cap : captures) {
+                    temp += cap.capturedCorrespondances.size() * 2;
+                  }
+                  return temp;
+                }()),
+        captureList(captures),
         // This nasty chunk get total element count via a lambda and return to
         // the int.
-        captureDataSetSize([=]() -> size_t {
-          size_t temp = 0;
-          for (auto &elem : captures) {
-            temp += elem.capturedCorrespondances.size() * 2;
-          }
-          return temp;
-        }()),
-        naoModel(model) {}
+        captureDataSetSize(Functor::values()), cfg(cfg) {}
 
   // Means the parameter count = 26~ in our case
   int inputs() const { return COMPACT_JOINT_CALIB_PARAM_COUNT; }

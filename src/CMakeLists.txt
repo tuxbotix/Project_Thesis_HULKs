@@ -78,9 +78,14 @@ add_executable(${test3} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADER
 target_link_libraries(${test3} observability utils naoPose tuhh)
 
 # Obs Tests
-set(test4 calibSolverTest)
-add_executable(${test4} tests/JointCalibSolverTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
-target_link_libraries(${test4} observability utils naoPose tuhh)
+#set(test4 calibSolverTest)
+#add_executable(${test4} tests/JointCalibSolverTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+#target_link_libraries(${test4} observability utils naoPose tuhh)
+
+# Joint error data generator
+set(dataGen jointErrorGen)
+add_executable(${dataGen} tests/JointErrorGeneration.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+target_link_libraries(${dataGen} observability utils naoPose tuhh)
 
 ### Post build
 
@@ -91,3 +96,5 @@ configure_file(configuration/limits_r.json configuration/)
 configure_file(configuration/simGridEvalConf.json configuration/)
 configure_file(configuration/cameraObsModelConf.json configuration/)
 configure_file(configuration/poseFilterConf.json configuration/)
+# test data
+configure_file(tests/test_data/l_1000_jointErrors.txt test_data/)

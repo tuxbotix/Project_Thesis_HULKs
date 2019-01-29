@@ -25,7 +25,7 @@ const double TOL = 0.999;
 
 /* Aliases */
 using PoseMap = std::map<size_t, poseAndRawAngleT>;
-using InteractionCostType = int64_t;
+using InteractionCostType = double;
 using InteractionCost =
     Eigen::Array<InteractionCostType, TOT_AMBIGUITY_COMBOS, 1>;
 using PoseInteractionId = std::pair<size_t, size_t>; // id1, id2 in order
@@ -685,8 +685,9 @@ bool poseToPoseChaining(const PoseInteraction &rootInteraction,
       }
     }
 
-    if (curMinCostCount < minTotalCount ||
-        (curMinCostCount == minTotalCount && curMinTotalCost < minTotalCost)) {
+    if (levelIdx > 3 &&
+        (curMinCostCount < minTotalCount || (curMinCostCount == minTotalCount &&
+                                             curMinTotalCost < minTotalCost))) {
       std::cout
           << "Attempted level " << levelIdx + 1
           << " No convergence; exiting chaining. cCount, cost, mCount, cost"
