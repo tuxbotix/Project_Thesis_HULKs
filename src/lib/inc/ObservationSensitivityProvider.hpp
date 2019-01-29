@@ -34,7 +34,6 @@ private:
             imSize, fc, cc, fov, dimensionExtremum, maxGridPointsPerSide,
             gridSpacing)),
         sensorNames(sensors) {
-    std::cout << "construction done";
   }
 
   /**
