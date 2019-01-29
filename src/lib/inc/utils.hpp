@@ -320,7 +320,7 @@ inline T getIndexUpperTriangle(const size_t &i, const size_t &j,
  * An array of triangular numbers.
  */
 static const std::array<size_t, 30> TRIANGLE_NUMS_30 = []() {
-  std::array<size_t, 30> vals;
+  std::array<size_t, 30> vals = {};
   for (size_t i = 0; i < vals.size(); i++) {
     vals[i] = getTriangleNum(i);
   }

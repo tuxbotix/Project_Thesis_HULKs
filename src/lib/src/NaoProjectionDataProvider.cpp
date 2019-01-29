@@ -13,7 +13,7 @@
  * Instead rely on assumption support foot is firmly on ground.
  */
 
-KinematicMatrix
+const KinematicMatrix
 NaoSensorDataProvider::getTorso2Ground(const KinematicMatrix &supFoot2torso) {
   /// torso2ground
   auto foot2torsoRotM = supFoot2torso.rotM.toRotationMatrix();
@@ -26,7 +26,7 @@ NaoSensorDataProvider::getTorso2Ground(const KinematicMatrix &supFoot2torso) {
   return torso2ground;
 }
 
-KinematicMatrix
+const KinematicMatrix
 NaoSensorDataProvider::getSupportFootMatrix(const std::vector<float> &angles,
                                             const SUPPORT_FOOT &sf) {
   KinematicMatrix supFoot2Torso;
@@ -117,7 +117,7 @@ void NaoSensorDataProvider::updatedCameraMatrix(
   cameraMatrix_.valid = true;
 }
 
-std::vector<std::pair<Vector2f, Vector2f>>
+const std::vector<std::pair<Vector2f, Vector2f>>
 NaoSensorDataProvider::getFilteredCorrespondancePairs(
     const VecVector2<float> &baseline,
     const std::vector<std::pair<bool, Vector2f>> &meas) {
@@ -139,7 +139,7 @@ NaoSensorDataProvider::getFilteredCorrespondancePairs(
   return output;
 }
 
-VecVector2<float> NaoSensorDataProvider::filterRobot2PixelSets(
+const VecVector2<float> NaoSensorDataProvider::filterRobot2PixelSets(
     const std::vector<std::pair<bool, Vector2f>> &vec) {
   VecVector2<float> output;
   for (const auto &i : vec) {

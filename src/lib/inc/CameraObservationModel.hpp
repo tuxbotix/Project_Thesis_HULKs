@@ -72,7 +72,7 @@ public:
    * Get observability (sensitivity?) of a given joint for a given camera at a
    * given pose
    */
-  Vector3f getSensitivityForJointForCamera(
+  const Vector3f getSensitivityForJointForCamera(
       const JOINTS::JOINT &joint, const rawPoseT &jointAngles,
       const SUPPORT_FOOT &sf, const VecVector2<float> &grid,
       const VecVector2<float> &baselinePoints, const Camera &sensorName,
@@ -82,14 +82,14 @@ public:
    * Get observability (sensitivity?) of each joint for a given camera at a
    * given pose
    */
-  PoseSensitivity<Vector3f>
+  const PoseSensitivity<Vector3f>
   getSensitivitiesForCamera(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
                             const SENSOR_NAME &sensorName);
 
   /**
    * Get sensitivities for each joint and each sensor
    */
-  std::vector<PoseSensitivity<Vector3f>>
+  const std::vector<PoseSensitivity<Vector3f>>
   getSensitivities(const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
                    const std::vector<SENSOR_NAME> &sensorNames);
 };

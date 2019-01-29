@@ -48,14 +48,14 @@ CameraObservationModel::CameraObservationModel(
 void CameraObservationModel::updateState(const rawPoseT &jointAngles,
                                          const SUPPORT_FOOT &sf,
                                          const Camera &camName) {
-  naoJointSensorModel.setPoseCamUpdateOnly(jointAngles, sf, camName);
+  naoJointSensorModel.setPoseCamUpdateOnly(jointAngles, sf, {camName});
 }
 
 /**
  * Get observability (sensitivity?) of a given joint for a given camera at a
  * given pose
  */
-Vector3f CameraObservationModel::getSensitivityForJointForCamera(
+const Vector3f CameraObservationModel::getSensitivityForJointForCamera(
     const JOINTS::JOINT &joint, const rawPoseT &jointAngles,
     const SUPPORT_FOOT &sf, const VecVector2<float> &grid,
     const VecVector2<float> &baselinePoints, const Camera &camName,
@@ -122,7 +122,8 @@ Vector3f CameraObservationModel::getSensitivityForJointForCamera(
  * Get observability (sensitivity?) of each joint for a given camera at a given
  * pose
  */
-PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(
+const PoseSensitivity<Vector3f>
+CameraObservationModel::getSensitivitiesForCamera(
     const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
     const SENSOR_NAME &sensorName) {
   if (sensorName != SENSOR_NAME::TOP_CAMERA &&
@@ -192,7 +193,8 @@ PoseSensitivity<Vector3f> CameraObservationModel::getSensitivitiesForCamera(
 /**
  * Get sensitivities for each joint and each sensor
  */
-std::vector<PoseSensitivity<Vector3f>> CameraObservationModel::getSensitivities(
+const std::vector<PoseSensitivity<Vector3f>>
+CameraObservationModel::getSensitivities(
     const rawPoseT &jointAngles, const SUPPORT_FOOT &sf,
     const std::vector<SENSOR_NAME> &sensorNames) {
   std::vector<PoseSensitivity<Vector3f>> output;

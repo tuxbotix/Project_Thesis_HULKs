@@ -1,6 +1,6 @@
 {
     "imSize": [640, 480],
-    "gridSideCount": 50,
+    "gridSizeLength": 2.0,// meters, 1.1~ max enough top cam
     "gridSpacing": 0.05,
     "dimensionExtremum": 1000
 }

@@ -16,6 +16,9 @@
 #include <Tools/Storage/Image.hpp>
 #include <Tools/Storage/Image422.hpp>
 
+#include <cxxopts/include/cxxopts.hpp>
+
+#include "MiniConfigHandle.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
 #include "NaoTorsoPose.hpp"
@@ -68,8 +71,17 @@ void sensitivityTesterFunc(const ObservationModelConfig cfg,
 }
 
 int main(int argc, char **argv) {
-  std::string inFileName((argc > 1 ? argv[1] : "out"));
-  std::string confRoot((argc > 2 ? argv[2] : "../../nao/home/"));
+
+  cxxopts::Options options("PoseFilter - Filter and link poses to hopefully "
+                           "give the best pose set");
+  options.add_options()("f,file-prefix", "I/O File prefix",
+                        cxxopts::value<std::string>())(
+      "c,confRoot", "Conf path",
+      cxxopts::value<std::string>()->default_value("../../nao/home/"));
+
+  auto result = options.parse(argc, argv);
+  std::string inFileName = result["file-prefix"].as<std::string>();
+  std::string confRoot = result["confRoot"].as<std::string>();
 
   const std::string outFileName(inFileName + "_ExtractedSensitivities");
 
@@ -82,10 +94,6 @@ int main(int argc, char **argv) {
   tuhhInstance.config_.get("Projection", "top_fc") >> fc;
   tuhhInstance.config_.get("Projection", "top_cc") >> cc;
   tuhhInstance.config_.get("Projection", "fov") >> fov;
-
-  Vector2i imSize(640, 480);
-
-  size_t maxGridPointsPerSide = 20;
 
   std::cout << "init" << std::endl;
 
@@ -114,15 +122,34 @@ int main(int argc, char **argv) {
     std::vector<std::atomic<size_t>> sensitivityCount(usableThreads);
     std::vector<std::fstream> outputFileList(usableThreads);
 
+    /// observerModel config (to get grpound grid info, etc)
+    Uni::Value obsModelConfig;
+    if (!MiniConfigHandle::mountFile("configuration/cameraObsModelConf.json",
+                                     obsModelConfig)) {
+      std::cout << "couldn't open the conf file" << std::endl;
+      exit(1);
+    }
+
+    Vector2i imSize;
+    size_t maxGridPointsPerSide;
+    size_t dimensionExtremum;
+    float gridSpacing;
+    obsModelConfig["imSize"] >> imSize;
+    obsModelConfig["gridSpacing"] >> gridSpacing;
+    maxGridPointsPerSide = static_cast<size_t>(std::ceil(
+        static_cast<float>(obsModelConfig["gridSizeLength"].asDouble()) /
+        gridSpacing));
+    obsModelConfig["dimensionExtremum"] >> dimensionExtremum;
+
     const ObservationModelConfig cfg = {
         imSize,
         fc,
         cc,
         fov,
         {SENSOR_NAME::BOTTOM_CAMERA, SENSOR_NAME::TOP_CAMERA},
-        1000,
+        dimensionExtremum,
         maxGridPointsPerSide,
-        0.08};
+        gridSpacing};
 
     for (unsigned int i = 0; i < usableThreads; i++) {
       outputFileList[i] = std::fstream(

@@ -16,6 +16,8 @@
 #include <Tools/Storage/Image.hpp>
 #include <Tools/Storage/Image422.hpp>
 
+#include <cxxopts/include/cxxopts.hpp>
+
 #include "MiniConfigHandle.hpp"
 #include "NaoPoseInfo.hpp"
 #include "NaoStability.hpp"
@@ -46,9 +48,9 @@ public:
   Vector2f minHeadYawPitch;
   Vector2f maxHeadYawPitch;
   Vector2f incHeadYawPitch;
-  std::array<Vector3f, 4> min;
-  std::array<Vector3f, 4> max;
-  std::array<Vector3f, 4> inc;
+  std::array<Vector3f, 4> min = {};
+  std::array<Vector3f, 4> max = {};
+  std::array<Vector3f, 4> inc = {};
 
   inline void getHeadYawLimits(dataT &minLim, dataT &maxLim,
                                dataT &increment) const // 8
@@ -224,9 +226,21 @@ void jointIterFuncWithLim(
 }
 
 int main(int argc, char **argv) {
-  std::string outFileName((argc > 1 ? argv[1] : "out"));
-  std::string supportFootName((argc > 2 ? argv[2] : "d"));
-  std::string confRoot((argc > 3 ? argv[3] : "../../nao/home/"));
+
+  cxxopts::Options options("PoseFilter - Filter and link poses to hopefully "
+                           "give the best pose set");
+  options.add_options()("f,file-prefix", "I/O File prefix",
+                        cxxopts::value<std::string>())(
+      "s,supportFoot", "support foot",
+      cxxopts::value<std::string>()->default_value("d"))(
+      "c,confRoot", "Conf path",
+      cxxopts::value<std::string>()->default_value("../../nao/home/"));
+
+  auto result = options.parse(argc, argv);
+  std::string outFileName = result["file-prefix"].as<std::string>();
+
+  std::string confRoot = result["confRoot"].as<std::string>();
+  std::string supportFootName = result["supportFoot"].as<std::string>();
 
   SUPPORT_FOOT supportFoot = SUPPORT_FOOT::SF_DOUBLE;
   if (supportFootName.compare("l") == 0) {

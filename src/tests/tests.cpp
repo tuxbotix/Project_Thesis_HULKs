@@ -36,9 +36,9 @@ public:
   Vector2f minHeadYawPitch;
   Vector2f maxHeadYawPitch;
   Vector2f incHeadYawPitch;
-  std::array<Vector3f, 4> min;
-  std::array<Vector3f, 4> max;
-  std::array<Vector3f, 4> inc;
+  std::array<Vector3f, 4> min = {};
+  std::array<Vector3f, 4> max = {};
+  std::array<Vector3f, 4> inc = {};
 
   inline void getHeadYawLimits(dataT &minLim, dataT &maxLim,
                                dataT &increment) const // 8

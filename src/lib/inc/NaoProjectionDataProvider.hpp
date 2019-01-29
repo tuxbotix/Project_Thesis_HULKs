@@ -16,7 +16,8 @@
  */
 
 class NaoSensorDataProvider {
-  static KinematicMatrix getTorso2Ground(const KinematicMatrix &supFoot2torso);
+  const static KinematicMatrix
+  getTorso2Ground(const KinematicMatrix &supFoot2torso);
 
   inline static KinematicMatrix
   getHeadToTorso(const std::vector<float> &angles) {
@@ -24,8 +25,9 @@ class NaoSensorDataProvider {
   }
 
 public:
-  static KinematicMatrix getSupportFootMatrix(const std::vector<float> &angles,
-                                              const SUPPORT_FOOT &sf);
+  const static KinematicMatrix
+  getSupportFootMatrix(const std::vector<float> &angles,
+                       const SUPPORT_FOOT &sf);
   static void
   updatedCameraMatrix(const std::vector<float> &angles, const SUPPORT_FOOT &sf,
                       CameraMatrix &cameraMatrix_, const Camera &camera,
@@ -45,7 +47,7 @@ public:
   /**
    * Filter correspondance pairs
    */
-  static std::vector<std::pair<Vector2f, Vector2f>>
+  const static std::vector<std::pair<Vector2f, Vector2f>>
   getFilteredCorrespondancePairs(
       const VecVector2<float> &baseline,
       const std::vector<std::pair<bool, Vector2f>> &meas);
@@ -53,6 +55,6 @@ public:
   /**
    * Filter out bad robot2Pixel converts
    */
-  static VecVector2<float>
+  const static VecVector2<float>
   filterRobot2PixelSets(const std::vector<std::pair<bool, Vector2f>> &vec);
 };

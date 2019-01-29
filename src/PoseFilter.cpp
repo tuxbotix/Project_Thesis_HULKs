@@ -444,7 +444,7 @@ int main(int argc, char **argv) {
 
   // threads -> sensors -> joints -> peakList (PerJointPerSensorPerThread)
   std::vector<std::vector<PoseCost>> poseCostListList(usableThreads);
-  SensorWeights sensorMagnitudeWeights;
+  SensorWeights sensorMagnitudeWeights = {};
   sensorMagnitudeWeights.fill(2);
 
   if (favouredSensor.compare("t") == 0) {
@@ -457,7 +457,7 @@ int main(int argc, char **argv) {
   }
 
   // TODO change this as needed.
-  JointWeights jointWeights;
+  JointWeights jointWeights = {};
   jointWeights.fill(1);
   if (jointNum > 0 && jointNum < static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
     jointWeights[static_cast<size_t>(jointNum)] = 4;
