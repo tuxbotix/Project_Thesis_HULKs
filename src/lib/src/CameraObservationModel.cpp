@@ -35,8 +35,8 @@ CameraObservationModel::CameraObservationModel(
     const size_t &maxGridPointsPerSide, const float &gridSpacing)
     : // maxGridPointsPerSide(maxGridPointsPerSide),
       maxValPerDim(dimensionExtremum),
-      imSize(imSize), deltaThetaCorse(5.0f * TO_RAD),
-      deltaThetaFine(1.0f * TO_RAD),
+      imSize(imSize), deltaThetaCorse(5.0f * TO_RAD_FLT),
+      deltaThetaFine(1.0f * TO_RAD_FLT),
       naoJointSensorModel(imSize, fc, cc, fov, maxGridPointsPerSide,
                           gridSpacing)
 // gridSpacing(gridSpacing),
@@ -83,11 +83,11 @@ const Vector3f CameraObservationModel::getSensitivityForJointForCamera(
     status = ObservationSolvers::get2dPose(baselineToObsList, output);
   }
 
-  if (abs(output.x()) > imSize.x() || abs(output.y()) > imSize.y() ||
-      abs(utils::constrainAngle180(output.z())) > 90) {
+  if (std::abs(output.x()) > imSize.x() || std::abs(output.y()) > imSize.y() ||
+      std::abs(utils::constrainAngle180(output.z())) > 90) {
     std::lock_guard<std::mutex> lock(utils::mtx_cout_);
     std::cout << "dimension Limit violation!!! j->" << joint << " " << sf << " "
-              << (int)camName;
+              << static_cast<int>(camName);
     for (auto &i : jointAngles) {
       std::cout << " " << i;
     }
@@ -101,7 +101,7 @@ const Vector3f CameraObservationModel::getSensitivityForJointForCamera(
   // or if norm of output is smaller than epsilon, = no obs.
   observed = (status > 0 && output.norm() > __FLT_EPSILON__);
 
-  /* constrain output +-maxValPerDim and norm(output) <= abs(maxValPerDim)
+  /* constrain output +-maxValPerDim and norm(output) <= std::abs(maxValPerDim)
    * 1st scale each dimension to +- maxValPerDim
    * 2nd Normalize and multiply by 1000 :P
    * This is written in a strange way, to reduce loosing too much precision.
@@ -111,9 +111,11 @@ const Vector3f CameraObservationModel::getSensitivityForJointForCamera(
   output.z() =
       std::floor(maxValPerDim * utils::constrainAngle180(output.z()) / 180.0f);
 
-  // clamp, maxDim * 10 is absolute max. limit :P
-  output.x() = clamp(output.x(), -(float)maxValPerDim, (float)maxValPerDim);
-  output.y() = clamp(output.y(), -(float)maxValPerDim, (float)maxValPerDim);
+  // clamp, maxDim * 10 is std::absolute max. limit :P
+  output.x() = clamp(output.x(), -static_cast<float>(maxValPerDim),
+                     static_cast<float>(maxValPerDim));
+  output.y() = clamp(output.y(), -static_cast<float>(maxValPerDim),
+                     static_cast<float>(maxValPerDim));
 
   return output;
 }

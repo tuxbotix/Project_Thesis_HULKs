@@ -125,6 +125,9 @@ public:
     }
     return outputStream;
   }
+  inline std::istream & read(std::istream &input){
+
+  }
   inline friend std::istream &operator>>(std::istream &in, PoseSensitivity &p) {
     for (size_t i = 0; i < p.observationMask.size(); i++) {
       p.observationMask[i] = false;

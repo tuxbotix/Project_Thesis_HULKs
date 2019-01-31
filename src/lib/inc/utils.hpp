@@ -149,18 +149,18 @@ std::string getISOTimeString();
 
 std::string getMilliSecondsString();
 
-inline double constrainAngle180(double x) {
-  x = fmod(x + 180, 360);
-  if (x < 0)
-    x += 360;
-  return x - 180;
+template <typename T> inline T constrainAngle180(const T &x) {
+  T v = fmod(x + 180, 360);
+  if (v < 0)
+    v += 360;
+  return v - 180;
 }
 
-inline double constrainAngle360(double x) {
-  x = fmod(x, 360);
-  if (x < 0)
-    x += 360;
-  return x;
+template <typename T> inline double constrainAngle360(const T &x) {
+  T v = fmod(x, 360);
+  if (v < 0)
+    v += 360;
+  return v;
 }
 
 template <typename T>
