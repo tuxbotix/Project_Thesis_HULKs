@@ -25,7 +25,7 @@ const double TOL = 0.999;
 
 /* Aliases */
 using PoseMap = std::map<size_t, poseAndRawAngleT>;
-using InteractionCostType = double;
+using InteractionCostType = int64_t;
 using InteractionCost =
     Eigen::Array<InteractionCostType, TOT_AMBIGUITY_COMBOS, 1>;
 using PoseInteractionId = std::pair<size_t, size_t>; // id1, id2 in order
