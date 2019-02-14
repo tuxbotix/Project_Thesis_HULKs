@@ -9,21 +9,23 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy import asarray as ar,exp
+from scipy import asarray as ar, exp
 from matplotlib import cm
 
-def gaus(x,a,x0,sigma):
-    return a*exp(-(x-x0)**2/(2*sigma**2))
+
+def gaus(x, a, x0, sigma):
+    return a * exp(-(x - x0)**2 / (2 * sigma**2))
+
 
 def fitGauss(data):
     x = data[:, 0]
     y = data[:, 1]
     n = len(x)
-    mean = sum(x*y)/n
-    sigma = sum(y*(x-mean)**2)/n
+    mean = sum(x * y) / n
+    sigma = sum(y * (x - mean)**2) / n
 
-    return curve_fit(gaus, x, y ,p0 = [1, mean, sigma])
-    
+    return curve_fit(gaus, x, y, p0=[1, mean, sigma])
+
 
 origResX = np.loadtxt("/tmp/originalResidualX", delimiter=',')
 origResY = np.loadtxt("/tmp/originalResidualY", delimiter=',')
@@ -31,25 +33,28 @@ origResY = np.loadtxt("/tmp/originalResidualY", delimiter=',')
 calibResX = np.loadtxt("/tmp/calibratedResidualX", delimiter=',')
 calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
 
-calibJointRes = np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')
-unCalibJointRes = np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')
+calibJointRes = np.array(np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')).transpose()
+unCalibJointRes = np.array(np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')).transpose()
 
 #unCalibJointRes[:, 0] *= (180 / math.pi)
+
+print(len(calibJointRes))
+
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()
 
+maxCalResX = max(calibResX[:, 0].max(), calibResY[:, 0].max()) * 1.1
 maxCalResY = max(calibResX[:, 1].max(), calibResY[:, 1].max()) * 1.1
 maxOrigResY = max(origResX[:, 1].max(), origResY[:, 1].max()) * 1.1
 maxOrigResX = max(origResX[:, 0].max(), origResY[:, 0].max()) * 1.1
 
-maxCalResX = max(calibResX[:, 0].max(), calibResY[:, 0].max()) * 1.1
 
-maxCalJointResX = max(calibJointRes[:, 0].max(), calibJointRes[:, 0].max()) * 1.1
-maxCalJointResY = max(calibJointRes[:, 1].max(), calibJointRes[:, 1].max()) * 1.1
-maxUnCalJointResX = max(unCalibJointRes[:, 0].max(), unCalibJointRes[:, 0].max()) * 1.1
-maxUnCalJointResY = max(unCalibJointRes[:, 1].max(), unCalibJointRes[:, 1].max()) * 1.1
-maxAllUncalibY = max(maxOrigResY, maxUnCalJointResY)
+# maxCalJointResX = max(calibJointRes[:, 0].max(), calibJointRes[:, 0].max()) * 1.1
+# maxCalJointResY = max(calibJointRes[:, 1].max(), calibJointRes[:, 1].max()) * 1.1
+# maxUnCalJointResX = max(unCalibJointRes[:, 0].max(), unCalibJointRes[:, 0].max()) * 1.1
+# maxUnCalJointResY = max(unCalibJointRes[:, 1].max(), unCalibJointRes[:, 1].max()) * 1.1
+maxAllUncalibY = max(maxOrigResY, 0)
 
 ax = axs[0]
 
@@ -86,36 +91,40 @@ ax.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
 
 ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
 #print("Y std dev and mean", popt[1:])
-    
+
+print("box1")
 ax = axs[2]
 ax.set_title('Joint error distribution before calibration')
-ax.plot(unCalibJointRes[:, 0], unCalibJointRes[:, 1], 1, label='Raw')
-ax.axis([-maxUnCalJointResX, maxUnCalJointResX, -0.02, maxAllUncalibY])
+ax.violinplot(unCalibJointRes)
+# ax.plot(unCalibJointRes[:, 0], unCalibJointRes[:, 1], 1, label='Raw')
+# ax.axis([-maxUnCalJointResX, maxUnCalJointResX, -0.02, maxAllUncalibY])
 
 ax = axs[5]
 #popt,pcov = fitGauss(calibJointRes)
 ax.set_title('Joint error distribution after calibration')
-ax.plot(calibJointRes[:, 0], calibJointRes[:, 1], 1, label='Raw')
+
+ax.boxplot(calibJointRes)
+# ax.plot(calibJointRes[:, 0], calibJointRes[:, 1], 1, label='Raw')
 
 
 #ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
 #ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
 #ax.plot(calibJointRes[:, 0], gaus(calibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
 
-ax.axis([-maxCalJointResX, maxCalJointResX, -0.02, maxCalJointResY])
+# ax.axis([-maxCalJointResX, maxCalJointResX, -0.02, maxCalJointResY])
 #print("Y std dev and mean", popt[1:])
 
 
 # n, bins, patches = plt.hist(val[:,1], 50, density=True, facecolor='r', alpha=0.75)
-#val.size()
-#plt.plot(val)
+# val.size()
+# plt.plot(val)
 
 
 # In[ ]:
 
 plt.show()
 
-### Scatter plots
+# Scatter plots
 
 
 def prepFor2DHist(x, y, valX, valY):
@@ -127,13 +136,14 @@ def prepFor2DHist(x, y, valX, valY):
     __lenX = len(x)
     __lenY = len(y)
     __Z = [[]] * __lenY
-    
+
 #     __Z = valX * valY
 #     print(__Z)
     for idxY in range(0, __lenY):
         __Z[idxY] = valX * valY[idxY]
 #         __Z[idxY] = [0] * __lenX
-    return __X,__Y,np.array(__Z)
+    return __X, __Y, np.array(__Z)
+
 
 def doHist(plotAxis, fig, XHistData, YHistData):
     xAxis = XHistData[:, 0]
@@ -141,27 +151,29 @@ def doHist(plotAxis, fig, XHistData, YHistData):
     xVals = XHistData[:, 1]
     yVals = YHistData[:, 1]
 
-    newX, newY, newZ = prepFor2DHist(origResX[:, 0], origResY[:, 0], origResX[:, 1], origResY[:, 1])
-    
+    newX, newY, newZ = prepFor2DHist(
+        origResX[:, 0], origResY[:, 0], origResX[:, 1], origResY[:, 1])
+
     newZTot = newZ.sum()
-    newZ = newZ * 10000 / newZTot 
-    
+    newZ = newZ * 10000 / newZTot
+
     xAxLim = max(abs(xAxis.min()), xAxis.max()) * 1.1
     yAxLim = max(abs(yAxis.min()), yAxis.max()) * 1.1
     zMin = newZ.min()
     zMax = newZ.max()
-    
+
     print(zMin, zMax)
 
     im = ax.imshow(newZ, interpolation='bilinear',
-               origin='lower', extent=[-xAxLim, xAxLim, -yAxLim, xAxLim],
-               vmax=zMax, vmin=zMin)
-    #Plot the surface.
+                   origin='lower', extent=[-xAxLim, xAxLim, -yAxLim, xAxLim],
+                   vmax=zMax, vmin=zMin)
+    # Plot the surface.
     #fig = plt.figure()
     #ax = fig.gca(projection='3d')
     #im = ax.plot_surface(newX, newY, newZ, cmap=cm.coolwarm)
 
     fig.colorbar(im, ax=ax)
+
 
 fig, _axs = plt.subplots(nrows=2, ncols=1)
 axs = _axs.flatten()
@@ -216,7 +228,7 @@ doHist(ax, fig, calibResX, calibResY)
 
 # plt.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
 # print("Y std dev and mean", popt[1:])
-    
+
 # ax = plt.subplot(233)
 # ax.set_title('Joint error distribution before calib')
 # #plt.plot(origResY[:, 0], origResY[:, 1], 1)
@@ -236,8 +248,8 @@ doHist(ax, fig, calibResX, calibResY)
 
 
 # n, bins, patches = plt.hist(val[:,1], 50, density=True, facecolor='r', alpha=0.75)
-#val.size()
-#plt.plot(val)
+# val.size()
+# plt.plot(val)
 
 
 # In[ ]:
