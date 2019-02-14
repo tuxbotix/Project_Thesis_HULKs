@@ -56,46 +56,35 @@
 % Chapters
 %%%% INTRO %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Introduction}
-\todo{Re-write this}
-Robots are increasingly becoming human-friendly and humanoid robots are already considered for roles from learning tools for children to caring the elderly to play soccer.
 
-The RoboCup was initiated in 1997 as an annual competition in robotics with main focus on playing Soccer.
+Robotics has evolved from caged industrial machines to aesthetically appealing and "smart" robots that aim to be friendly with humans. Their proposed roles range from being learning aids for children to caring the elderly and also to play soccer!.
 
-This thesis is written regarding calibrating NAO, the humanoid robot by Softbank robotics. While the research presented here can be applied to other humanoid and serial robot platforms, the foundations lies in the context of RoboCup, where the team HULKs from Hamburg University of technology (TUHH) participate in the Standard Platform League. In addition to the technical challenges in calibration, the international and competitive nature of RoboCup also make it necessary to consider factors like time to calibrate, logistics. 
+The RoboCup was inaugurated 21 years ago (1997) in Japan as an annual competition in robotics with the vision of robots playing against FIFA champions in the year 2050. It also features  logistics and rescue categories, highlighting  the fact that robots should be able to handle complex environments opposed to highly structured industrial settings in order to successfully interact with humans in day-to-day life.  Since 2008, the Robocup SPL (Standard Platform League) has been using NAO, a 58cm tall humanoid robot by Softbank robotics.
 
-This chapter will introduce more about the RoboCup, the NAO robot and the motivations for this thesis.
+This thesis presents the design, implementation and application of a Camera and Joint calibration process for the NAO, in the context of "HULKs", the SPL team of Hamburg University of Technology. Not only the technical challenges, but also factors like time to calibrate, logistics are also considered due to the varying venues and competitive nature of the world championship.
 
-\section{RoboCup}
-
-With the vision of robots playing against FIFA champions in the year 2050, the RoboCup was inaugurated 21 years ago (1997) in Japan. Currently the tournament hosts multiple leagues of humanoid robot soccer, but also hosts competitions in other areas such as logistics and rescue. The speciality of RoboCup is that not only it is a competition, but it also act as a platform to share research, ideas and implementations (source code, etc) in robotics.
-
-\subsection{The standard Platform League}
-
-The RoboCup Standard Platform League comprise of teams playing against each other using the same type of Hardware. Initially the Sony Aibo robot "dog" was used as the platform and since 2008, the NAO Robot - a Humanoid robot from Softbank Robotics is used. 
-
-\section{The NAO Robotics system}
-
-\todo{Complete this}
+This thesis is organized as follows. \todo{Complete this}
 
 \section{Motivation}
 
-Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic).
+Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic). \todo{Cite TRR}
 
-In the recent years, with the ageing NAO V5 robots it was observed that the joints of the NAO have a significant play and backlash. In certain occasions, the origin of the joint position sensors were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several errors.
+In recent years, with the ageing NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several meters.
 
-Therefore it has come to attention the need for automatic joint error detection and calibration as this also affects the camera extrinsic calibration process.
+Therefore it has come to attention the need for automatic joint error detection and calibration as this also affects camera extrinsic calibration process.
 
-In the past several teams has attempted this with less than satisfactory results and as far as it is known, the only working process seems to be manual measurement and adjustment.
+In the past several teams has attempted automating this with less than satisfactory results and all known processes that appears to work well are manual methods. 
 
 \section{Goals}
 \todo{cleanup}
 The aim of this thesis is to develop a fully or semi-automatic joint and camera calibration. This includes theoretical observer modelling, optimal calibration pose generation, calculation of potential success of calibrating a given joint and the implementation of the necessary tools, modules into the HULKs NAO framework and the debug tooling (which will be extending the current calibration tools).
 
-Investigate current approaches and determine issues with them
+Since the documented automatic calibration attempts does not cover aspects such as observation modelling or handling possible "ambiguities" or Local Minimum cases, these aspects will gain special attention in order to identify factors affecting automated methods to present possible solutions.
 
+\todo{cleanup}
 \begin{itemize}
-	\item Derive a process to determine suitability of a sensors, poses, input data, etc. -> also observer model
-	\item Investigate the suitability of onboard sensors based on the above mentioned process. (at least some joints must be calibrate-able)
+	\item Derive a process to determine suitability of a sensors, poses, input data, etc. This may include observation modelling.
+	\item Investigate the suitability of onboard sensors based on the above mentioned process. (At least some of the joint errors should be correctable)
 	\item Determine the effect of backlash and offsets, level of observation and other factors.
 \end{itemize}
 
@@ -106,9 +95,10 @@ However, it should be noted that the primary goal of this thesis is to provide a
 Due to the vast number of possible avenues and requirements, this thesis is constrained in the following scope.
 
 \begin{itemize}
-	\item Only on-board sensors are evaluated in this thesis
+	\item Intrinsic Camera calibration is not considered, as it doesn't depend on joints. enabling it to function well even without the intended improvements of this research.
+	\item Only on-board sensors are evaluated in this thesis, making Cameras the prime observation sensor.
 	\item Primary testing will be with different levels simulations.
-	\item Once simulation based testing proves feasibility, use real robots.
+	\item Optionally, perform real life testing with robots if and when simulation proves feasibility and there is enough time.
 \end{itemize}
 
 The goal of this thesis is to provide a foundation on observer models, deriving them and a process to determine suitability, Not to calibrate robots to perfection as end result.
@@ -116,10 +106,12 @@ The goal of this thesis is to provide a foundation on observer models, deriving 
 
 %%%% WORKFLOW %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Workflow \& Milestones}
-This chapter describe the goals in details in terms of milestones and the proposed workflow.  The methodology \todo{link to chapter} is followed in this order.
+\label{chap:workflow}
+
+This chapter describe the goals in details in terms of milestones and the proposed workflow.  The methodology \cref{chap:methodology} is followed in this order.
 
 \section{Initial preparations}
-\todo{Intro para.?}
+This step identify and fullfill the prerequicites.
 
 \begin{enumerate}
 	\item Determine which type of errors affect the accuracy of the robot.
@@ -129,8 +121,10 @@ This chapter describe the goals in details in terms of milestones and the propos
 	\item If backlash is not directly observed, a model is needed.
 	\subitem Else; It can be assumed only joint offsets affect the kinematic chain.
 \end{enumerate}
-\section{Observation model and calibration poses}
-\todo{Intro para?}
+
+\section{Observation model}
+In order to identify the ability of sensors under consideration and their observation capability of joint errors, developing  models is proposed.
+
 \begin{enumerate}
 	\item Define and observation model/ framework for joint and camera extrinsic error space.
 	\subitem Some abstraction for obs. models are needed in order for transparent expansion with different sensors in future.
@@ -141,17 +135,28 @@ This chapter describe the goals in details in terms of milestones and the propos
 		\item Using above observation information and other weights, a cost function will be evaluated and "best" poses are chosen.
 	\end{itemize}
 \end{enumerate}
+
 \section{Calibration Process}
-\todo{Intro para?}
+The following tasks aim to derive a calibration process that will use poses obtained by the method proposed in the previous section.
+
 \begin{enumerate}
 	\item Make the robot reach each calibration pose, capture sensor values. (Cameras, joint angles, etc).
 	\subitem the uniqueness of observation direction for each joint at a given pose highly influence quality/ possibility of observing joint error without much ambiguity. This will be further discussed in *state of art* and *methodology*
-	\item Global optimization to determine joint errors and camera extrinsic values.
+	\item Optimization to determine joint errors and camera extrinsic values.
 	\item Based on results of simulation, real world tests can be done.
 \end{enumerate}
 
 \section{Testing and evaluation of calibration poses and process}
-\todo{Complete this??}
+
+Evaluating the outcome of previous stages is done in multitude of manners.
+
+\begin{itemize}
+	\item Unit tests or similar tests to verify data storage, computational methods
+	\item Simulated joint calibration testing with a dense set of captured data (3D-2D correspondences in case of camera) with a suitable population size.
+	\subitem The goal is to verify calibration is possible to a high degree of confidence.
+	\item Simulated testing with relatively sparse set of captured data. This would verify ability to use real world constraints such as using points off a calibration pattern at a given place. It gives a "sparse" data set compared to "dense" data sets taken by a large imaginary grid of points resulting potentially worse calibration despite faster optimization computation.
+	\item If time permits, real world testing with actual NAO robots will be performed in the same manner as the previous method. The only challenge would be reliably obtaining ground truth.
+\end{itemize}
 
 \section{Timeline}
 \todo{Complete this}
@@ -174,6 +179,7 @@ NAO V5 has been the primary version used in the past few years which feature a c
 NAO V6 will be used officially in the upcoming RoboCup, thus it is also a priority to allow the calibration framework to be used with this platform. The cameras are upgraded to higher pixel density and they also feature autofocus (most probably be disabled).
 
 \subsubsection{Joint encoders}
+\label{subsub:jointEncoders}
 
 They feature magnetic incremental encoders with $0.1\degree$ precision. As mentioned previously, these sensors give feedback to closed loop controllers of the joints as well as let the software framework to calculate kinematic matrices. \todo{cite datasheet}
 
@@ -181,19 +187,19 @@ They feature magnetic incremental encoders with $0.1\degree$ precision. As menti
 IMU is also an important element, FSR ... etc. \todo {complete this}
 
 \subsection{HULKs NAO framework}
-This is the software framework developed by HULKs to control the NAO for playing in RoboCup SPL written in C++. It access the robot hardware primarily through several software components provided by SoftBank Robotics. However it access the cameras via kernel driver (V4L2). Due to this difference, two major threads are employed; Vision (+ brain -> perception \& behavior) and Motion. They cycle at 60Hz (30FPS per camera x 2) and 100Hz (rate set by NAOqi - the interface to access hardware). Due to this difference of rates, the synchronization is done with a set of timestamped buffers. For calibration purposes, therefore static poses are desirable for capturing images and joint values to avoid time-synchronization induced shifts. \todo{cleanup}
+This is the software framework developed by HULKs for the NAO to play soccer in RoboCup SPL . It access robot's hardware through several software components provided by SoftBank Robotics. However it access cameras via kernel driver (V4L2). Due to this difference, two major threads are employed; Vision (+ brain -> perception \& behavior) and Motion. They cycle at 60Hz (30FPS per camera x 2) and 100Hz (rate set by NAOqi - the interface to access hardware). Due to this difference of rates, synchronization is done with a set of timestamped buffers. For calibration purposes, therefore static poses are desirable for capturing images and joint values to avoid time-synchronization induced shifts. \todo{cleanup}
 
-The framework also supports debugging and configuration via the Debug tool "MATE" - also developed by HULKs. Further information is present in the Team Research Report.
+The framework also supports debugging and configuration via the Debug tool "MATE" - also developed by HULKs. Further information is present in the Team Research Report. \todo{cite TRR}
 
-This framework includes a module to compensate joint offset errors \todo{cite}. It offsets the joints movement commands by the given value and it also compensate this value from sensor output, so that the Robot doesn't "know" there is an induced offset. \todo{Maybe include a block diagram?}
+This framework includes a module to compensate joint offset errors \todo{cite Code release?}. It offsets the joints movement commands by the given value and it also compensate this value from sensor output, making the robot's perception unaware of induced offsets. \todo{Maybe include a block diagram?}
 
 \section{Camera calibration (extrinsic)}
 Camera calibration is a well researched topic as it is a primary dependency for obtaining good results with camera systems. In this thesis, these standard methods \& tools for intrinsic calibration is employed, while discussion about extrinsic approaches will be given higher regard.
 
 \subsection{Method of HULKs}
 
-The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. The method of operation and usage is explained in detail in the team research report. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (LM).
-\todo{cite HULKS TRR}
+The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (LM). The method of operation and usage is explained in detail in the team research report. \todo{cite HULKS TRR}
+
 \subsection{Other teams}
 The team B-Human employs a method combined with joint calibration \todo{ref section.. and paper}. HTWK-Lepzig employs a method based on the centre circle, their robots gather enough feature points in several poses to solve the non linear equation. Berlin United also employs a similar approach but they do this with the robots in a sit down (unstiffed) pose and they can use all the lines of the entire field as features.
 
@@ -201,41 +207,41 @@ The team B-Human employs a method combined with joint calibration \todo{ref sect
 
 In methods such as photogrammetry, a dense feature set is used to identify the relative position of the camera. In typical intrinsic calibration, a chessboard or similar pattern is used. For extrinsic calibration, the same can be used.
 
-However, one disadvantage with the classic chessboard pattern is that the processing taken for identifying the corners are time consuming. Also majority of openly available algorithms depends on full visibility of the pattern.
-\todo{Improve this. Cite OpenCV Contrib papers. Include figures}
-ChAruco - a hybridization of the classic chessboard and AR markers to achieve fast detection and obtaining 3D points for partially visible patterns. ( Traditional implementations using chessboard relies on having complete visibility of the chessboard).
+However, one disadvantage with the classic chessboard pattern is that the processing taken for identifying the corners are time consuming. ChAruco - a hybridization of the classic chessboard and AR markers to achieve fast detection and obtaining 3D points for partially visible patterns. ( Traditional implementations using chessboard relies on having complete visibility of the chessboard).  \todo{Improve this. Cite OpenCV Contrib papers. Include figures}
 
 \section{Joint calibration}
 This section discuss the fundamentals of Joint errors, reasons for calibration and possible approaches.
 
 \subsection{Joint error types}
-Two major types of joint errors contribute to adverse effects, they are backlash and shift of origin (which cause the joint actuator to point at physically incorrect locations although the sensors sense otherwise). \todo{cite and find most approopriate terminology.}
+\todo{rewrite}
+Two major types of joint errors contribute to adverse effects, they are backlash and shift of origin (which cause the joint actuator to point at physically incorrect locations although the sensors percepts otherwise). \todo{cite and find most appropriate terminology.}
 
-Backlash occurs due to necessary gap between gears (to avoid jamming) as well as wear occurred due to usage. While precision machined gears with hardened surfaces operating with tribologically matched lubrication types can minimize designed backlash and wear rate, this isn't noticeable in case of the NAO as most joints feature plastic gears, multiple reduction stages and the backlash of some joints of even brand new (Observed with V5 refurbished, V6 brand new) robots can be more than one degree. Therefore it can be concluded that the effects of backlash is a major factor and thus possible methods to mitigate this problem has to be investigated.
+Backlash occurs due to necessary gap between gears (to avoid jamming) and wear occurred due to usage. While precision machined gears with hardened surfaces operating with tribologically matched lubrication can minimize designed backlash and wear rate.However, such improvements doesn't appear to be available for the NAO as most of the joints feature plastic gears, multiple reduction stages and backlash of some joints in even brand new (Observed with V5 refurbished, V6 brand new) robots can be more than $1\degree$ . Therefore it can be concluded that effects of backlash is a major factor and thus possible methods to mitigate this problem has to be investigated.
 \todo{add diagrams}
 
-The errors caused by shifted sensor origin can happen due to mechanical shift of the actuator and/ or physical shock damages (multiple such instances observed during RoboCup 2018 with head yaw joint).
+The errors caused by shifted sensor origin can happen due to mechanical shifting of the actuator relative to links and/ or physical shock damages (multiple such instances observed during RoboCup 2018 with head yaw joint).
 
 The calibration can be rather straight forward if the position sensor of a joint can observe the effects of backlash, this means the sensor is connected between the two links the joint is comprised of. Assuming there is no play in rotary or linear axes, it should be possible to measure any backlash of this joint.
 
 However complications arise if the backlash cannot be observed by the joint position sensor (encoder). In this case, a different sensor has to either directly observe the backlash or indirectly observe it by observing the aftereffects of such backlash (ie: change of actual position of end effector relative to base)\todo{add diagram}  In addition, when capturing data it has to be taken into account of the direction of backlash at a given pose (including if floating state). Once the direction of motion/ force is known, it is possible to compensate backlash by applying the appropriate offset - this is the procedure used in machining equipment with non-zero backlash leadscrews.
 
+\todo{move this to methodology}
 In the case of Nao in RoboCup SPL's context, it is possible to simplify the modelling as follows.
 \todo{potential merge with proposed workflow?}
 \begin{itemize}
 	\item Determing if all joint backlash is observable
 	\item if yes, then calibration can only be limited to joint offset errors as effects of backlash are directly measured.
 	\item If not, then the calibration observations must be made in poses similar to what used in RoboCup
-	\item Since almost all behavior depends on bipedal motion and stability, it is safe to use only standing poses. 
-	\item However to improve the accuracy of kicking, another set of separate observations maybe made and applied to identify efffects of backlash for a lifted foot, then during the kick phase \todo{refer trr}, this special set of calibration angles can be introduced.
+	\item Since almost all behaviour depends on bipedal motion and stability, it is safe to use only standing poses. 
+	\item However to improve the accuracy of kicking, another set of separate observations maybe made and applied to identify effects of backlash for a lifted foot, then during the kick phase \todo{refer trr}, this special set of calibration angles can be introduced.
 \end{itemize}
 \todo{add diagrams}
 
 \subsection{Direct measurement}
 
-This approach is commonly used for lathes, milling machines and similar equipment with the use of dial indicators. While this is possible for the NAO as well, the "curvy" nature of the limbs (with almost no easily identifiable reference points) present a massive challenge in employing dial indicator based approaches in a time efficient manner.
+This approach is commonly used for lathes, milling machines and similar equipment with the use of dial indicators. While this is possible for the NAO as well, the "curvy" nature of the limbs (with almost no easily identifiable reference points) present a massive challenge in employing dial indicator based or similar approaches in a time efficient manner.
 
-Another option is using an angle measuring tool or to 3D scan the joint at  two extremes of backlash at a given position and obtain the angle.\todo{Clean up this, possibly give some figures?} But this approach require more specialized equipment, processing power and possibly less portability. However this is a suitable method to obtain ground truth for the purpose of evaluating a particular calibration method. \todo{ references? }
+Another option is using an angle measuring tool or to 3D scan the joint at  two extremes of backlash at a given position and obtain the angle.\todo{Clean up this, possibly give some figures?} But this approach require more specialized equipment, processing power and possibly less portability. Yet this is a suitable method to obtain ground truth for the purpose of evaluating a particular calibration method. \todo{ references? }
 
 \subsection{Indirect measurement}
 Indirect measurement based methods are possibly more practical in the context of NAO robot, as they involve in less specialized sensors or eliminate need to measure each sensor individually.
@@ -253,6 +259,7 @@ Considering the above revelations, observations and feedback gathered from discu
 
 The basis of this observation model takes some of the inspiration from control systems where terms such as partial and full observability are defined. In this instance, the model tries to observe the difference of sensor measurements a joint error cause and the goal is to determine the poses that yield most observation strength. In order to do this fast and accurately, a software representation of the kinematic chain and camera is used, thus this modeling will be done in a simulated setting.
 
+\todo{move to methodology}
 This thesis will focus only on the on board cameras, but abstraction of this concept will make it possible to extend to other sensors as well.
 
 \begin{itemize}
@@ -270,30 +277,29 @@ With the above set of sensitivities per joint per pose, it is possible to sort a
 \subsection{Ambiguities of observations}
 \label{subsec:ambiguities}
 
-Since there are 14 Joints in interest (excluding arms), but only 3 dimensions (simplest model) for the sensitivity in camera based joint error observation model (mentioned in above subsection), there is a high possibility that the sensitivity of multiple joints at a given pose have similar direction vector. This effect will be refered as "ambiguity" for the rest of this thesis.
+Since there are 14 Joints in interest (excluding arms), but only 3 dimensions (simplest model) for the sensitivity in camera based joint error observation model (mentioned in above subsection), there is a high possibility that the sensitivity of multiple joints at a given pose have similar direction vector. This effect will be referred as "ambiguity" for the rest of this thesis.
  
-Due to the above reasons, This is a crucial element that can weigh into the success or failure of this experiment. Therefore, it is important to pre-determine the possible ambiguities of the observations. 
+This is a crucial element that can weigh into the success or failure of this experiment. Therefore, it is important to pre-determine the possible ambiguities of the observations. 
 
-It is already possible to identify possible problem cases by knowledge in inverse kinematics and intuition. For an example, Knee pitch, hip pitch and ankle pitch together may end up causing ambiguities, the reason is the possibility of attaining a given position with more than one possible joint value combination. This is a common case in robotics when there are more joints (that can cover one or more DOF) than degrees of freedom. In addition, the observation inaccuracies can further cloud the calibration solving.
+It is already possible to identify problem cases by knowledge in inverse kinematics and intuition. For an example, Knee, hip and ankle pitch together may end up causing ambiguities, the reason is possibility of attaining a given position with more than one possible joint configuration. This is a common case in robotics when there are more joints (that can cover one or more DOF) than degrees of freedom. In addition, the observation inaccuracies can further cloud the calibration solving.
 
-The evaluation of similarity between two observation directions can be done in multiple ways, one option is cosine similarity. Another is to get difference and norm of it. Also it is possible to simply see if each dimension is close by some amount, etc. Reducing the similarity measure into one dimension has its appeal as it is easier to understand and to write programs to handle this concept.
+The evaluation of similarity between two observation directions can be done in multiple ways, one option is cosine similarity. Another is to get difference and norm of it. Also it is possible to simply see if each dimension is close by some amount, etc. Reducing the similarity measure into one dimension has its appeal as it is easier to understand and write programs to handle this concept.
 
 \todo{More literature and the conclusion to proposed workflow or methodology?}
 
 \section{Computing a pose for a robot}
-This section discuss approaches in deriving "poses" for the robot. In this context, generating a pose means generating the appropriate joint angles or expressing it by means of feet positions relative to torso and head joint angles. (Arms are not moved, will be in 0deg position.)
+This section discuss approaches in deriving "poses" for the robot. In this context, generating a pose means obtaining appropriate joint angles or expressing a pose by means of feet positions relative to torso and head joint angles. (Arms are not moved, will be in 0deg position.)
 
 \subsection{Forward Kinematics}
 
-In this approach, the pose is directly defined in terms of joint angles. The kinematic chain is generated from these angles by means of forward kinematic equations, thus the approach is named after forward kinematics.
+In this approach, the pose is directly defined in terms of joint angles. The kinematic chain is generated by means of forward kinematic equations.
 
-The drawback is that when generating in a brute-force method, it is not possible to directly identify if this pose is safe, stable, etc (these calculations is better defined via kinematic matrices). Also due to this nature it is not possible to directly define a work envelope (work envelope is the 3D region which a robot's links can access).
+The drawback is that when generating in a brute-force method, it is not possible to directly identify if this pose is safe, stable, etc (these calculations is better defined via kinematic matrices). Due to this nature it is also not possible to directly define a work envelope (the region which a robot's links can access).
 
-Finally, such brute force approaches can easily end up with trillions \todo{give correct value} of possible iterations to exhaust entire joint angle space even with 1 degree step size. [ 16~ joints, 90~ deg freedom, 1 deg step -> 90\^16] \todo{replace with actual calculation}
+Finally, such brute force approaches can easily end up with very large number of possible iterations to exhaust entire joint angle space even with 1 degree step size. (ex: 16~ joints, 90~ deg freedom, 1 deg step -> 90\^16 ) \todo{replace with actual calculation}
 
 \subsection{Inverse Kinematics}
 
-\todo{define the data format}
 Inverse kinematic approach take the target pose in terms of feet and torso position relative to each other and head joint angles. Then inverse kinematics is applied for the two legs to obtain the corresponding joint angles. The arm angles are obtained by one of the predefined poses within HULKs framework (STAND pose \todo{cite code release?})
 
 In conclusion, direct joint values cannot give a direct understanding of the robot's posture to a user while the dual is that the robot cannot directly understand it's supposed to be joint positions by means of kinematic matrices of feet relative to pose. \todo{is it correct to call this a dual?}
@@ -302,7 +308,7 @@ Since both formats are required for generation, storage and interfacing, appropr
 
 \todo{refer data type structure?}
 
-\section{Cost functions, Optimization, clustering}
+\section{Cost functions and optimizers}
 
 This section discuss the considered approaches to determine optimal (or set) of poses for a given set of conditions.
 
@@ -321,7 +327,7 @@ The goal is to obtain the set of parameters that can minimize the output of the 
 
 These approaches are used in many fields including optimal control, machine learning, etc.
 
-\subsection{Optimization approaches and clustering}
+\subsection{Optimization approaches}
 
 In order to solve a cost function, one possible way is to try all valid values for the parameters - applying the entire configuration space.
 
@@ -330,9 +336,10 @@ This approach is known as brute force, as the name suggests the method isn't "sm
 Out of these optimizers, one class is global optimizers - they will attempt to find the best solution within the entire configuration space. For example, brute force method can do this as it explore the entire space. While the prospect of getting the best value is tempting, global solvers are computationally expensive, thus local methods are favoured when there is a good initial guess. There are also various approaches to speed up solving of global optimization problems including multi-agent, flood fill, etc methods. 
 \todo{cite cite cite!!!}
 
-Local optimization methods will find the closest minima (or maxima, depends on the approach) to the starting point. there is no guarentee it is the best solution. Thus the initial guess plays a major role.
+Local optimization methods will find the closest minima (or maxima, depends on the approach) to the starting point. there is no guarantee it is the best solution. Thus the initial guess plays a major role. Levenberg Marquardt is one such popular solver/ optimizer algorithm.
 
 \todo{cite, maybe also put some graphs?}
+
 \subsection{Curse of dimensionality}
 This is a phenomena mentioned in the field of data science where the data set involve high amount of or when the cost function has large number of parameters.
 
@@ -340,9 +347,10 @@ Due to the high dimensionality, it is not only difficult to visualize, but also 
 
 %%%% METHODOLOGY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Methodology}
-This chapter describe the methodology followed in this thesis. It is based on the workflow described in chapter... \todo{refer}
+\label{chap:methodology}
+This chapter describe the methodology followed in this thesis. It is based on the workflow described in chapter \cref{chap:workflow}
 
-Majority of the time was spent for the pose generation stage due to the massive amounts of computation needed. The frame working for reaching robot poses was already done. \todo{write clearly}
+Majority of the time was spent for pose generation and filtering stage due to the massive amounts of computation needed. The frame working for reaching robot poses was already done. \todo{write clearly}
 
 \section{Initial work}
 
@@ -539,7 +547,7 @@ Below are the results for each step of the above experiment.
 		\hline
 	Distribution (Uniform) Range & Lev.-Mar.  & dlib::global & igl::PSO & stochastic \\
 	\hline
-	$\pm6.5\degree$& 68\% &  &  & 1.9\% \\
+	$\pm6.5\degree$& 13\% &  &  & 1.9\% \\
 	$1\degree$ to $6.5\degree$ and $-1\degree$ to $-6.5\degree$	& 54\% & . &  &3.2\% \\ \hline
 %		&  &  &  &  \\
 %		&  &  &  & 
@@ -562,6 +570,8 @@ Below are the results for each step of the above experiment.
 \todo{Data, randomly induced errors, individually induced errors}
 \subsection{Real?: Actual calibration process}
 \todo{if above succeed, try on real robots}
+
+\subsection{discussion}
 
 %%%% CONCLUSION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Conclusion and future work}
