@@ -34,7 +34,7 @@ set(TUHHSDK_SOURCES
   ${TUHHSDK_HOME}/Tools/Math/Correlation.cpp
   ${TUHHSDK_HOME}/Tools/Math/FFT.cpp
   ${TUHHSDK_HOME}/Tools/Math/HungarianMethod.cpp
-  ${TUHHSDK_HOME}/Tools/Math/KalmanFilter.cpp
+#  ${TUHHSDK_HOME}/Tools/Math/KalmanFilter.cpp
   ${TUHHSDK_HOME}/Tools/Math/Random.cpp
   ${TUHHSDK_HOME}/Tools/StateEstimation/Covariance.hpp
   ${TUHHSDK_HOME}/Tools/StateEstimation/ProjectionMeasurementModel.hpp
@@ -190,7 +190,7 @@ set(TUHHSDK_HEADERS
   ${TUHHSDK_HOME}/Tools/Math/Geometry.hpp
   ${TUHHSDK_HOME}/Tools/Math/HungarianMethod.hpp
   ${TUHHSDK_HOME}/Tools/Math/Hysteresis.hpp
-  ${TUHHSDK_HOME}/Tools/Math/KalmanFilter.h
+#  ${TUHHSDK_HOME}/Tools/Math/KalmanFilter.h
   ${TUHHSDK_HOME}/Tools/Math/Line.hpp
   ${TUHHSDK_HOME}/Tools/Math/Pose.hpp
   ${TUHHSDK_HOME}/Tools/Math/Range.hpp
