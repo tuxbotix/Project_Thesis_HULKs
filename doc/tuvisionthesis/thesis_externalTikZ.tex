@@ -65,9 +65,9 @@ This thesis presents the design, implementation and application of a Camera and 
 
 This thesis is organized as follows. \todo{Complete this}
 
-\section{Motivation}
+\section{Problem Statement}
 
-Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic). \todo{Cite TRR}
+Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic) \cite{HULKs2017Report}.
 
 In recent years, with the ageing NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several meters.
 
@@ -75,34 +75,41 @@ Therefore it has come to attention the need for automatic joint error detection 
 
 In the past several teams has attempted automating this with less than satisfactory results and all known processes that appears to work well are manual methods. 
 
+\subsection{Potential reasons for specified problems}
+Prior to presentation of a solution, it is imperative to identify potential sources of failures experienced in past. Based on the available research, observations and practical experience with calibrating the NAO robots, following hypotheses are presented regarding causes for previous failures and difficulty in calibration.
+
+\begin{itemize}
+	\label{itemize:possible_reasons}
+	\item Used calibration poses weren't optimal, resulting in incomplete coverage of the observable subspace (considering the joint error domain\todo{is this the right wording?}) which leads to poor calibration quality inclusing lack of convergence and local minimum exits.
+	\item While a global minimizer could improve the results, it is still not immune from observation noise which can distort the cost function such that solved global minima is not the real one.
+	\item As noted in B-Human's research, joint backlash plays a crucial role. Therefore, captures should also contain information about direction of backlash or limit the scope of calibration assuming the robot's usable poses always load joints in the ways resulting same backlash effects.
+	\item Camera based calibration also depend on intrinsic and extrinsic parameters; The former can be calibrated without reliance of robot's positioning, but the latter depends on calibrated joints causing a cyclic dependency which can possibly be resolved by multiple cycles of calibration for joints and extrinsic parameters. This concern is already mentioned in Team Research Report of B-Human and their manual calibration procedure appears to address it in the above mentioned method.
+\end{itemize}
+
 \section{Goals}
-\todo{cleanup}
-The aim of this thesis is to develop a fully or semi-automatic joint and camera calibration. This includes theoretical observer modelling, optimal calibration pose generation, calculation of potential success of calibrating a given joint and the implementation of the necessary tools, modules into the HULKs NAO framework and the debug tooling (which will be extending the current calibration tools).
 
-Since the documented automatic calibration attempts does not cover aspects such as observation modelling or handling possible "ambiguities" or Local Minimum cases, these aspects will gain special attention in order to identify factors affecting automated methods to present possible solutions.
+The aim of this thesis is to develop a fully or semi-automatic joint and camera calibration. This includes theoretical observer modelling, optimal  pose generation and the implementation of necessary tools, modules into HULKs NAO framework and the debug tooling (which will be extending the current calibration tools).
 
-\todo{cleanup}
+Since item 1 and 2 of \cref{itemize:possible_reasons} are not covered well in most literature or only in industrial context (which use laser trackers), this thesis will pay more attention for importance of picking optimal poses, observability, reduction of ambiguities (somewhat inverse to coverage of observable subspace) \todo{use a section to define wording} and improving calibration optimizers. Finally the evaluation phase will be used to validate the hypotheses. A detailed 
+
+Below listed is a summarized set of goals. A detailed workflow is presented in \cref{chap:workflow}.
+
 \begin{itemize}
 	\item Derive a process to determine suitability of a sensors, poses, input data, etc. This may include observation modelling.
 	\item Investigate the suitability of onboard sensors based on the above mentioned process. (At least some of the joint errors should be correctable)
 	\item Determine the effect of backlash and offsets, level of observation and other factors.
 \end{itemize}
 
-However, it should be noted that the primary goal of this thesis is to provide a foundation on observer models, deriving them and a process to determine suitability, Not to calibrate robots to perfection as end result.**
-
 \section{Limitations \& Scope}
 
-Due to the vast number of possible avenues and requirements, this thesis is constrained in the following scope.
+This research is performed with the following constraints.
 
 \begin{itemize}
 	\item Intrinsic Camera calibration is not considered, as it doesn't depend on joints. enabling it to function well even without the intended improvements of this research.
-	\item Only on-board sensors are evaluated in this thesis, making Cameras the prime observation sensor.
+	\item Only on-board sensors are evaluated in this thesis, therefore Cameras will be the main source of information in addition to joint position sensors.
 	\item Primary testing will be with different levels simulations.
 	\item Optionally, perform real life testing with robots if and when simulation proves feasibility and there is enough time.
 \end{itemize}
-
-The goal of this thesis is to provide a foundation on observer models, deriving them and a process to determine suitability, Not to calibrate robots to perfection as end result.
-\todo{re-check this}
 
 %%%% WORKFLOW %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Workflow \& Milestones}
@@ -252,7 +259,9 @@ There are several experiments done in context of the NAO Robot for indirect join
 
 Currently B-Human have a working joint calibration method based on manual observations. First, the robot is put to a specific pose (ie: standing), lifted to observe foot offsets and adjustments are done so that both feet are at same level and orientation. Next, the robot is placed on the ground and the distance to hip or another known joint origin is measured. This allows to measure the length of the kinematic chain of each leg. Any deviations are compensated by means of inverse kinematic values and finally the robot's leaning \todo{clarify} towards ground is also adjusted. While this appears to be a practical method, the disadvantage of manual measurements is time consuming and can be erroneous (measuring height to torso by a ruler would not be much accurate given lack of reference points on the NAO).
 
-There isn't significant amount of previous research regarding the observability of joint errors with on board sensors alone. Therefore one of the key components of this thesis would be devising an observation model for joint errors and deriving most suitable poses. This should assist to explain the quality of calibration at each joint.
+Several publications have covered the topic of choosing optimal poses (using condition number of the kinematic equation-matrix) for joint calibration when the end effector position is measured has claimed and seemingly proven that measurements from a small amount of optimal calibration poses yields better or equal results compared to using large amount of randomly chosen measurement poses. However, it should be noted that these publications were applied to industrial robots where the measurements were taken by accurate 3D measurement tools, whereas the preferred constraints for this thesis's use case provides further complications as the 2D cameras can only estimate the pose of a calibration target, not get a precise position.
+
+There isn't significant amount of previous research regarding the observability of joint errors with on board sensors (esp. 2D cameras) alone. Therefore one of the key components of this thesis would be devising an observation model for joint errors and deriving most suitable poses. This should assist to explain the quality of calibration at each joint.
 
 \section{Observation Models}
 Considering the above revelations, observations and feedback gathered from discussions with other team members and teams, it was decided that deriving an observation model for joint errors for various available sensors (or fused outputs) would be beneficial than following a trial and error approach for calibration.
@@ -533,7 +542,7 @@ Finally, the idea of attempting to supply a sample set of the population as init
 
 \subsubsection{Results}
 
-Below are the results for each step of the above experiment.
+Below are the results for each step of the above experiment.  
 
 \begin{itemize}
 	\item Grid size: 50 per side, $5cm$ between two points. ($2.5m$ per side)
@@ -577,5 +586,6 @@ Below are the results for each step of the above experiment.
 \chapter{Conclusion and future work}
 \todo{Complete this}
 %%% include your text here %%%
-
+\bibliographystyle{splncs03}
+\bibliography{bibliography}{}
 \end{document}
