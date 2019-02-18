@@ -254,7 +254,6 @@ struct JointErrorEval {
      * Run Lev-Mar to optimize
      */
     auto runLevMar = [&calibrator](Eigen::VectorXf &params) {
-
       Eigen::LevenbergMarquardt<
           Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator,
                                Eigen::Central>,
@@ -771,6 +770,36 @@ int main(int argc, char *argv[]) {
 
   // cameras to evaluate
   std::vector<Camera> camNames = {Camera::BOTTOM, Camera::TOP};
+
+  {
+    std::cout << "p";
+    std::fstream roiFile("/tmp/rois.txt", std::ios::out);
+    if (!roiFile.is_open()) {
+      std::cerr << "file open fail exit;;" << std::endl;
+      return 1;
+    }
+    auto naoJointSensorModel = NaoJointAndSensorModel(cfg);
+
+    for (const auto &elem : poseList) {
+      naoJointSensorModel.setPose(elem.angles, elem.pose.supportFoot);
+      for (const auto &cam : camNames) {
+        std::array<Vector2f, 4> corners = {};
+        // clockwise order
+        Vector2f camCenterProjPoint;
+        if (naoJointSensorModel.projectCameraFOVToGround(cam, corners,
+                                                         camCenterProjPoint)) {
+          roiFile << elem.pose.id << " "
+                  << (cam == Camera::TOP ? "top" : "bottom") << " ";
+          for (const auto &corner : corners) {
+            roiFile << corner.x() << " " << corner.y() << " ";
+          }
+          roiFile << camCenterProjPoint.norm() << "\n";
+        }
+      }
+    }
+    roiFile.flush();
+    roiFile.close();
+  }
 
   // Start the threads
   for (size_t i = 0; i < MAX_THREADS; ++i) {

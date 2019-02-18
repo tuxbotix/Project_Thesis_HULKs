@@ -75,6 +75,8 @@ public:
     }
   }
 
+  static float getMaxViewDist() { return NaoJointAndSensorModel::maxViewDist; }
+
   NaoJointAndSensorModel(const NaoJointAndSensorModelConfig cfg)
       : NaoJointAndSensorModel(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
                                cfg.maxGridPointsPerSide, cfg.gridSpacing) {}
@@ -167,12 +169,12 @@ public:
       return false;
     }
     // pinhole projection
-    pixel_coordinates.x() =
-        camMat.cc.x() -
-        camMat.fc.x() * cameraCoordinates.y() / cameraCoordinates.x();
-    pixel_coordinates.y() =
-        camMat.cc.y() -
-        camMat.fc.y() * cameraCoordinates.z() / cameraCoordinates.x();
+    pixel_coordinates.x() = camMat.cc.x() - camMat.fc.x() *
+                                                cameraCoordinates.y() /
+                                                cameraCoordinates.x();
+    pixel_coordinates.y() = camMat.cc.y() - camMat.fc.y() *
+                                                cameraCoordinates.z() /
+                                                cameraCoordinates.x();
     return true;
   }
 
@@ -230,17 +232,17 @@ public:
   }
 
   /**
-   * Get 3D grid with given grid spacing relative to robot's ground coord.
-   * Obviously, camera matrix must be updated before calling this.
-   * 1. This has a hard range limit of 2m
+   * @brief projectCameraFOVToGround
+   * We go clockwise order (assuming y is downwards and x to right in image
+   * plane)
+   * @param camName
+   * @param imageCornerGroundProjections
    */
-  // TODO  Make this private.
-  const VecVector2<float> getGroundGrid(const Camera &camName,
-                                        bool &success) const {
-    VecVector2<float> output;
-    Vector2f robotCoords = {0, 0};
-    Vector2f camCenterProjPoint = {0, 0};
-    float cornerProjMaxDist = 0; // max distance to corners from center.
+  bool projectCameraFOVToGround(
+      const Camera &camName,
+      std::array<Vector2f, 4> &imageCornerGroundProjections,
+      Vector2f &camCenterProjPoint) const {
+    auto &camMat = camName == Camera::TOP ? topCamMat : botCamMat;
 
     // Check if horizon line is above bottom of camera view.
     bool proceed = !isCameraAboveHorizon(camName);
@@ -268,14 +270,61 @@ public:
     }
 #endif
     if (proceed) {
-      std::array<Vector2f, 4> imageCornerGroundProjections = {};
-      pixelToRobot(camName, Vector2i(0, 0), imageCornerGroundProjections[0]);
-      pixelToRobot(camName, Vector2i(0, imSize.y()),
-                   imageCornerGroundProjections[1]);
-      pixelToRobot(camName, Vector2i(imSize.x(), 0),
-                   imageCornerGroundProjections[2]);
-      pixelToRobot(camName, imSize, imageCornerGroundProjections[3]);
+      // bottom-left
+      proceed &= pixelToRobot(camName, Vector2i(0, imSize.y()),
+                              imageCornerGroundProjections[3]);
+      // bottom-right
+      proceed &= pixelToRobot(camName, imSize, imageCornerGroundProjections[2]);
 
+      // get ground point of image's center right point
+      // if this fails, abort as we can't even see half of the image under
+      // horizon
+      auto leftTopHoriz = camMat.getHorizonHeight(0);
+      auto rightTopHoriz = camMat.getHorizonHeight(imSize.x() - 1);
+      if (imSize.y() / 2 > leftTopHoriz && imSize.y() / 2 > rightTopHoriz) {
+        // center-left
+        pixelToRobot(camName, Vector2i(0, imSize.y() / 2),
+                     imageCornerGroundProjections[0]);
+        // get gradient of line from bl point of image on ground to cl of image
+        // on ground
+        Vector2f diff =
+            (imageCornerGroundProjections[0] - imageCornerGroundProjections[3])
+                .normalized();
+        // truncate the FOV with maxViewDist to get psuedo top-left
+        imageCornerGroundProjections[0] += diff * maxViewDist; // 120%
+
+        // center-right
+        pixelToRobot(camName, Vector2i(imSize.x(), imSize.y() / 2),
+                     imageCornerGroundProjections[1]);
+        // get gradient of line from br point of image on ground to cr of image
+        // on ground
+        diff =
+            (imageCornerGroundProjections[1] - imageCornerGroundProjections[2])
+                .normalized();
+        // truncate the FOV with maxViewDist to get psuedo top-right
+        imageCornerGroundProjections[0] += diff * maxViewDist;
+      } else {
+        return false;
+      }
+    }
+    return proceed;
+  }
+  /**
+   * Get 3D grid with given grid spacing relative to robot's ground coord.
+   * Obviously, camera matrix must be updated before calling this.
+   * 1. This has a hard range limit of 2m
+   */
+  // TODO  Make this private.
+  const VecVector2<float> getGroundGrid(const Camera &camName,
+                                        bool &success) const {
+    VecVector2<float> output;
+    Vector2f robotCoords = {0, 0};
+    Vector2f camCenterProjPoint = {0, 0};
+    float cornerProjMaxDist = 0; // max distance to corners from center.
+
+    std::array<Vector2f, 4> imageCornerGroundProjections = {};
+    if (projectCameraFOVToGround(camName, imageCornerGroundProjections,
+                                 camCenterProjPoint)) {
       for (const auto &val : imageCornerGroundProjections) {
         float dist = (camCenterProjPoint - val).norm();
         if (dist > cornerProjMaxDist) {
@@ -307,7 +356,7 @@ public:
       std::cout << "Too far view dist!" << std::endl;
     }
 #endif
-    success = proceed && (output.size() > 0);
+    success = (output.size() > 0);
     return output;
   }
 };
