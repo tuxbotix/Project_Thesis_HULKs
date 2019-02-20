@@ -270,41 +270,74 @@ public:
     }
 #endif
     if (proceed) {
+      auto &tl = imageCornerGroundProjections[0];
+      auto &tr = imageCornerGroundProjections[1];
+      auto &br = imageCornerGroundProjections[2];
+      auto &bl = imageCornerGroundProjections[3];
+      // these will be indexes (0 index)
+      Vector2i imLimits = imSize - Vector2i(1, 1);
+      float imHeightHalf = imSize.y() * 0.75f;
+
       // bottom-left
-      proceed &= pixelToRobot(camName, Vector2i(0, imSize.y()),
-                              imageCornerGroundProjections[3]);
+      proceed &= pixelToRobot(camName, Vector2i(0, imLimits.y()), bl);
       // bottom-right
-      proceed &= pixelToRobot(camName, imSize, imageCornerGroundProjections[2]);
+      proceed &= pixelToRobot(camName, imLimits, br);
 
       // get ground point of image's center right point
       // if this fails, abort as we can't even see half of the image under
       // horizon
       auto leftTopHoriz = camMat.getHorizonHeight(0);
-      auto rightTopHoriz = camMat.getHorizonHeight(imSize.x() - 1);
-      if (imSize.y() / 2 > leftTopHoriz && imSize.y() / 2 > rightTopHoriz) {
+      auto rightTopHoriz = camMat.getHorizonHeight(imLimits.x());
+      if (imHeightHalf > leftTopHoriz && imHeightHalf > rightTopHoriz) {
+        Vector2f temp = {0.0f, 0.0f};
+        Vector2f diff = {0.0f, 0.0f};
+        Vector2f diff2 = {0.0f, 0.0f};
+        bool cornerSuccess = false;
+        // top left
+        cornerSuccess = pixelToRobot(camName, Vector2i(0, leftTopHoriz), tl) &&
+                        tl.norm() < maxViewDist;
+        diff = (tl - bl).normalized();
         // center-left
-        pixelToRobot(camName, Vector2i(0, imSize.y() / 2),
-                     imageCornerGroundProjections[0]);
+        //        proceed &=
+        pixelToRobot(camName, Vector2i(0, imHeightHalf), temp) &&
+            temp.norm() < maxViewDist;
         // get gradient of line from bl point of image on ground to cl of image
         // on ground
-        Vector2f diff =
-            (imageCornerGroundProjections[0] - imageCornerGroundProjections[3])
-                .normalized();
-        // truncate the FOV with maxViewDist to get psuedo top-left
-        imageCornerGroundProjections[0] += diff * maxViewDist; // 120%
+        diff2 = (temp - bl).normalized();
+        // if bl to cl and bl to tl are coinciding (+- 10.0 deg divergence)
+        // then this is good
+        if (!cornerSuccess ||
+            std::abs(std::atan2(diff2.y(), diff2.x()) -
+                     std::atan2(diff.y(), diff.x())) > 10.0f * TO_RAD_FLT) {
+          // truncate the FOV with maxViewDist to get psuedo top-left
+          tl = bl + diff2 * std::max(maxViewDist, (maxViewDist - bl.norm()));
+        }
 
+        // top right
+        cornerSuccess =
+            pixelToRobot(camName, Vector2i(imLimits.x(), rightTopHoriz), tr) &&
+            tr.norm() < maxViewDist;
+        diff = (tr - br).normalized();
         // center-right
-        pixelToRobot(camName, Vector2i(imSize.x(), imSize.y() / 2),
-                     imageCornerGroundProjections[1]);
+        //        proceed &=
+        pixelToRobot(camName, Vector2i(imLimits.x(), imHeightHalf), temp) &&
+            temp.norm() < maxViewDist;
         // get gradient of line from br point of image on ground to cr of image
         // on ground
-        diff =
-            (imageCornerGroundProjections[1] - imageCornerGroundProjections[2])
-                .normalized();
-        // truncate the FOV with maxViewDist to get psuedo top-right
-        imageCornerGroundProjections[0] += diff * maxViewDist;
+        diff2 = (temp - br).normalized();
+        // if br to cr and br to tr are coinciding (+- 10.0 deg divergence)
+        // then this is good
+        if (!cornerSuccess ||
+            std::abs(std::atan2(diff2.y(), diff2.x()) -
+                     std::atan2(diff.y(), diff.x())) > 10.0f * TO_RAD_FLT) {
+          // truncate the FOV with maxViewDist to get psuedo top-left
+          tr = br + diff2 * std::max(maxViewDist, (maxViewDist - br.norm()));
+          //        std::cout << ", " << diff2 << " "
+          //                  << std::max(maxViewDist, (maxViewDist -
+          //                  temp.norm())) << "\n";
+        }
       } else {
-        return false;
+        proceed = false;
       }
     }
     return proceed;
