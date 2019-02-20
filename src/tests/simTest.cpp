@@ -36,6 +36,9 @@ const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
 template <class T> using Residual = std::vector<T>;
 
+using CombinedPoseListT =
+    std::vector<std::pair<NaoPoseAndRawAngles<float>, Camera>>;
+
 enum CalibStatus {
   FAIL_LOCAL_MINIMA,
   FAIL_NO_CONVERGE,
@@ -89,7 +92,7 @@ template <typename T> struct CalibEvalResiduals {
 struct JointErrorEval {
 
   const NaoJointAndSensorModelConfig cfg;
-  const poseAndRawAngleListT poseList;
+  const CombinedPoseListT combinedPoseList;
   const SUPPORT_FOOT supFoot;
   const float jointCalibQualityTol;
   const float reprojErrTolPercent;
@@ -103,12 +106,12 @@ struct JointErrorEval {
   std::normal_distribution<double> jointNoiseDistribution;
 
   JointErrorEval(const NaoJointAndSensorModelConfig cfg,
-                 const poseAndRawAngleListT poseList,
-                 const SUPPORT_FOOT supFoot, const float jointCalibQualityTol,
+                 const CombinedPoseListT poseList, const SUPPORT_FOOT supFoot,
+                 const float jointCalibQualityTol,
                  const float reprojErrTolPercent, const float pixelNoiseStdDev,
                  const float jointNoiseStdDev, const bool stochasticFix,
                  const bool enablePixelNoise, const bool enableJointNoise)
-      : cfg(cfg), poseList(poseList), supFoot(supFoot),
+      : cfg(cfg), combinedPoseList(poseList), supFoot(supFoot),
         jointCalibQualityTol(jointCalibQualityTol),
         reprojErrTolPercent(reprojErrTolPercent), stochasticFix(stochasticFix),
         enablePixelNoise(enablePixelNoise), enableJointNoise(enableJointNoise),
@@ -155,7 +158,9 @@ struct JointErrorEval {
 
     // Capture per pose.
     size_t iter = 0;
-    for (const auto &poseAndAngles : poseList) {
+    for (const auto &combinedPoseAndAngles : combinedPoseList) {
+      const auto &poseAndAngles = combinedPoseAndAngles.first;
+      const auto &camName = combinedPoseAndAngles.second;
       naoJointSensorModel.setCalibValues(inducedErrorStdVec);
       if (enableJointNoise) {
         auto poseAngles(poseAndAngles.angles);
@@ -168,7 +173,8 @@ struct JointErrorEval {
         naoJointSensorModel.setPose(poseAndAngles.angles,
                                     poseAndAngles.pose.supportFoot);
       }
-      for (const auto &camName : camNames) {
+      //      for (const auto &camName : camNames)
+      {
         bool proceed = false;
         // will be relative to support foot, easier to manage
         const auto groundGrid =
@@ -470,8 +476,8 @@ struct JointErrorEval {
  */
 CalibStatusStatistics
 threadedFcn(CalibEvalResiduals<double> &residuals,
-            const poseAndRawAngleListT poseList, const SUPPORT_FOOT supFoot,
-            const std::vector<Camera> camNames,
+            const CombinedPoseListT combinedPoseList,
+            const SUPPORT_FOOT supFoot, const std::vector<Camera> camNames,
             const NaoJointAndSensorModelConfig cfg,
             const std::vector<rawPoseT>::iterator jointErrItrBegin,
             const std::vector<rawPoseT>::iterator jointErrItrEnd,
@@ -492,7 +498,7 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
   //                 const bool enablePixelNoise, const bool enableJointNoise)
 
   JointErrorEval jointErrorEvalStruct(
-      cfg, poseList, supFoot, jointCalibQualityTol, reprojErrTolPercent,
+      cfg, combinedPoseList, supFoot, jointCalibQualityTol, reprojErrTolPercent,
       pixelNoiseStdDev, jointNoiseStdDev, stochasticFix, enablePixelNoise,
       enableJointNoise);
 
@@ -771,6 +777,8 @@ int main(int argc, char *argv[]) {
   // cameras to evaluate
   std::vector<Camera> camNames = {Camera::BOTTOM, Camera::TOP};
 
+  // PoseAndCamera list
+  CombinedPoseListT combinedPoseList;
   {
     std::cout << "p";
     std::fstream roiFile("/tmp/rois.txt", std::ios::out);
@@ -794,6 +802,7 @@ int main(int argc, char *argv[]) {
             roiFile << corner.x() << " " << corner.y() << " ";
           }
           roiFile << camCenterProjPoint.norm() << "\n";
+          combinedPoseList.emplace_back(elem, cam);
         }
       }
     }
@@ -829,7 +838,7 @@ int main(int argc, char *argv[]) {
     //                const bool enableJointNoise)
     futureList[i] = std::async(
         std::launch::async, &threadedFcn, std::ref(calibResidualList[i]),
-        poseList, supFeet, camNames, cfg, begin, end,
+        combinedPoseList, supFeet, camNames, cfg, begin, end,
         JOINT_CALIB_QUALITY_TOL_RAD, REPROJ_ERR_TOL_PERCENT,
         PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV, stochasticFix,
         enablePixelNoise, enableJointNoise);
