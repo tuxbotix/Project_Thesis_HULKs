@@ -101,8 +101,8 @@ public:
                                                  false);
       // update default horizon
       horizon[static_cast<int>(camName)] =
-          std::min(std::min(camMat.getHorizonHeight(0),
-                            camMat.getHorizonHeight(imSize.x() - 1)),
+          std::min(std::min(camMat.getHorizonHeight(0) + 1,
+                            camMat.getHorizonHeight(imSize.x() - 1) + 1),
                    imSize.y() - 1);
     }
   }
@@ -151,7 +151,7 @@ public:
   }
 
   bool isCameraAboveHorizon(const Camera &camName) const {
-    return horizon[(int)camName] >= (imSize.y() - 1);
+    return horizon[static_cast<Eigen::Index>(camName)] >= (imSize.y() - 1);
   }
   /**
    * @brief cameraToPixel transforms camera coordinates to pixel coordinates
@@ -286,8 +286,8 @@ public:
       // get ground point of image's center right point
       // if this fails, abort as we can't even see half of the image under
       // horizon
-      auto leftTopHoriz = camMat.getHorizonHeight(0);
-      auto rightTopHoriz = camMat.getHorizonHeight(imLimits.x());
+      auto leftTopHoriz = camMat.getHorizonHeight(0) + 1;
+      auto rightTopHoriz = camMat.getHorizonHeight(imLimits.x()) + 1;
       if (imHeightHalf > leftTopHoriz && imHeightHalf > rightTopHoriz) {
         Vector2f temp = {0.0f, 0.0f};
         Vector2f diff = {0.0f, 0.0f};
