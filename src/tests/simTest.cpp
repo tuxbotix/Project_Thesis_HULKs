@@ -99,6 +99,8 @@ struct JointErrorEval {
   const bool stochasticFix;
   const bool enablePixelNoise;
   const bool enableJointNoise;
+  const float minJointErrVal;
+  const float maxJointErrVal;
 
   /// Random generator
   std::default_random_engine generator; // random gen
@@ -107,6 +109,7 @@ struct JointErrorEval {
 
   JointErrorEval(const NaoJointAndSensorModelConfig cfg,
                  const CombinedPoseListT poseList, const SUPPORT_FOOT supFoot,
+                 const float minJointErrVal, const float maxJointErrVal,
                  const float jointCalibQualityTol,
                  const float reprojErrTolPercent, const float pixelNoiseStdDev,
                  const float jointNoiseStdDev, const bool stochasticFix,
@@ -115,6 +118,7 @@ struct JointErrorEval {
         jointCalibQualityTol(jointCalibQualityTol),
         reprojErrTolPercent(reprojErrTolPercent), stochasticFix(stochasticFix),
         enablePixelNoise(enablePixelNoise), enableJointNoise(enableJointNoise),
+        minJointErrVal(minJointErrVal), maxJointErrVal(maxJointErrVal),
         generator(), pixelNoiseDistribution(0.0f, pixelNoiseStdDev),
         jointNoiseDistribution(0.0, static_cast<double>(jointNoiseStdDev)) {}
 
@@ -278,13 +282,16 @@ struct JointErrorEval {
     // Just to note if the loop was done and broken with success
     bool loopedAndBroken = false;
     // Do stochastic fixing?
-    if (stochasticFix && status != 4) {
+    if (stochasticFix &&
+        (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT ||
+         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)) {
       // This will hold best params in case looping is needed
       Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
           JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
       size_t count = 0; // counter for the while loop
-      /// TODO make this distribution configurable
-      std::uniform_real_distribution<float> distribution(-6.5, 6.5);
+
+      std::uniform_real_distribution<float> distribution(minJointErrVal,
+                                                         maxJointErrVal);
 
       /*
        * If status is 2 or 5, most likely we are at a local minima
@@ -481,6 +488,7 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
             const NaoJointAndSensorModelConfig cfg,
             const std::vector<rawPoseT>::iterator jointErrItrBegin,
             const std::vector<rawPoseT>::iterator jointErrItrEnd,
+            const float minJointErrVal, const float maxJointErrVal,
             const float jointCalibQualityTol, const float reprojErrTolPercent,
             const float pixelNoiseStdDev, const float jointNoiseStdDev,
             bool stochasticFix, const bool enablePixelNoise,
@@ -498,9 +506,9 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
   //                 const bool enablePixelNoise, const bool enableJointNoise)
 
   JointErrorEval jointErrorEvalStruct(
-      cfg, combinedPoseList, supFoot, jointCalibQualityTol, reprojErrTolPercent,
-      pixelNoiseStdDev, jointNoiseStdDev, stochasticFix, enablePixelNoise,
-      enableJointNoise);
+      cfg, combinedPoseList, supFoot, minJointErrVal, maxJointErrVal,
+      jointCalibQualityTol, reprojErrTolPercent, pixelNoiseStdDev,
+      jointNoiseStdDev, stochasticFix, enablePixelNoise, enableJointNoise);
 
   for (auto errSetIter = jointErrItrBegin; errSetIter != jointErrItrEnd;
        ++errSetIter) {
@@ -838,8 +846,8 @@ int main(int argc, char *argv[]) {
     //                const bool enableJointNoise)
     futureList[i] = std::async(
         std::launch::async, &threadedFcn, std::ref(calibResidualList[i]),
-        combinedPoseList, supFeet, camNames, cfg, begin, end,
-        JOINT_CALIB_QUALITY_TOL_RAD, REPROJ_ERR_TOL_PERCENT,
+        combinedPoseList, supFeet, camNames, cfg, begin, end, MIN_ERR_VAL,
+        MAX_ERR_VAL, JOINT_CALIB_QUALITY_TOL_RAD, REPROJ_ERR_TOL_PERCENT,
         PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV, stochasticFix,
         enablePixelNoise, enableJointNoise);
   }

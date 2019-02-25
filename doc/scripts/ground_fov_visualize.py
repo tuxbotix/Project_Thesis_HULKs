@@ -78,8 +78,9 @@ ax.invert_yaxis()
 
 ax.set_xlim([-4, 4])
 ax.set_ylim([-4, 4])
-
+ax.grid()
 ax.add_collection(p)
+
 
 fig.colorbar(p, ax = ax)
 
