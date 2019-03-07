@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <array>
 #include <cmath>
 #include <fstream>
@@ -250,7 +250,7 @@ struct JointErrorEval {
     //  auto calibrator = JointCalibSolvers::JointCalibrator(frameCaptures,
     //  cfg);
 
-    Eigen::VectorXf errorVec(calibrator.values());
+    Eigen::VectorXf initialError(calibrator.values());
     Eigen::VectorXf finalErrorVec(calibrator.values());
 
     // Setting zero is very important.
@@ -258,7 +258,8 @@ struct JointErrorEval {
         JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
     calibratedParams.setZero();
 
-    calibrator(calibratedParams, errorVec);
+    // Get state of errors before calibration
+    calibrator(calibratedParams, initialError);
 
     /*
      * Run Lev-Mar to optimize
@@ -280,14 +281,18 @@ struct JointErrorEval {
     calibrator(calibratedParams, finalErrorVec);
 
     // Just to note if the loop was done and broken with success
-    bool loopedAndBroken = false;
+    //    bool loopedAndBroken = false;
     // Do stochastic fixing?
-    if (stochasticFix &&
-        (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT ||
-         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)) {
+    if (stochasticFix
+        //        && (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT
+        //        ||
+        //         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)
+    ) {
       // This will hold best params in case looping is needed
       Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
           JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
+      Eigen::VectorXf oldErrorVec(finalErrorVec);
+
       size_t count = 0; // counter for the while loop
 
       std::uniform_real_distribution<float> distribution(minJointErrVal,
@@ -307,9 +312,10 @@ struct JointErrorEval {
            supFoot == SUPPORT_FOOT::SF_RIGHT)
               ? JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT
               : 2 + JointCalibSolvers::LEG_JOINT_COUNT;
-      while ((status == 2 || status == 5) && count < 100) {
+      while (count < 20) {
         // save state
         oldParams = calibratedParams;
+        oldErrorVec = finalErrorVec;
         // get cost
         float finalCost = finalErrorVec.squaredNorm();
 
@@ -333,15 +339,15 @@ struct JointErrorEval {
         calibrator(calibratedParams, finalErrorVec);
 
         // Check status and continue accordingly
-        if (status == 4 && finalCost > finalErrorVec.squaredNorm()) {
-          loopedAndBroken = true;
-          break;
-        } else if (
-            //                    (status == 2 || status == 5) ||
-            finalCost < finalErrorVec.squaredNorm()) {
+        //        if (finalCost > finalErrorVec.squaredNorm()) {
+        //          loopedAndBroken = true;
+        //          break;
+        //        } else
+
+        /// go back to previous parameter set.
+        if (finalCost < finalErrorVec.squaredNorm()) {
           calibratedParams = oldParams;
-          // Get the new cost
-          calibrator(calibratedParams, finalErrorVec);
+          finalErrorVec = oldErrorVec;
         }
         count++;
       }
@@ -368,7 +374,7 @@ struct JointErrorEval {
     //  const auto finalErrAbsMax = std::max(std::abs(minCoeff),
     //  std::abs(maxCoeff));
     const auto finalErrorAvg = finalErrorVec.mean();
-    const auto errorNorm = finalErrorVec.norm();
+    const auto finalErrorNorm = finalErrorVec.norm();
     //  const auto errorAvg = finalErrorVec.norm() / finalErrorVec.size();
     const auto jointCalibResAbsMax =
         std::max(std::abs(jointCalibResidual.maxCoeff()),
@@ -377,13 +383,13 @@ struct JointErrorEval {
 
     // Determine success or failure
     if (finalErrorAvg <= imageSize.minCoeff() * reprojErrTolPercent &&
-        errorNorm <= errorVec.norm() &&
+        finalErrorNorm <= initialError.norm() &&
         jointCalibResAbsMax > jointCalibQualityTol) {
       successStatus = CalibStatus::FAIL_LOCAL_MINIMA;
     } else if (std::isnan(minCoeff) || std::isnan(maxCoeff)) {
       successStatus = CalibStatus::FAIL_NUMERICAL;
     } else if (finalErrorAvg > imageSize.minCoeff() * reprojErrTolPercent ||
-               errorNorm > errorVec.norm()) {
+               finalErrorNorm > initialError.norm()) {
       successStatus = CalibStatus::FAIL_NO_CONVERGE;
     } else {
       successStatus = CalibStatus::SUCCESS;
@@ -459,14 +465,14 @@ struct JointErrorEval {
     if (!JointCalibSolvers::jointCalibParamsToRawPose(calibratedParams,
                                                       result.jointParams)) {
     }
-    result.reprojectionErrorNorm = errorNorm;
+    result.reprojectionErrorNorm = finalErrorNorm;
     result.reprojectionErrorNorm = finalErrorAvg;
 #if DEBUG_SIM_TEST
     logStream << "END";
     std::lock_guard<std::mutex> lg(utils::mtx_cout_);
     std::cout << logStream.str() << std::endl;
 #endif
-    return {result, jointCalibResidual, errorVec, finalErrorVec};
+    return {result, jointCalibResidual, initialError, finalErrorVec};
   }
 };
 
@@ -705,9 +711,9 @@ int main(int argc, char *argv[]) {
   poseList.reserve(MAX_POSES_TO_CALIB);
   poseAndRawAngleT poseAndAngles;
 
-  for (size_t i = 0; i < MAX_POSES_TO_CALIB &&
-                     utils::JointsAndPosesStream::getNextPoseAndRawAngles(
-                         inFile, poseAndAngles);
+  for (size_t i = 0;
+       i < MAX_POSES_TO_CALIB &&
+       JointsAndPosesStream::getNextPoseAndRawAngles(inFile, poseAndAngles);
        ++i) {
     if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
       --i;

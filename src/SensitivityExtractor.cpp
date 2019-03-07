@@ -47,8 +47,8 @@ void sensitivityTesterFunc(const ObservationModelConfig cfg,
   std::vector<PoseSensitivity<Vector3f>> sensitivityBuf;
   NaoPoseAndRawAngles<float> poseAndAngles;
 
-  while (utils::JointsAndPosesStream::getNextPoseAndRawAngles(inputStream,
-                                                              poseAndAngles)) {
+  while (JointsAndPosesStream::getNextPoseAndRawAngles(inputStream,
+                                                       poseAndAngles)) {
     iterations++;
     std::vector<PoseSensitivity<Vector3f>> sensitivityOutput =
         obs.getSensitivities(poseAndAngles.angles,

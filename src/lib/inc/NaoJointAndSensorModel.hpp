@@ -276,7 +276,7 @@ public:
       auto &bl = imageCornerGroundProjections[3];
       // these will be indexes (0 index)
       Vector2i imLimits = imSize - Vector2i(1, 1);
-      float imHeightHalf = imSize.y() * 0.75f;
+      float imHeightFraction = imSize.y() * 0.75f;
 
       // bottom-left
       proceed &= pixelToRobot(camName, Vector2i(0, imLimits.y()), bl);
@@ -288,7 +288,7 @@ public:
       // horizon
       auto leftTopHoriz = camMat.getHorizonHeight(0) + 1;
       auto rightTopHoriz = camMat.getHorizonHeight(imLimits.x()) + 1;
-      if (imHeightHalf > leftTopHoriz && imHeightHalf > rightTopHoriz) {
+      if (imHeightFraction > leftTopHoriz && imHeightFraction > rightTopHoriz) {
         Vector2f temp = {0.0f, 0.0f};
         Vector2f diff = {0.0f, 0.0f};
         Vector2f diff2 = {0.0f, 0.0f};
@@ -299,7 +299,7 @@ public:
         diff = (tl - bl).normalized();
         // center-left
         //        proceed &=
-        pixelToRobot(camName, Vector2i(0, imHeightHalf), temp) &&
+        pixelToRobot(camName, Vector2i(0, imHeightFraction), temp) &&
             temp.norm() < maxViewDist;
         // get gradient of line from bl point of image on ground to cl of image
         // on ground
@@ -320,7 +320,7 @@ public:
         diff = (tr - br).normalized();
         // center-right
         //        proceed &=
-        pixelToRobot(camName, Vector2i(imLimits.x(), imHeightHalf), temp) &&
+        pixelToRobot(camName, Vector2i(imLimits.x(), imHeightFraction), temp) &&
             temp.norm() < maxViewDist;
         // get gradient of line from br point of image on ground to cr of image
         // on ground

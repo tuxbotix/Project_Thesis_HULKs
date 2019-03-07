@@ -73,8 +73,8 @@ add_executable(${test2} tests/icpTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${test2} observability utils naoPose tuhh)
 
 # Obs Tests
-set(test3 obsTest)
-add_executable(${test3} tests/camObsTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
+set(test3 calibFeatureTest)
+add_executable(${test3} tests/calibFeatureTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${test3} observability utils naoPose tuhh)
 
 # Obs Tests

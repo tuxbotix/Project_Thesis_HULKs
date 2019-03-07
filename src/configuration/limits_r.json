@@ -12,8 +12,8 @@
     "max_oFootRot": [0, 0, 0],
 
     "inc_headYawPitch":[6, 1.5],
-    "inc_torsoPos": [0.01, 0.01, 0.01],
+    "inc_torsoPos": [0.01, 0.01, 0.02],
     "inc_torsoRot": [5, 5, 2.5],
-    "inc_oFootPos": [0.01, 0.02, 0.01],
+    "inc_oFootPos": [0.01, 0.02, 0.02],
     "inc_oFootRot": [5, 5, 5]
 }

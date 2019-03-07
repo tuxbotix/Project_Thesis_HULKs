@@ -178,23 +178,6 @@ bool getNextDataEntry(std::istream &inputPoseFile, T &val) {
   return false;
 }
 
-class JointsAndPosesStream {
-public:
-  static bool getNextPoseAndRawAngles(std::istream &inputPoseFile,
-                                      NaoPoseAndRawAngles<float> &val) {
-    if (inputPoseFile.good()) {
-      std::string poseStr;
-      std::getline(inputPoseFile, poseStr);
-      if (inputPoseFile.good()) {
-        std::stringstream line(poseStr);
-        line >> val;
-        return val.isGood();
-      }
-    }
-    return false;
-  }
-};
-
 template <typename T> class SimpleHistogram {
 private:
   long binCount;

@@ -3,7 +3,7 @@
     "jointNoiseStdDev": 0.01, // for gaussian noise on joint readings
     "testErrorCount": 1000,
     "calibPoseNumDefault": 10,
-    "errRangeMinMax": [-5, 5],
+    "errRangeMinMax": [-6.5, 6.5],
     "mirrorAroundY": false, // if enabled, above min-max is mirrored around y axis. Else above min max strictly observed
 
     "jointCalibQualityTol": 0.2, // degrees

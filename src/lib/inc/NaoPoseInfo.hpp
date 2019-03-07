@@ -56,9 +56,9 @@ typedef PARAMS paramNameT;
  */
 template <typename T> class PoseSensitivity {
   /**
-     * This class store sensitivity per joint (except arms and head) and also by
+   * This class store sensitivity per joint (except arms and head) and also by
    * which sensor.
-     */
+   */
   const static std::string className;
   SENSOR_NAME sensorName;
   std::vector<T> sensitivities;
@@ -125,9 +125,7 @@ public:
     }
     return outputStream;
   }
-  inline std::istream & read(std::istream &input){
-
-  }
+  inline std::istream &read(std::istream &input) {}
   inline friend std::istream &operator>>(std::istream &in, PoseSensitivity &p) {
     for (size_t i = 0; i < p.observationMask.size(); i++) {
       p.observationMask[i] = false;
@@ -503,3 +501,20 @@ const std::string NaoPose<T>::className = "NaoPoseV2"; // updated version
 
 template <typename T>
 const std::string NaoPoseAndRawAngles<T>::className = "NaoPoseAndRawAngles";
+
+class JointsAndPosesStream {
+public:
+  static bool getNextPoseAndRawAngles(std::istream &inputPoseFile,
+                                      NaoPoseAndRawAngles<float> &val) {
+    if (inputPoseFile.good()) {
+      std::string poseStr;
+      std::getline(inputPoseFile, poseStr);
+      if (inputPoseFile.good()) {
+        std::stringstream line(poseStr);
+        line >> val;
+        return val.isGood();
+      }
+    }
+    return false;
+  }
+};
