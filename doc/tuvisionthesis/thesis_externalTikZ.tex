@@ -63,13 +63,13 @@ The RoboCup was inaugurated 21 years ago (1997) in Japan as an annual competitio
 
 This thesis presents the design, implementation and application of a Camera and Joint calibration process for the NAO, in the context of "HULKs", the SPL team of Hamburg University of Technology. Not only the technical challenges, but also factors like time to calibrate, logistics are also considered due to the varying venues and competitive nature of the world championship.
 
-This thesis is organized as follows. \todo{Complete this}
+This thesis is organized as follows; The 
 
 \section{Problem Statement}
 
 Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic) \cite{HULKs2017Report}.
 
-In recent years, with the ageing NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several meters.
+In recent years, with the aging NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several meters.
 
 Therefore it has come to attention the need for automatic joint error detection and calibration as this also affects camera extrinsic calibration process.
 
@@ -92,78 +92,106 @@ The aim of this thesis is to develop a fully or semi-automatic joint and camera 
 
 Since item 1 and 2 of \cref{itemize:possible_reasons} are not covered well in most literature or only in industrial context (which use laser trackers), this thesis will pay more attention for importance of picking optimal poses, observability, reduction of ambiguities (somewhat inverse to coverage of observable subspace) \todo{use a section to define wording} and improving calibration optimizers. Finally the evaluation phase will be used to validate the hypotheses. A detailed 
 
-Below listed is a summarized set of goals. A detailed workflow is presented in \cref{chap:workflow}.
+Below listed is a summarized set of goals. A detailed breakdown into milestones is presented in \cref{chap:milestones}.
 
-\begin{itemize}
+\begin{enumerate}
 	\item Derive a process to determine suitability of a sensors, poses, input data, etc. This may include observation modelling.
 	\item Investigate the suitability of onboard sensors based on the above mentioned process. (At least some of the joint errors should be correctable)
 	\item Determine the effect of backlash and offsets, level of observation and other factors.
-\end{itemize}
+\end{enumerate}
 
 \section{Limitations \& Scope}
 
 This research is performed with the following constraints.
 
-\begin{itemize}
+\begin{enumerate}
 	\item Intrinsic Camera calibration is not considered, as it doesn't depend on joints. enabling it to function well even without the intended improvements of this research.
 	\item Only on-board sensors are evaluated in this thesis, therefore Cameras will be the main source of information in addition to joint position sensors.
 	\item Primary testing will be with different levels simulations.
 	\item Optionally, perform real life testing with robots if and when simulation proves feasibility and there is enough time.
-\end{itemize}
+\end{enumerate}
 
-%%%% WORKFLOW %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\chapter{Workflow \& Milestones}
-\label{chap:workflow}
+%%%% MILESTONES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Milestones}
+\label{chap:milestones}
 
-This chapter describe the goals in details in terms of milestones and the proposed workflow.  The methodology \cref{chap:methodology} is followed in this order.
+This chapter describe the goals in details in terms of milestones and the proposed workflow.
 
 \section{Initial preparations}
-This step identify and fullfill the prerequicites.
-
+Tasks:
 \begin{enumerate}
-	\item Determine which type of errors affect the accuracy of the robot.
-	\subitem Joint backlash might be observable from joint angle sensors.
-	\subitem Joint offsets cannot be directly observed from onboard sensors.
+	\item Determine which type of errors affect the accuracy of robot's perception.
+	\subitem Note: Joint backlash might be observable from joint angle sensors.
+	\subitem Note: Joint offsets cannot be directly observed from onboard sensors.
 	\item Determine which poses the robot frequently use and how the errors affect.
 	\item If backlash is not directly observed, a model is needed.
 	\subitem Else; It can be assumed only joint offsets affect the kinematic chain.
+	\item prepare and setup necessary software frameworks.
+\end{enumerate}
+
+\section{Generating candidate poses}
+Given the amount of joints and movement range, virtually infinite number of poses can be reached by the NAO. Considering the requirement of capturing in similar conditions to real gameplay, stable, standing poses are preferred. However, captures while moving will not be considered due to concerns of temporal synchronizing joint sensors with camera capture.
+
+Tasks:
+\begin{enumerate}
+	\item Identify criterion for a "valid" pose.
+	\item Implement necessary software for generating poses that follow the given criterion.
+	\item Define and implement necessary data storage formats as well.
 \end{enumerate}
 
 \section{Observation model}
 In order to identify the ability of sensors under consideration and their observation capability of joint errors, developing  models is proposed.
 
+Tasks:
 \begin{enumerate}
 	\item Define and observation model/ framework for joint and camera extrinsic error space.
-	\subitem Some abstraction for obs. models are needed in order for transparent expansion with different sensors in future.
-	\item Derive "poses" in which the calibration will take place. Due to trillions of possible joint configurations, a small subset of optimal poses has to be determined.
-	\begin{itemize}
-		\item Poses must be similar/ stimulate joints in similar manner to poses seen/ used during SPL games. Thus, stable, standing poses are preferred.
-		\item Apply the observation model to each possible pose and obtain information such as magnitude and direction vector of observation space.
-		\item Using above observation information and other weights, a cost function will be evaluated and "best" poses are chosen.
-	\end{itemize}
+	\item Consider abstraction of obs. models in order for transparent expansion with different sensors in future.
+\end{enumerate}
+
+\section{Extracting optimal poses}
+Given the large amount of possible candidate poses, an optimal subset of these poses must be derived in order to get best possible results while minimizing amount of different poses in order to save time when calibrating.
+
+ Previous work has demonstrated that selecting a set of optimal calibration poses is more beneficial than randomly selected set of poses.
+
+Tasks:
+\begin{enumerate}
+	\item Apply the observation model to each possible pose and obtain information such as magnitude and direction vector of observation space.
+	\item Poses that do not exhibit satisfactory amount of observation capabilities should be removed.
+	\item Define a suitable cost function that use information from previous step to sort poses in order of minimal cost.
+	\item Derive a set of Optimal poses based on previously derived list. This step will consider interaction of different poses with the calibration space with similar goal as  \todo{cite paper about condition number?}
+	\item Identify potential placement of calibration patterns based on this optimal set of poses.
 \end{enumerate}
 
 \section{Calibration Process}
 The following tasks aim to derive a calibration process that will use poses obtained by the method proposed in the previous section.
 
+Tasks:
 \begin{enumerate}
-	\item Make the robot reach each calibration pose, capture sensor values. (Cameras, joint angles, etc).
+	\item Prepare necessary software for performing simulated calibration, including making the robot reach each pose, capture sensor values. (Cameras, joint angles, etc).
 	\subitem the uniqueness of observation direction for each joint at a given pose highly influence quality/ possibility of observing joint error without much ambiguity. This will be further discussed in *state of art* and *methodology*
-	\item Optimization to determine joint errors and camera extrinsic values.
-	\item Based on results of simulation, real world tests can be done.
+	\item Iteratively solve to determine joint errors and camera extrinsic values.
+	\item Obtain statistics with a suitable population size.
+\end{enumerate}
+
+\section{Testing and evaluation of software}
+\begin{enumerate}
+	\item Unit tests or similar tests to verify data storage, computational methods
 \end{enumerate}
 
 \section{Testing and evaluation of calibration poses and process}
+Evaluating the outcome of this research is done as follows.
 
-Evaluating the outcome of previous stages is done in multitude of manners.
-
-\begin{itemize}
-	\item Unit tests or similar tests to verify data storage, computational methods
+\begin{enumerate}
 	\item Simulated joint calibration testing with a dense set of captured data (3D-2D correspondences in case of camera) with a suitable population size.
 	\subitem The goal is to verify calibration is possible to a high degree of confidence.
-	\item Simulated testing with relatively sparse set of captured data. This would verify ability to use real world constraints such as using points off a calibration pattern at a given place. It gives a "sparse" data set compared to "dense" data sets taken by a large imaginary grid of points resulting potentially worse calibration despite faster optimization computation.
-	\item If time permits, real world testing with actual NAO robots will be performed in the same manner as the previous method. The only challenge would be reliably obtaining ground truth.
-\end{itemize}
+	\item Simulated testing with relatively sparse set of captured data. This would demonstrate the ability to use a calibration pattern (a relatively sparse feature with limited amount of points) at a given place.
+	\item Identify the effect of noisy camera captures and noisy joint readings.
+	\item If time permits, real world testing with actual NAO robots will be performed in the same manner as the previous method. Obtaining reliable ground truth might be a challenge.
+	
+\end{enumerate}
+
+\section{Finalization}
+\todo{Complete this}
 
 \section{Timeline}
 \todo{Complete this}
@@ -172,7 +200,7 @@ Evaluating the outcome of previous stages is done in multitude of manners.
 \chapter{Literature Review}
 
 \section{NAO Robot}
-
+\todo{is it the right place?}
 \subsection{Joints \& Coordinate frames}
 NAO V5 and V6 have almost identical link lengths but the masses may be different. The joint actuators are explained in the datasheet, but they don't mention typical backlash values. \todo{cite, verify this}
 
@@ -181,7 +209,7 @@ These joints can be commanded at 100Hz rate, which is possible via NAOqi - a sof
 \subsection{Sensors}
 \subsubsection{Camera}
 \todo{datasheet \& drawings}
-NAO V5 has been the primary version used in the past few years which feature a camera with following specifications.
+NAO V5 has been the primary version used in the past few years which feature a camera with following specifications \cite{AldebaranDocumentationV5_Head}.
 
 NAO V6 will be used officially in the upcoming RoboCup, thus it is also a priority to allow the calibration framework to be used with this platform. The cameras are upgraded to higher pixel density and they also feature autofocus (most probably be disabled).
 
@@ -194,18 +222,22 @@ They feature magnetic incremental encoders with $0.1\degree$ precision. As menti
 IMU is also an important element, FSR ... etc. \todo {complete this}
 
 \subsection{HULKs NAO framework}
-This is the software framework developed by HULKs for the NAO to play soccer in RoboCup SPL . It access robot's hardware through several software components provided by SoftBank Robotics. However it access cameras via kernel driver (V4L2). Due to this difference, two major threads are employed; Vision (+ brain -> perception \& behavior) and Motion. They cycle at 60Hz (30FPS per camera x 2) and 100Hz (rate set by NAOqi - the interface to access hardware). Due to this difference of rates, synchronization is done with a set of timestamped buffers. For calibration purposes, therefore static poses are desirable for capturing images and joint values to avoid time-synchronization induced shifts. \todo{cleanup}
+This is the software framework developed by HULKs for the NAO to play soccer in RoboCup SPL . It access robot's hardware through several software components provided by SoftBank Robotics. However it access cameras via kernel driver (V4L2). Due to this difference, two major threads are employed; Vision (+ "brain" -> perception \& behavior) \todo{check this} and Motion. They cycle at 60Hz (30FPS per camera x 2) and 100Hz (rate set by NAOqi - the interface to access hardware)\todo{V6 updates}. Due to this difference of rates, synchronization is done with a set of timestamped buffers. For calibration purposes, therefore static poses are desirable for capturing images and joint values to avoid time-synchronization induced shifts. \todo{cleanup}
 
-The framework also supports debugging and configuration via the Debug tool "MATE" - also developed by HULKs. Further information is present in the Team Research Report. \todo{cite TRR}
+The framework also supports debugging and configuration via the Debug tool "MATE" - also developed by HULKs. \todo{do we need this?}
 
 This framework includes a module to compensate joint offset errors \todo{cite Code release?}. It offsets the joints movement commands by the given value and it also compensate this value from sensor output, making the robot's perception unaware of induced offsets. \todo{Maybe include a block diagram?}
 
+Further information about HULKs NAO framework and tools is present in \cite{HULKs2017Report}.
+
+\textbf{}
 \section{Camera calibration (extrinsic)}
+\todo{trim this as scope is changed}
 Camera calibration is a well researched topic as it is a primary dependency for obtaining good results with camera systems. In this thesis, these standard methods \& tools for intrinsic calibration is employed, while discussion about extrinsic approaches will be given higher regard.
 
 \subsection{Method of HULKs}
 
-The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (LM). The method of operation and usage is explained in detail in the team research report. \todo{cite HULKS TRR}
+The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (LM). The method of operation and usage is explained in \cite{HULKs2017Report}.
 
 \subsection{Other teams}
 The team B-Human employs a method combined with joint calibration \todo{ref section.. and paper}. HTWK-Lepzig employs a method based on the centre circle, their robots gather enough feature points in several poses to solve the non linear equation. Berlin United also employs a similar approach but they do this with the robots in a sit down (unstiffed) pose and they can use all the lines of the entire field as features.
@@ -357,20 +389,20 @@ Due to the high dimensionality, it is not only difficult to visualize, but also 
 %%%% METHODOLOGY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Methodology}
 \label{chap:methodology}
-This chapter describe the methodology followed in this thesis. It is based on the workflow described in chapter \cref{chap:workflow}
+This chapter describe the methodology followed in this thesis. It is based on the workflow described in chapter \cref{chap:milestones}
 
 Majority of the time was spent for pose generation and filtering stage due to the massive amounts of computation needed. The frame working for reaching robot poses was already done. \todo{write clearly}
 
-\section{Initial work}
+\section{Initial Preparations}
 
-This stage was covering the prerequites.
+This stage was covering the prerequisites.
 
 \section{Generation of Calibration poses}
 This phase became a major segment of this project due to the importance of finding out the poses that could get best results as calibration data captures. About 80\% of the implementation was dedicated for this matter.
 
 \subsection{Software implementation}
 
-Several sets of software were implemented for this research. One portion was within the NAO to obtain images and to get joint angles after a being stable. The next is user interface (within debug tool) to command robots to reach a pose and the nessesary calculation stage within the NAO.
+Several sets of software were implemented for this research. One portion was within the NAO to obtain images and to get joint angles after a being stable. The next is user interface (within debug tool) to command robots to reach a pose and the necessary calculation stage within the NAO.
 
 The crucial set of software was in the pose generation and optimal pose finding stage. This was a set of C++ programs that depends on the HULKs NAO framework (TUHHSDK segments to be precise) to access existing kinematic, center of mass calculations as well as camera matrix and related calculations. In addition a multitude of classes were implemented to store data in text files with space seperated fields, with full serialization and deserialization capability to simplify IO operations. The following classes could be streamed into files and thus be persistantly stored.
 \todo{More about data types.mayve a subsubsection?}
