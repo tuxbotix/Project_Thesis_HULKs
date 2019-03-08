@@ -81,9 +81,9 @@ template <typename _Scalar = float> struct Pose2DFunctor : Functor<_Scalar> {
  */
 
 // we will solve ||Xb-y|| s.t. b>=0
-//template <typename T>
-//class Pose2DLeastSquares : public cppoptlib::BoundedProblem<T> {
-//public:
+// template <typename T>
+// class Pose2DLeastSquares : public cppoptlib::BoundedProblem<T> {
+// public:
 //  using Superclass = cppoptlib::BoundedProblem<T>;
 //  using typename Superclass::TVector;
 //  using TMatrix = typename Superclass::THessian;
@@ -91,7 +91,7 @@ template <typename _Scalar = float> struct Pose2DFunctor : Functor<_Scalar> {
 //  const TMatrix X;
 //  const TVector y;
 
-//public:
+// public:
 //  Pose2DLeastSquares(const TMatrix &X_, const TVector y_)
 //      : Superclass(X_.cols()), X(X_), y(y_) {}
 
@@ -145,21 +145,26 @@ int get2dPose(
       lm(functorDiff);
 
   int status = lm.minimize(paramsX);
-  // {
-  //   VectorXf diffs(functor.values());
-  //   functor(paramsX, diffs);
-  //   // if (diffs.norm() > 5)
-  //   {
-  //     float mean = diffs.mean();
-  //     VectorXf val = (diffs - VectorXf::Ones(diffs.size()) * mean);
-  //     double std_dev = std::sqrt(val.dot(val) / (diffs.size() - 1));
+  {
+    VectorXf diffs(functor.values());
+    functor(paramsX, diffs);
+    const auto finalErrorAvg = diffs.mean();
+    if (finalErrorAvg > 480 * 0.02) {
+      status = -1;
+    }
+    // if (diffs.norm() > 5)
+    //    {
+    //      float mean = diffs.mean();
+    //      VectorXf val = (diffs - VectorXf::Ones(diffs.size()) * mean);
+    //      double std_dev = std::sqrt(val.dot(val) / (diffs.size() - 1));
 
-  //     std::cout << "Solver's efficiency?? mean" << mean << " std dev: "
-  //               << std_dev << " norm " << diffs.norm() << std::endl;
-  //     // " min " << diffs.minCoeff() << " max " << diffs.maxCoeff() <<
-  //     std::endl;
-  //   }
-  // }
+    //      std::cout << "Solver's efficiency?? mean" << mean
+    //                << " std dev: " << std_dev << " norm " << diffs.norm()
+    //                << std::endl;
+    //      // " min " << diffs.minCoeff() << " max " << diffs.maxCoeff() <<
+    //      std::endl;
+    //    }
+  }
   params = Eigen::Vector3f(paramsX(0), paramsX(1), paramsX(2));
   return status;
 }

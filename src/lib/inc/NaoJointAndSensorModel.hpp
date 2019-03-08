@@ -75,7 +75,9 @@ public:
     }
   }
 
-  static float getMaxViewDist() { return NaoJointAndSensorModel::maxViewDist; }
+  const static float getMaxViewDist() {
+    return NaoJointAndSensorModel::maxViewDist;
+  }
 
   NaoJointAndSensorModel(const NaoJointAndSensorModelConfig cfg)
       : NaoJointAndSensorModel(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,
@@ -169,12 +171,12 @@ public:
       return false;
     }
     // pinhole projection
-    pixel_coordinates.x() = camMat.cc.x() - camMat.fc.x() *
-                                                cameraCoordinates.y() /
-                                                cameraCoordinates.x();
-    pixel_coordinates.y() = camMat.cc.y() - camMat.fc.y() *
-                                                cameraCoordinates.z() /
-                                                cameraCoordinates.x();
+    pixel_coordinates.x() =
+        camMat.cc.x() -
+        camMat.fc.x() * cameraCoordinates.y() / cameraCoordinates.x();
+    pixel_coordinates.y() =
+        camMat.cc.y() -
+        camMat.fc.y() * cameraCoordinates.z() / cameraCoordinates.x();
     return true;
   }
 
@@ -248,7 +250,7 @@ public:
     bool proceed = !isCameraAboveHorizon(camName);
     if (proceed) {
       proceed = projectCamCenterAxisToGround(camName, camCenterProjPoint) &&
-                (camCenterProjPoint.norm()) <= maxViewDist;
+                (camCenterProjPoint.norm()) <= getMaxViewDist();
     }
 #if DEBUG_JOINT_AND_SENS
     else {
@@ -295,12 +297,12 @@ public:
         bool cornerSuccess = false;
         // top left
         cornerSuccess = pixelToRobot(camName, Vector2i(0, leftTopHoriz), tl) &&
-                        tl.norm() < maxViewDist;
+                        tl.norm() < getMaxViewDist();
         diff = (tl - bl).normalized();
         // center-left
         //        proceed &=
         pixelToRobot(camName, Vector2i(0, imHeightFraction), temp) &&
-            temp.norm() < maxViewDist;
+            temp.norm() < getMaxViewDist();
         // get gradient of line from bl point of image on ground to cl of image
         // on ground
         diff2 = (temp - bl).normalized();
@@ -310,18 +312,20 @@ public:
             std::abs(std::atan2(diff2.y(), diff2.x()) -
                      std::atan2(diff.y(), diff.x())) > 10.0f * TO_RAD_FLT) {
           // truncate the FOV with maxViewDist to get psuedo top-left
-          tl = bl + diff2 * std::max(maxViewDist, (maxViewDist - bl.norm()));
+          tl = bl +
+               diff2 *
+                   std::max(getMaxViewDist(), (getMaxViewDist() - bl.norm()));
         }
 
         // top right
         cornerSuccess =
             pixelToRobot(camName, Vector2i(imLimits.x(), rightTopHoriz), tr) &&
-            tr.norm() < maxViewDist;
+            tr.norm() < getMaxViewDist();
         diff = (tr - br).normalized();
         // center-right
         //        proceed &=
         pixelToRobot(camName, Vector2i(imLimits.x(), imHeightFraction), temp) &&
-            temp.norm() < maxViewDist;
+            temp.norm() < getMaxViewDist();
         // get gradient of line from br point of image on ground to cr of image
         // on ground
         diff2 = (temp - br).normalized();
@@ -331,10 +335,9 @@ public:
             std::abs(std::atan2(diff2.y(), diff2.x()) -
                      std::atan2(diff.y(), diff.x())) > 10.0f * TO_RAD_FLT) {
           // truncate the FOV with maxViewDist to get psuedo top-left
-          tr = br + diff2 * std::max(maxViewDist, (maxViewDist - br.norm()));
-          //        std::cout << ", " << diff2 << " "
-          //                  << std::max(maxViewDist, (maxViewDist -
-          //                  temp.norm())) << "\n";
+          tr = br +
+               diff2 *
+                   std::max(getMaxViewDist(), (getMaxViewDist() - br.norm()));
         }
       } else {
         proceed = false;

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <thread>
 //#include <gmpxx.h>
 
 #include "JointCalibSolver.hpp"
@@ -264,16 +265,21 @@ template <typename T = size_t>
  */
 inline void decodeInteractionVecIndex(const T &index, size_t &row,
                                       size_t &col) {
-  for (size_t iter = 1; iter < utils::TRIANGLE_NUMS_30.size(); ++iter) {
-    if (index < static_cast<T>(utils::TRIANGLE_NUMS_30[iter])) {
-      col = static_cast<size_t>(index) - utils::TRIANGLE_NUMS_30[iter - 1];
-      row = iter;
-      break;
-    }
-  }
+  //  for (size_t iter = 1; iter < utils::TRIANGLE_NUMS_30.size(); ++iter) {
+  //    if (index < static_cast<T>(utils::TRIANGLE_NUMS_30[iter])) {
+  //      col = static_cast<size_t>(index) - utils::TRIANGLE_NUMS_30[iter - 1];
+  //      row = iter;
+  //      break;
+  //    }
+  //  }
+
+  const auto val = utils::getClosestTriangleNumAndBase(index);
+  col = static_cast<size_t>(index) - val.first;
+  row = val.second + 1;
+
   if (encodeInteractionVecIndex(row, col) != static_cast<size_t>(index)) {
     std::cerr << "Reconstruction failure. " << index << " " << row << " " << col
-              << std::endl;
+              << " " << encodeInteractionVecIndex(row, col) << std::endl;
     throw("Triangle Reconstruction failure");
   }
 }
@@ -436,6 +442,109 @@ bool sortAndTrimPoseCosts(PoseMap &poseMap,
  */
 
 /**
+ * @brief poseInteractionCriteria
+ * @param i
+ * @param j
+ * @return true if i is better than j
+ */
+inline bool poseInteractionCriteria(const PoseInteraction &i,
+                                    const PoseInteraction &j) {
+  // count is smaller, if same, then get lower cost.
+  return i.interactionCount < j.interactionCount ||
+         (i.interactionCount == j.interactionCount && i.cost < j.cost);
+}
+
+inline bool poseInteractionCriteria(const int &iCount, const double &iCost,
+                                    const int &jCount, const double &jCost) {
+  // count is smaller, if same, then get lower cost.
+  return (iCount < jCount || (iCount == jCount && iCost < jCost));
+}
+
+/**
+ * @brief populatePoseInteractions
+ * @param poseInteractionList
+ * @param sortedPoseCostVec
+ * @return
+ */
+std::pair<PoseInteraction, bool>
+getBestPoseInteraction(const std::vector<PoseCost> &sortedPoseCostVec,
+                       const size_t MAX_THREADS = 4) {
+  std::atomic<size_t> iterSum;
+  iterSum = 0;
+  auto selectionFunc = [&sortedPoseCostVec, &iterSum](
+      const size_t beginPoint,
+      const size_t endPoint) -> std::pair<PoseInteraction, bool> {
+    auto curBestInteraction =
+        PoseInteraction(PoseCost(10E5, 0), PoseCost(10E5, 0));
+
+    for (size_t idx = beginPoint, i = 0; idx < endPoint; ++idx, ++i) {
+      size_t row;
+      size_t col;
+      decodeInteractionVecIndex(idx, row, col);
+
+      auto currentInteraction =
+          PoseInteraction(sortedPoseCostVec[row], sortedPoseCostVec[col]);
+      // check if better than current best.
+      if (poseInteractionCriteria(currentInteraction, curBestInteraction)) {
+        curBestInteraction = currentInteraction;
+      }
+      ++iterSum;
+      //      if (i % 1000) {
+      //        iterSum += 1000;
+      //      }
+    }
+    return {curBestInteraction, (curBestInteraction.combinedId.first != 0 &&
+                                 curBestInteraction.combinedId.second != 0)};
+  };
+
+  size_t combinationCount = utils::getTriangleNum(sortedPoseCostVec.size());
+  size_t combosPerThread = combinationCount / MAX_THREADS;
+
+  std::vector<std::future<std::pair<PoseInteraction, bool>>> futureList(
+      MAX_THREADS);
+  for (size_t idx = 0; idx < MAX_THREADS; ++idx) {
+    const size_t begin = idx * combosPerThread;
+    const size_t end =
+        (idx + 1 < MAX_THREADS) ? begin + combosPerThread : combinationCount;
+    futureList[idx] = std::async(selectionFunc, begin, end);
+  }
+
+  //#if ENABLE_PROGRESS
+  bool continueTicker = true;
+  std::thread tTick = std::thread([&]() {
+    int elapsed = 0;
+    const size_t interval = 10;
+    while (continueTicker) {
+      std::lock_guard<std::mutex> lock(utils::mtx_cout_);
+      std::cout << "Elapsed: " << elapsed << "s Iterations: "
+                << (static_cast<double>(iterSum) * 100 / combinationCount)
+                << "%" << std::endl; // "\r";
+      elapsed += interval;
+      std::this_thread::sleep_for(
+          std::chrono::seconds(interval)); // 100Hz -> 10ms
+    }
+  });
+  //#endif
+
+  auto bestInteraction = PoseInteraction(PoseCost(10E5, 0), PoseCost(10E5, 0));
+  for (auto &future : futureList) {
+    auto temp = future.get();
+    // check if better than current best.
+    if (temp.second && poseInteractionCriteria(temp.first, bestInteraction)) {
+      bestInteraction = temp.first;
+    }
+  }
+  //  #if ENABLE_PROGRESS
+  continueTicker = false;
+  if (tTick.joinable()) {
+    tTick.join();
+  }
+  //#endif
+  return {bestInteraction, (bestInteraction.combinedId.first != 0 &&
+                            bestInteraction.combinedId.second != 0)};
+}
+
+/**
  * @brief populatePoseInteractions
  * @param poseInteractionList
  * @param sortedPoseCostVec
@@ -466,19 +575,6 @@ populatePoseInteractions(std::vector<PoseInteraction> &poseInteractionList,
   }
   return approxMaxPosesToTry;
 }
-
-inline bool poseInteractionCriteria(const PoseInteraction &i,
-                                    const PoseInteraction &j) {
-  // count is smaller, if same, then get lower cost.
-  return i.interactionCount < j.interactionCount ||
-         (i.interactionCount == j.interactionCount && i.cost < j.cost);
-};
-
-inline bool poseInteractionCriteria(const int &iCount, const double &iCost,
-                                    const int &jCount, const double &jCost) {
-  // count is smaller, if same, then get lower cost.
-  return (iCount < jCount || (iCount == jCount && iCost < jCost));
-};
 /**
  * @brief finalPoseFilteringAndChaining
  * Sort the pose interactions..

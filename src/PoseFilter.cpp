@@ -407,6 +407,9 @@ int main(int argc, char **argv) {
   const std::string outFilteredPosesFileName(
       outFilePrefix + "_" + constants::FilteredPosesFileName + "_" +
       (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
+  const std::string outTestPosesFileName(
+      outFilePrefix + "_" + constants::TestPosesFileName + "_" +
+      (jointNum >= 0 ? "j" + std::to_string(jointNum) : "generic"));
 
   /// TUHH conf.
   TUHH tuhhInstance(confRoot);
@@ -510,40 +513,57 @@ int main(int argc, char **argv) {
   /*
    * Secondary sort run with poseInteractionns
    */
-  std::vector<PoseInteraction> poseInteractionList;
-  size_t approxMaxPosesToTry = populatePoseInteractions(
-      poseInteractionList, sortedPoseCostVec, maxPoseInteractionCount);
-  poseToPoseInteractionSort(poseInteractionList);
+  //  std::vector<PoseInteraction> poseInteractionList;
+  //  size_t approxMaxPosesToTry = populatePoseInteractions(
+  //      poseInteractionList, sortedPoseCostVec, maxPoseInteractionCount);
+  //  poseToPoseInteractionSort(poseInteractionList);
 
   // populate Id vec
-  PoseInteraction rootPoseInteraction =
-      poseInteractionList[0]; // this is the best
+  std::cout << "Total PoseCosts: " << sortedPoseCostVec.size() << std::endl;
+  auto bestInteractionResult =
+      getBestPoseInteraction(sortedPoseCostVec, MAX_THREADS);
+
+  if (!bestInteractionResult.second) {
+    std::cerr << "No best interaction found!!! Something is wrong" << std::endl;
+//    exit(1);
+  }
+  PoseInteraction rootPoseInteraction = bestInteractionResult.first;
+
   std::vector<size_t> poseIdVec;
   {
     /// This keeps the poses as ordered before. But being a set, we ensure only
     /// a unique set of elems are here.
 
     std::unordered_set<size_t> poseIdSet;
-    poseIdVec.reserve(approxMaxPosesToTry); // reserve the vec
-    poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
-    for (auto &elem : poseInteractionList) {
-      auto res = poseIdSet.insert(elem.combinedId.first);
+    poseIdVec.reserve(sortedPoseCostVec.size()); // reserve the vec
+    //    poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
+    //    for (auto &elem : poseInteractionList) {
+    //      auto res = poseIdSet.insert(elem.combinedId.first);
+    //      if (res.second) {
+    //        poseIdVec.emplace_back(elem.combinedId.first);
+    //      }
+    //      res = poseIdSet.insert(elem.combinedId.second);
+    //      if (res.second) {
+    //        poseIdVec.emplace_back(elem.combinedId.second);
+    //      }
+    //    }
+    poseIdVec.emplace_back(rootPoseInteraction.combinedId.first);
+    poseIdVec.emplace_back(rootPoseInteraction.combinedId.second);
+
+    for (const auto &elem : sortedPoseCostVec) {
+      auto res = poseIdSet.insert(elem.id);
       if (res.second) {
-        poseIdVec.emplace_back(elem.combinedId.first);
-      }
-      res = poseIdSet.insert(elem.combinedId.second);
-      if (res.second) {
-        poseIdVec.emplace_back(elem.combinedId.second);
+        poseIdVec.emplace_back(elem.id);
       }
     }
 
-    if (poseIdVec[0] == rootPoseInteraction.combinedId.first &&
-        poseIdVec[1] == rootPoseInteraction.combinedId.second) {
-      std::cout << "good" << std::endl;
-    }
-    poseInteractionList.clear(); // clear elements
-    std::vector<PoseInteraction>().swap(
-        poseInteractionList); // Actually force it to dealloc the memory
+    //    if (poseIdVec[0] == rootPoseInteraction.combinedId.first &&
+    //        poseIdVec[1] == rootPoseInteraction.combinedId.second) {
+    //      std::cout << "good" << std::endl;
+    //    }
+    //    poseInteractionList.clear(); // clear elements
+    //    std::vector<PoseInteraction>().swap(
+    //        poseInteractionList); // Actually force it to dealloc the memory
   }
 
   /// Chain the poses!!
@@ -557,6 +577,31 @@ int main(int argc, char **argv) {
     }
   } else {
     std::cout << "No Chaining" << std::endl;
+  }
+
+  /// Get test data
+  std::vector<size_t> testPoseIdVec;
+  {
+    std::set<size_t> testPoseIdSet;
+    std::default_random_engine generator; // random gen
+    std::uniform_int_distribution<size_t> randomDist(0,
+                                                     sortedPoseCostVec.size());
+    size_t testDataSetSize = 100;
+
+    for (size_t i = 0; i < 2000 && testPoseIdSet.size() < testDataSetSize;
+         i++) {
+      const auto idx = randomDist(generator);
+      const auto &id = sortedPoseCostVec[idx].id;
+      if (id != 0) {
+        testPoseIdSet.insert(id);
+      }
+    }
+
+    std::copy(testPoseIdSet.begin(), testPoseIdSet.end(),
+              std::back_inserter(testPoseIdVec));
+    /// shuffle
+    std::srand(std::time(0));
+    std::random_shuffle(testPoseIdVec.begin(), testPoseIdVec.end());
   }
 
   /// Write the remaining buffers to file
@@ -591,6 +636,22 @@ int main(int argc, char **argv) {
               << std::endl;
     outCostsFile.close();
     outFilteredPosesFile.close();
+
+    // save test poses
+    auto outFilteredPosesFile =
+        std::fstream(outTestPosesFileName, std::ios::out);
+    for (auto &id : testPoseIdVec) {
+      try {
+        auto pose = poseMap.at(id);
+        outFilteredPosesFile << pose << "\n";
+      } catch (std::exception e) {
+        std::cerr << e.what() << std::endl;
+        break;
+      }
+    }
+    outFilteredPosesFile.flush();
+    outFilteredPosesFile.close();
+    std::cout << "commited test poses: " << testPoseIdVec.size() << std::endl;
 #endif
     std::cout << "All done\n" << std::endl;
   }

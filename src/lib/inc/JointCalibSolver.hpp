@@ -113,8 +113,17 @@ struct JointCalibCaptureEvalT {
  */
 struct JointCalibResult {
   int status; // out of solver
-  float reprojectionErrorNorm;
-  float reprojectionErrorAvg;
+
+  float reprojectionErrorStdDevCalib;
+  float reprojectionErrorNormCalib;
+  float reprojectionErrorAvgCalib;
+  size_t sampleSizeCalib;
+
+  float reprojectionErrorStdDevTest;
+  float reprojectionErrorNormTest;
+  float reprojectionErrorAvgTest;
+  size_t sampleSizeTest;
+
   rawPoseT jointParams; // solved params
 };
 

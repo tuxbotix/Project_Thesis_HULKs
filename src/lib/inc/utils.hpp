@@ -61,7 +61,7 @@ void commitToStream(std::vector<T> &poseList, std::ostream &outStream) {
       buffer.clear();
     }
 #else
-    outStream << p << std::endl;
+    outStream << p << "\n";
 #endif
   }
 #if USE_STRINGSTREAM
@@ -252,8 +252,9 @@ public:
     out << std::setprecision(10);
     for (int i = 0; i < hist.binCount; ++i) {
       out << ((T)i * hist.binSize + hist.minRange) << ", "
-          << hist.histogram[i] / hist.totalElemCount << std::endl;
+          << hist.histogram[i] / hist.totalElemCount << "\n";
     }
+    out.flush();
     // do stuff
     out.precision(old_precision);
     return out;
@@ -286,6 +287,32 @@ inline size_t getSmallerTriangleNum(const size_t &sizeOfSize) {
  */
 inline size_t getTriangleNum(const size_t &sizeOfSize) {
   return sizeOfSize * (sizeOfSize + 1) / 2;
+}
+
+/**
+ * @brief getClosestTriangleNum
+ * Source:
+ * https://stackoverflow.com/questions/23319520/fastest-way-to-find-nearest-triangle-number
+ * @param index
+ * @return
+ */
+template <typename T = size_t>
+inline std::pair<size_t, T> getClosestTriangleNumAndBase(const T &index) {
+  // solve it for the explicit formula
+  size_t m = static_cast<size_t>(
+      std::floor(0.5 * (-1.0 + sqrt(1.0 + 8.0 * static_cast<double>(index)))));
+  size_t tan0 = (m * m + m) / 2;         // the closest one is either this
+  size_t tan1 = (m * m + 3 * m + 2) / 2; // or this
+
+  if (index > tan1) { // tan1 is larger, so eval it first
+    return {tan1, m + 1};
+  } else if (index >= tan0) {
+    return {tan0, m};
+  } else {
+    std::cerr << "Can't find nearest triangle!!! " << index << " " << tan0
+              << " " << tan1 << " " << m << std::endl;
+    throw("Can't find nearest triangle!!!");
+  }
 }
 
 /**

@@ -34,7 +34,7 @@
 
 #include "utils.hpp"
 
-static const size_t maxMemBuf = 5e9;
+static const size_t maxMemBuf = 10e9;
 static std::atomic<size_t> maxBufSize(1);
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
@@ -103,14 +103,20 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < MAX_THREADS; i++) {
     std::string fileName =
         inFileName + "_GeneratedPoses_" + std::to_string(i) + ".txt";
-    if (std::ifstream(fileName)) {
+    if (std::ifstream{fileName}) {
       inputPoseAndJointStreams.emplace_back(fileName, std::ios::in);
       usableThreads++;
     } else {
+      std::cout << "Tried opening " << fileName << ", But failed"
+                << std::endl;
       break;
     }
   }
 
+  if (usableThreads <= 0) {
+    std::cerr << "Cannot open inputs, exiting..." << std::endl;
+    exit(1);
+  }
   // Update the buffer size per thread
   maxBufSize = maxMemBuf / (usableThreads * 500);
   std::cout << "Elem buf size per thread: " << maxBufSize
@@ -239,13 +245,14 @@ int main(int argc, char **argv) {
         }
         std::string s;
         while (std::getline(inStream, s)) {
-          outStream << s << std::endl;
+          outStream << s << "\n";
           counter++;
           totalCounter++;
           if (counter > linesPerFile &&
               (outFileNum + 1) < usableThreads) // if last file, keep appending
                                                 // to the same file.
           {
+            outStream.flush();
             outStream.close();
             outStream.clear();
             std::cout << "Finished writing to file: " << outFileNum

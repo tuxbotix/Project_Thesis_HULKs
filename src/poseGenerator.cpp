@@ -128,7 +128,7 @@ const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
 // 2000MB(approx)  total buffer usage = BUFFER_SIZE *sizeof(int) * JOINT_COUNT *
 // MAX_THREADS
-const size_t totalBufferSizeInBytes = 2E9;
+const size_t totalBufferSizeInBytes = 10E9;
 const size_t BUFFER_SIZE =
     totalBufferSizeInBytes /
     (sizeof(dataT) * static_cast<size_t>(PARAMS::P_MAX) * MAX_THREADS);
@@ -472,13 +472,14 @@ int main(int argc, char **argv) {
         }
         std::string s;
         while (std::getline(inStream, s)) {
-          outStream << s << std::endl;
+          outStream << s << "\n";
           counter++;
           totalCounter++;
           if (counter > linesPerFile &&
               (outFileNum + 1) < THREADS_USED) // if last file, keep appending
                                                // to the same file.
           {
+            outStream.flush();
             outStream.close();
             outStream.clear();
             std::cout << "Finished writing to file: " << outFileNum

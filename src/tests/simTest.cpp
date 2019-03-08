@@ -287,7 +287,7 @@ struct JointErrorEval {
         //        && (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT
         //        ||
         //         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)
-    ) {
+        ) {
       // This will hold best params in case looping is needed
       Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
           JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
@@ -338,12 +338,6 @@ struct JointErrorEval {
         // Get the new cost
         calibrator(calibratedParams, finalErrorVec);
 
-        // Check status and continue accordingly
-        //        if (finalCost > finalErrorVec.squaredNorm()) {
-        //          loopedAndBroken = true;
-        //          break;
-        //        } else
-
         /// go back to previous parameter set.
         if (finalCost < finalErrorVec.squaredNorm()) {
           calibratedParams = oldParams;
@@ -358,9 +352,6 @@ struct JointErrorEval {
       }
 #endif
     }
-
-    /// Run Lev-Mar again
-    //  status = runLevMar(calibratedParams);
 
     /*
      * END lev-mar
@@ -395,51 +386,6 @@ struct JointErrorEval {
       successStatus = CalibStatus::SUCCESS;
     }
 
-//  if (successStatus != CalibStatus::SUCCESS) {
-//  {
-//    auto func = JointCalibSolvers::JointCalibrator(frameCaptures, cfg);
-//    Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator,
-//                         Eigen::NumericalDiffMode::Central>
-//        calib(func);
-
-//    Eigen::VectorXf fakeParams(calibratedParams.size());
-//    fakeParams.setZero();
-//    Eigen::VectorXf temp(finalErrorVec.size());
-//    temp.setZero();
-//    calib(fakeParams, temp);
-//    JointCalibSolvers::JointCalibrator::JacobianType mat(calib.values(),
-//                                                         calib.inputs());
-//    calib.df(fakeParams, mat);
-
-//    size_t currentlyPrintedVals = 0;
-//    for (size_t i = 0; i < func.captureList.size(); i++) {
-//      const auto &cap = func.captureList[i];
-//      const auto capCount = cap.capturedCorrespondances.size() * 2;
-//      std::stringstream ss;
-//      std::cout << (cap.camName == Camera::TOP ? "T" : "B")
-//                << " n: " << capCount << " j: ";
-//      for (const auto &j : cap.pose) {
-//        ss << j << " ";
-//      }
-//      std::cout << ss.str() << std::endl;
-//      ss << "\n\t | "
-//         << temp.segment(static_cast<Eigen::Index>(currentlyPrintedVals),
-//                         capCount)
-//                .transpose()
-//         << std::endl;
-//      std::hash<std::string> hash_fn;
-//      std::cout << "hashMain: " << hash_fn(ss.str());
-
-//      ss.clear();
-//      ss << mat.block(static_cast<Eigen::Index>(currentlyPrintedVals), 0,
-//                      capCount, calib.inputs());
-//      std::cout << " hashJac: " << hash_fn(ss.str()) << std::endl;
-//      //      std::cout << mat.transpose() << std::endl;
-//      currentlyPrintedVals += capCount;
-//    }
-//  std::cout << "\n " << successStatus << " Done\n\n\n" << std::endl;
-//  }
-
 // if failed OR if loop broken BUT calibration is bad
 /*
  * NOTE: Local minima if reprojection errr is small but jointResidual isn't
@@ -447,8 +393,7 @@ struct JointErrorEval {
  */
 #if DEBUG_SIM_TEST
     if (successStatus != CalibStatus::SUCCESS ||
-        (stochasticFix && loopedAndBroken &&
-         jointCalibResAbsMax > jointCalibQualityTol)) {
+        (stochasticFix && jointCalibResAbsMax > jointCalibQualityTol)) {
 
       //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
       logStream << "errAbsMax: "
@@ -465,8 +410,8 @@ struct JointErrorEval {
     if (!JointCalibSolvers::jointCalibParamsToRawPose(calibratedParams,
                                                       result.jointParams)) {
     }
-    result.reprojectionErrorNorm = finalErrorNorm;
-    result.reprojectionErrorNorm = finalErrorAvg;
+    result.reprojectionErrorNormCalib = finalErrorNorm;
+    result.reprojectionErrorAvgCalib = finalErrorAvg;
 #if DEBUG_SIM_TEST
     logStream << "END";
     std::lock_guard<std::mutex> lg(utils::mtx_cout_);
@@ -617,7 +562,7 @@ int main(int argc, char *argv[]) {
   }
   std::fstream errorConfFile(errConfigFileName);
   if (!errorConfFile.is_open()) {
-    std::cerr << "error config file cannot be opened, exiting.." << std::endl;
+    std::cerr << "Config file cannot be opened, exiting.." << std::endl;
     return 1;
   }
 
