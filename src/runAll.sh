@@ -1,6 +1,6 @@
 #!/bin/bash
 
-naoConfPath="../../../nao/home/"
+naoConfPath="../../../nao_master/home/"
 
 # supFeet=("l" "r" "d")
 
@@ -75,18 +75,18 @@ tempSensName="out_senses_${supFoot}_temp.txt"
     echo "Starting ${supFoot} foot; poseGen";
 if [ -z "${skipUpto}" ]
   then
-    ./poseGen "${outFile}_${supFoot}" ${supFoot} ${naoConfPath}
+    ./poseGen -f "${outFile}_${supFoot}" -s ${supFoot} -c ${naoConfPath}
 fi
 if [ -z "${skipUpto}" ] || [ "${skipUpto}" == "e" ]
   then
     echo "Starting ${supFoot} foot; SensExtractor";
-    ./sensitivityExtractor "${outFile}_${supFoot}" ${naoConfPath}
+    ./sensitivityExtractor -f "${outFile}_${supFoot}" -c ${naoConfPath}
 fi
     echo "Starting poseFilter - generic";
-    ./poseFilter "${outFile}_${supFoot}" -1 all ${chaining} ${naoConfPath}
+    ./poseFilter -f "${outFile}_${supFoot}" -l ${chaining} -c ${naoConfPath}
     for j in {8..19}
     do
         echo "Starting poseFilter Joint: ${j}";
-        ./poseFilter "${outFile}_${supFoot}" ${j} all ${chaining} ${naoConfPath}
+        ./poseFilter -f "${outFile}_${supFoot}" -l ${chaining} -j ${j} -c ${naoConfPath}
     done
 # done
