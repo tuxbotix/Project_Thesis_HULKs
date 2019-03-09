@@ -165,7 +165,7 @@ void jointIterFuncWithLim(
     poseAndRawAngleListT &poseList, std::ostream &poseOutStream,
     const SupportPolygon
         &supportPoly /*, Collision::CollisionModel &collisionModel*/,
-    std::atomic<size_t> &iterCount, const std::string &id_prefix) {
+    std::atomic<size_t> &iterCount /*, const std::string &id_prefix*/) {
   const rawAnglesT defaultPose = Poses::getPose(Poses::READY);
 
   const auto begin = torsoPosList.begin() + torsoPosBegin;
@@ -207,9 +207,8 @@ void jointIterFuncWithLim(
                 poseCount++;
 #if DO_COMMIT
                 poseList.emplace_back(
-                    poseT(std::stoull(id_prefix + std::to_string(poseCount)),
-                          supFoot, com2CentroidDist, headYawPitch, *torsoPos,
-                          torsoRot, OFootPos, OFootRot),
+                    poseT(poseCount, supFoot, com2CentroidDist, headYawPitch,
+                          *torsoPos, torsoRot, OFootPos, OFootRot),
                     jointAngles);
                 if (poseList.size() > BUFFER_SIZE) {
                   utils::commitToStream<NaoPoseAndRawAngles<dataT>>(
@@ -392,8 +391,8 @@ int main(int argc, char **argv) {
           torsoPosList, torsoRotList, OtherFootPosList, OtherFootRotList,
           std::ref(poseAndAnglesListList[i]), std::ref(poseAndAnglesFiles[i]),
           std::ref(supportPolyList[i]),
-          /* std::ref(collisionModelList[i]), */ std::ref(iterCount[i]),
-          std::string(timestamp + std::to_string(i)));
+          /* std::ref(collisionModelList[i]), */ std::ref(iterCount[i]) /*,
+          std::string(timestamp + std::to_string(i))*/);
     }
 #if ENABLE_PROGRESS
     bool continueTicker = true;
@@ -442,6 +441,9 @@ int main(int argc, char **argv) {
 /// Write the remaining buffers to file
 
 #if DO_COMMIT
+    size_t newId = std::stoull(timestamp) *
+                   static_cast<size_t>(std::floor(log10(maxIterCount)));
+
     std::cout << "flushing all " << std::endl;
     for (size_t i = 0; i < THREADS_USED; i++) {
       utils::commitToStream<NaoPoseAndRawAngles<dataT>>(
@@ -471,8 +473,10 @@ int main(int argc, char **argv) {
           continue;
         }
         std::string s;
+        size_t tmpId;
         while (std::getline(inStream, s)) {
-          outStream << s << "\n";
+          auto spaceLoc = s.find_first_of(" ");
+          outStream << newId++ << s.substr(spaceLoc) << "\n";
           counter++;
           totalCounter++;
           if (counter > linesPerFile &&
