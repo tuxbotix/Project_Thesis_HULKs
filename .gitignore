@@ -2,4 +2,4 @@
 build/*
 *.user
 *.autosave
-*/CmakeLists.txt.user.*
+*/CMakeLists.txt.user.*
