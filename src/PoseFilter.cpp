@@ -31,6 +31,8 @@
 
 #include "utils.hpp"
 
+//#define newStuff
+
 static const size_t MAX_MEM_FOR_PIP =
     20E9; // max mmory for pose vs pose interactions
 
@@ -115,7 +117,7 @@ std::pair<double, InteractionCost> poseFilterCostFunc(
       continue;
     }
 
-    double v1Norm = static_cast<double>(val.norm());
+    double v1Norm = val.template cast<double>().norm();
     for (size_t col = 0; col < row; col++) {
       const JOINTS::JOINT innerJoint = Sensor::ALL_OBS_JOINTS[col];
       // skip own-joint and unobservable joints..
@@ -126,18 +128,19 @@ std::pair<double, InteractionCost> poseFilterCostFunc(
       bool obs2;
       p.getSensitivity(innerJoint, val2, obs2);
 
-      double v2Norm = static_cast<double>(val2.norm());
+      double v2Norm = val2.template cast<double>().norm();
       // second stage
-      double dot =
-          std::fabs(static_cast<double>(val.dot(val2)) / (v1Norm * v2Norm));
+      double cosTheta = std::fabs(
+          val.template cast<double>().dot(val2.template cast<double>()) /
+          (v1Norm * v2Norm));
       // We trust in the dot product :P
-      if (dot > 1.0) {
-        dot = 1.0;
-      } else if (dot < -1.0) {
-        dot = -1.0;
+      if (cosTheta > 1.0) {
+        cosTheta = 1.0;
+      } else if (cosTheta < -1.0) {
+        cosTheta = -1.0;
       }
-      // get the linear angle value.. closer to 90deg, the better.
-      const double similarityAngle = std::acos(dot) / TO_RAD_DBL;
+      // get the linear angle value.. In radians
+      const double similarityAngle = std::acos(cosTheta);
       const long curIdx = encodeInteractionVecIndex<Eigen::Index>(row, col);
       double ambiguityCost = 0;
       /*
@@ -147,17 +150,18 @@ std::pair<double, InteractionCost> poseFilterCostFunc(
        */
       if (policy == SimilarityCostPolicy::PENALIZE_0_ONLY) {
         /// [0, 180] 180 is best, 90 is better and 0 is worst
-        ambiguityCost = std::fabs(180.0 - similarityAngle);
+        ambiguityCost = std::fabs(M_PI - similarityAngle) / M_PI;
       } else if (policy == SimilarityCostPolicy::PENALIZE_0_AND_180) {
         /// [0, 90*2] 90 is best, 180 (wrapped to 0) and 0 are worst
-        ambiguityCost = std::fabs(90.0 - similarityAngle) * 2;
+        /// We are normalizing now ;) [0.0, 1.0]
+        ambiguityCost = std::fabs(1.0 - (similarityAngle / M_PI_2));
       } else {
         /// [0, 180] Original - wrong outcome;
-        ambiguityCost = std::fabs(similarityAngle);
+        ambiguityCost = std::fabs(similarityAngle / M_PI);
       }
 
       // we accumilate the "fitness" or negative cost; so the negative sign
-      accum += wOrtho * -ambiguityCost;
+      accum += wOrtho * -(ambiguityCost * 180.0);
 
       if (enableInteractionCostWeighting) {
         ambiguityCost *= wOrtho;
@@ -165,13 +169,14 @@ std::pair<double, InteractionCost> poseFilterCostFunc(
       interactionCost(curIdx) =
           static_cast<Interactions::InteractionCostType>(ambiguityCost);
 
-      if (dot > static_cast<double>(1.0) || dot < static_cast<double>(-1.0) ||
-          std::isnan(dot) || std::isnan(similarityAngle) || std::isnan(accum)) {
+      if (cosTheta > static_cast<double>(1.0) ||
+          cosTheta < static_cast<double>(-1.0) || std::isnan(cosTheta) ||
+          std::isnan(similarityAngle) || std::isnan(accum)) {
         std::lock_guard<std::mutex> lock(utils::mtx_cout_);
         std::cout << p.getId() << " is NAN 2nd stage [domain err] " << joint
-                  << " " << innerJoint << " dot " << dot << " aco "
-                  << std::acos(dot) << " wOrtho " << wOrtho << " fabs "
-                  << std::fabs(similarityAngle) << std::endl;
+                  << " " << innerJoint << " dot " << cosTheta << " aco "
+                  << std::acos(cosTheta) << " wOrtho " << wOrtho << " fabs "
+                  << std::fabs(similarityAngle / TO_RAD_DBL) << std::endl;
         continue;
       }
     }
@@ -459,7 +464,6 @@ int main(int argc, char **argv) {
     sensorMagnitudeWeights[SENSOR_NAME::BOTTOM_CAMERA] = 4;
   }
 
-  // TODO change this as needed.
   JointWeights jointWeights = {};
   jointWeights.fill(1);
   if (jointNum > 0 && jointNum < static_cast<int>(JOINTS::JOINT::JOINTS_MAX)) {
@@ -500,9 +504,9 @@ int main(int argc, char **argv) {
             static_cast<Interactions::InteractionCostType>(Interactions::TOL)) {
           auto idxPair = decodeInteractionVecIndex(i);
           std::cout << i << " (" << Sensor::ALL_OBS_JOINTS[idxPair.first]
-                    << " vs " << Sensor::ALL_OBS_JOINTS[idxPair.second]
-                    << "): " << static_cast<int>(std::round(
-                                    poseCost.jointInteractionCostVec(i)))
+                    << " vs " << Sensor::ALL_OBS_JOINTS[idxPair.second] << "): "
+                    << static_cast<int>(std::round(
+                           poseCost.jointInteractionCostVec(i) / TO_RAD_DBL))
                     << ", ";
         }
       }
@@ -510,60 +514,67 @@ int main(int argc, char **argv) {
     }
   }
 
-  /*
-   * Secondary sort run with poseInteractionns
-   */
-  //  std::vector<PoseInteraction> poseInteractionList;
-  //  size_t approxMaxPosesToTry = populatePoseInteractions(
-  //      poseInteractionList, sortedPoseCostVec, maxPoseInteractionCount);
-  //  poseToPoseInteractionSort(poseInteractionList);
+/*
+ * Secondary sort run with poseInteractionns
+ */
+#ifndef newStuff
 
+  std::vector<PoseInteraction> poseInteractionList;
+  size_t approxMaxPosesToTry = populatePoseInteractions(
+      poseInteractionList, sortedPoseCostVec, maxPoseInteractionCount);
+  poseToPoseInteractionSort(poseInteractionList);
+  PoseInteraction rootPoseInteraction = poseInteractionList[0];
   // populate Id vec
   std::cout << "Total PoseCosts: " << sortedPoseCostVec.size() << std::endl;
-  auto bestInteractionResult =
+#else
+  /// BEGIN NEW STUFF
+  PoseInteraction rootPoseInteraction =
       getBestPoseInteraction(sortedPoseCostVec, MAX_THREADS);
 
-  if (!bestInteractionResult.second) {
-    std::cerr << "No best interaction found!!! Something is wrong" << std::endl;
-//    exit(1);
-  }
-  PoseInteraction rootPoseInteraction = bestInteractionResult.first;
-
+/// END NEW STUFF
+#endif
   std::vector<size_t> poseIdVec;
   {
     /// This keeps the poses as ordered before. But being a set, we ensure only
     /// a unique set of elems are here.
 
     std::unordered_set<size_t> poseIdSet;
-    poseIdVec.reserve(sortedPoseCostVec.size()); // reserve the vec
-    //    poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
-    //    for (auto &elem : poseInteractionList) {
-    //      auto res = poseIdSet.insert(elem.combinedId.first);
-    //      if (res.second) {
-    //        poseIdVec.emplace_back(elem.combinedId.first);
-    //      }
-    //      res = poseIdSet.insert(elem.combinedId.second);
-    //      if (res.second) {
-    //        poseIdVec.emplace_back(elem.combinedId.second);
-    //      }
-    //    }
+#ifndef newStuff
+
+    poseIdVec.reserve(approxMaxPosesToTry); // reserve the vec
+    poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
+    for (auto &elem : poseInteractionList) {
+      auto res = poseIdSet.insert(elem.combinedId.first);
+      if (res.second) {
+        poseIdVec.emplace_back(elem.combinedId.first);
+      }
+      res = poseIdSet.insert(elem.combinedId.second);
+      if (res.second) {
+        poseIdVec.emplace_back(elem.combinedId.second);
+      }
+    }
+
+    if (poseIdVec[0] == rootPoseInteraction.combinedId.first &&
+        poseIdVec[1] == rootPoseInteraction.combinedId.second) {
+      std::cout << "good" << std::endl;
+    }
+    poseInteractionList.clear(); // clear elements
+    std::vector<PoseInteraction>().swap(
+        poseInteractionList); // Actually force it to dealloc the memory
+#else
+    poseIdVec.reserve(
+        std::min(size_t(100000), sortedPoseCostVec.size())); // reserve the vec
     poseIdVec.emplace_back(rootPoseInteraction.combinedId.first);
     poseIdVec.emplace_back(rootPoseInteraction.combinedId.second);
 
-    for (const auto &elem : sortedPoseCostVec) {
+    for (size_t i = 0; i < poseIdVec.size(); ++i) {
+      const auto &elem = sortedPoseCostVec[i];
       auto res = poseIdSet.insert(elem.id);
       if (res.second) {
         poseIdVec.emplace_back(elem.id);
       }
     }
-
-    //    if (poseIdVec[0] == rootPoseInteraction.combinedId.first &&
-    //        poseIdVec[1] == rootPoseInteraction.combinedId.second) {
-    //      std::cout << "good" << std::endl;
-    //    }
-    //    poseInteractionList.clear(); // clear elements
-    //    std::vector<PoseInteraction>().swap(
-    //        poseInteractionList); // Actually force it to dealloc the memory
+#endif
   }
 
   /// Chain the poses!!
@@ -571,7 +582,7 @@ int main(int argc, char **argv) {
     std::cout << "Start Multiplication Chaining" << std::endl;
 
     if (!poseToPoseChaining(rootPoseInteraction, poseIdVec, sortedPoseCostVec,
-                            20, MAX_THREADS)) {
+                            10, MAX_THREADS)) {
       std::cerr << "Something went wrong in pose chaining" << std::endl;
       return 1;
     }
@@ -591,16 +602,20 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < 2000 && testPoseIdSet.size() < testDataSetSize;
          i++) {
       const auto idx = randomDist(generator);
-      const auto &id = sortedPoseCostVec[idx].id;
-      if (id != 0) {
+      const auto id = sortedPoseCostVec[idx].id;
+      if (poseIdVec.end() ==
+          std::find(poseIdVec.begin(), poseIdVec.end(), id)) {
         testPoseIdSet.insert(id);
+        poseMap.at(id);
+        std::cout << id << "\n";
       }
     }
+    std::cout << std::endl;
 
     std::copy(testPoseIdSet.begin(), testPoseIdSet.end(),
               std::back_inserter(testPoseIdVec));
     /// shuffle
-    std::srand(std::time(0));
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
     std::random_shuffle(testPoseIdVec.begin(), testPoseIdVec.end());
   }
 
@@ -610,8 +625,8 @@ int main(int argc, char **argv) {
     std::cout << "flushing all " << std::endl;
     std::cout << "Commit to file.." << poseIdVec.size() << std::endl;
     size_t iter = 0;
-    for (auto &id : poseIdVec) {
-      auto pose = poseMap.at(id);
+    for (const auto &id : poseIdVec) {
+      const auto pose = poseMap.at(id);
       try {
         auto result =
             std::find_if(sortedPoseCostVec.begin(), sortedPoseCostVec.end(),
@@ -638,19 +653,18 @@ int main(int argc, char **argv) {
     outFilteredPosesFile.close();
 
     // save test poses
-    auto outFilteredPosesFile =
-        std::fstream(outTestPosesFileName, std::ios::out);
-    for (auto &id : testPoseIdVec) {
+    auto outTestPosesFile = std::fstream(outTestPosesFileName, std::ios::out);
+    for (const auto &id : testPoseIdVec) {
       try {
-        auto pose = poseMap.at(id);
-        outFilteredPosesFile << pose << "\n";
-      } catch (std::exception e) {
+        const auto pose = poseMap.at(id);
+        outTestPosesFile << pose << "\n";
+      } catch (std::out_of_range e) {
         std::cerr << e.what() << std::endl;
         break;
       }
     }
-    outFilteredPosesFile.flush();
-    outFilteredPosesFile.close();
+    outTestPosesFile.flush();
+    outTestPosesFile.close();
     std::cout << "commited test poses: " << testPoseIdVec.size() << std::endl;
 #endif
     std::cout << "All done\n" << std::endl;

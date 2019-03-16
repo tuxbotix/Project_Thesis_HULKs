@@ -5,6 +5,8 @@
     "calibPoseNumDefault": 10,
     "errRangeMinMax": [-6.5, 6.5],
     "mirrorAroundY": false, // if enabled, above min-max is mirrored around y axis. Else above min max strictly observed
+    "testPoseCount": 80,
+    "testPoseCountMin": 8,
 
     "jointCalibQualityTol": 0.2, // degrees
     "reprojErrTolPercent": 0.02, // 5% of image size is too bad.

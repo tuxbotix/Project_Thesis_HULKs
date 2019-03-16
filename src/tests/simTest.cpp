@@ -10,10 +10,6 @@
 #include <tuple>
 
 #include <Data/CameraMatrix.hpp>
-#include <Modules/Configuration/Configuration.h>
-#include <Modules/Configuration/UnixSocketConfig.hpp>
-#include <Modules/NaoProvider.h>
-#include <Modules/Poses.h>
 
 #include <cxxopts/include/cxxopts.hpp>
 
@@ -25,6 +21,7 @@
 #define DEBUG_IN_THREAD 1
 #define ENABLE_PROGRESS 1
 
+#include "JointCalibEval.hpp"
 #include "JointCalibSolver.hpp"
 #include "MiniConfigHandle.hpp"
 #include "NaoPoseInfo.hpp"
@@ -34,393 +31,9 @@
 
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
-template <class T> using Residual = std::vector<T>;
-
-using CombinedPoseListT =
-    std::vector<std::pair<NaoPoseAndRawAngles<float>, Camera>>;
-
-enum CalibStatus {
-  FAIL_LOCAL_MINIMA,
-  FAIL_NO_CONVERGE,
-  FAIL_NUMERICAL,
-  FAIL_NO_CAPTURES,
-  SUCCESS,
-  MAX_STATUS_COUNT
-};
-
-using CalibStatusStatistics = std::array<size_t, CalibStatus::MAX_STATUS_COUNT>;
-
-template <typename T> struct CalibEvalResiduals {
-  Residual<T> preX;
-  Residual<T> preY;
-  Residual<T> postX;
-  Residual<T> postY;
-
-  std::array<Residual<T>, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
-      jointResiduals;
-
-  /**
-   * @brief joinEvalResiduals move-insert ops for all vectors. Src list is
-   * joined to dest list
-   * @param src source CalibEvalResidual
-   * @param dest destination CalibEvalResidual
-   * @return Reference to dest
-   */
-  CalibEvalResiduals &joinEvalResiduals(CalibEvalResiduals &src,
-                                        CalibEvalResiduals &dest) {
-    dest.preX.insert(dest.preX.end(), std::make_move_iterator(src.preX.begin()),
-                     std::make_move_iterator(src.preX.end()));
-    dest.preY.insert(dest.preY.end(), std::make_move_iterator(src.preY.begin()),
-                     std::make_move_iterator(src.preY.end()));
-    dest.postX.insert(dest.postX.end(),
-                      std::make_move_iterator(src.postX.begin()),
-                      std::make_move_iterator(src.postX.end()));
-    dest.postY.insert(dest.postY.end(),
-                      std::make_move_iterator(src.postY.begin()),
-                      std::make_move_iterator(src.postY.end()));
-    for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
-         ++i) {
-      auto &srcjoint = src.jointResiduals[i];
-      auto &dstjoint = dest.jointResiduals[i];
-      dstjoint.insert(dstjoint.end(), std::make_move_iterator(srcjoint.begin()),
-                      std::make_move_iterator(srcjoint.end()));
-    }
-    return dest;
-  }
-};
-
-struct JointErrorEval {
-
-  const NaoJointAndSensorModelConfig cfg;
-  const CombinedPoseListT combinedPoseList;
-  const SUPPORT_FOOT supFoot;
-  const float jointCalibQualityTol;
-  const float reprojErrTolPercent;
-  const bool stochasticFix;
-  const bool enablePixelNoise;
-  const bool enableJointNoise;
-  const float minJointErrVal;
-  const float maxJointErrVal;
-
-  /// Random generator
-  std::default_random_engine generator; // random gen
-  std::normal_distribution<float> pixelNoiseDistribution;
-  std::normal_distribution<double> jointNoiseDistribution;
-
-  JointErrorEval(const NaoJointAndSensorModelConfig cfg,
-                 const CombinedPoseListT poseList, const SUPPORT_FOOT supFoot,
-                 const float minJointErrVal, const float maxJointErrVal,
-                 const float jointCalibQualityTol,
-                 const float reprojErrTolPercent, const float pixelNoiseStdDev,
-                 const float jointNoiseStdDev, const bool stochasticFix,
-                 const bool enablePixelNoise, const bool enableJointNoise)
-      : cfg(cfg), combinedPoseList(poseList), supFoot(supFoot),
-        jointCalibQualityTol(jointCalibQualityTol),
-        reprojErrTolPercent(reprojErrTolPercent), stochasticFix(stochasticFix),
-        enablePixelNoise(enablePixelNoise), enableJointNoise(enableJointNoise),
-        minJointErrVal(minJointErrVal), maxJointErrVal(maxJointErrVal),
-        generator(), pixelNoiseDistribution(0.0f, pixelNoiseStdDev),
-        jointNoiseDistribution(0.0, static_cast<double>(jointNoiseStdDev)) {}
-
-  /**
-   * @brief evalJointErrorSet Evaluate calibration capability for an error
-   * config.
-   * THIS IS NOT THREAD SAFE
-   * @param naoModel As mentioned in threadedFcn..
-   * @param poseList
-   * @param inducedErrorStdVec Joint error configuration
-   * @return pre-post residuals residuals and more infos.
-   */
-  std::tuple<JointCalibSolvers::JointCalibResult, Eigen::VectorXf,
-             Eigen::VectorXf, Eigen::VectorXf>
-  evalJointErrorSet(const std::vector<Camera> camNames,
-                    const rawPoseT inducedErrorStdVec,
-                    CalibStatus &successStatus) {
-
-#if DEBUG_SIM_TEST
-    std::stringstream logStream;
-    logStream << "BEGIN\n";
-#endif
-    // Create result object
-    JointCalibSolvers::JointCalibResult result;
-
-    // Map the error vector into an Eigen vector
-    Eigen::VectorXf inducedErrorEigCompact;
-    if (!JointCalibSolvers::rawPoseToJointCalibParams(inducedErrorStdVec,
-                                                      inducedErrorEigCompact)) {
-    }
-
-    // Initialize residual of joint calibration (this isn't squared*)
-    Eigen::VectorXf jointCalibResidual = inducedErrorEigCompact;
-
-    // Make a copy of nao sensor model
-    auto naoJointSensorModel = NaoJointAndSensorModel(cfg);
-    // set the error state
-
-    // List of captures
-    JointCalibSolvers::CaptureList frameCaptures;
-
-    // Capture per pose.
-    size_t iter = 0;
-    for (const auto &combinedPoseAndAngles : combinedPoseList) {
-      const auto &poseAndAngles = combinedPoseAndAngles.first;
-      const auto &camName = combinedPoseAndAngles.second;
-      naoJointSensorModel.setCalibValues(inducedErrorStdVec);
-      if (enableJointNoise) {
-        auto poseAngles(poseAndAngles.angles);
-        for (auto &elem : poseAngles) {
-          elem += static_cast<float>(jointNoiseDistribution(generator) *
-                                     TO_RAD_DBL);
-        }
-        naoJointSensorModel.setPose(poseAngles, poseAndAngles.pose.supportFoot);
-      } else {
-        naoJointSensorModel.setPose(poseAndAngles.angles,
-                                    poseAndAngles.pose.supportFoot);
-      }
-      //      for (const auto &camName : camNames)
-      {
-        bool proceed = false;
-        // will be relative to support foot, easier to manage
-        const auto groundGrid =
-            naoJointSensorModel.getGroundGrid(camName, proceed);
-        if (proceed) {
-          // world points, pixel points.
-          // TODO make world points handle 3d also
-          auto correspondances =
-              NaoSensorDataProvider::getFilteredCorrespondancePairs(
-                  groundGrid,
-                  naoJointSensorModel.robotToPixelMulti(camName, groundGrid));
-
-          // add measurement noise
-          if (enablePixelNoise) {
-            for (auto &elem : correspondances) {
-              elem.second.x() +=
-                  static_cast<float>(pixelNoiseDistribution(generator));
-              elem.second.y() +=
-                  static_cast<float>(pixelNoiseDistribution(generator));
-            }
-          }
-          if (correspondances.size() > 0) {
-            frameCaptures.emplace_back(correspondances, poseAndAngles.angles,
-                                       camName, poseAndAngles.pose.supportFoot);
-          } else {
-#if DEBUG_SIM_TEST
-            //          std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-            logStream << "No suitable ground points " << iter << " "
-                      << (camName == Camera::TOP ? "TOP" : "BOT") << std::endl;
-#endif
-          }
-        } else {
-#if DEBUG_SIM_TEST
-          //        std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-          logStream << "Obtaining ground grid failed, gridCount: "
-                    << groundGrid.size() << " pose:" << iter << " "
-                    << " cam:" << (camName == Camera::TOP ? "TOP" : "BOT")
-                    << std::endl;
-#endif
-        }
-      }
-      iter++;
-    }
-
-    // If no frames are captured, consider this as a failure
-    if (frameCaptures.size() <= 0) {
-      successStatus = CalibStatus::FAIL_NO_CAPTURES;
-#if DEBUG_SIM_TEST
-      //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-      logStream << "No suitable frame captures !!\n";
-      logStream << "END";
-      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-      std::cout << logStream.str() << std::endl;
-#endif
-      return {result, jointCalibResidual, Eigen::VectorXf(0),
-              Eigen::VectorXf(0)};
-    } else {
-#if DEBUG_SIM_TEST
-      logStream << "Framecaptures: " << frameCaptures.size() << std::endl;
-#endif
-    }
-
-    /*
-     * Mini eval of cost fcn to get an idea of error
-     */
-    auto functor = JointCalibSolvers::JointCalibrator(frameCaptures, cfg);
-    Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator, Eigen::Central>
-        calibrator(functor);
-    //  auto calibrator = JointCalibSolvers::JointCalibrator(frameCaptures,
-    //  cfg);
-
-    Eigen::VectorXf initialError(calibrator.values());
-    Eigen::VectorXf finalErrorVec(calibrator.values());
-
-    // Setting zero is very important.
-    Eigen::VectorXf calibratedParams(static_cast<Eigen::Index>(
-        JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
-    calibratedParams.setZero();
-
-    // Get state of errors before calibration
-    calibrator(calibratedParams, initialError);
-
-    /*
-     * Run Lev-Mar to optimize
-     */
-    auto runLevMar = [&calibrator](Eigen::VectorXf &params) {
-      Eigen::LevenbergMarquardt<
-          Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator,
-                               Eigen::Central>,
-          float>
-          lm(calibrator);
-      int status = lm.minimize(params);
-      return status;
-    };
-
-    /// Run the Levenberg-Marquardt solver
-    int status = runLevMar(calibratedParams);
-
-    //  Get reprojection error
-    calibrator(calibratedParams, finalErrorVec);
-
-    // Just to note if the loop was done and broken with success
-    //    bool loopedAndBroken = false;
-    // Do stochastic fixing?
-    if (stochasticFix
-        //        && (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT
-        //        ||
-        //         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)
-        ) {
-      // This will hold best params in case looping is needed
-      Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
-          JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
-      Eigen::VectorXf oldErrorVec(finalErrorVec);
-
-      size_t count = 0; // counter for the while loop
-
-      std::uniform_real_distribution<float> distribution(minJointErrVal,
-                                                         maxJointErrVal);
-
-      /*
-       * If status is 2 or 5, most likely we are at a local minima
-       * So to give some push-start random start positions will be attempted
-       */
-      const size_t legsInitialIdx =
-          (supFoot == SUPPORT_FOOT::SF_DOUBLE ||
-           supFoot == SUPPORT_FOOT::SF_LEFT)
-              ? 2
-              : 2 + JointCalibSolvers::LEG_JOINT_COUNT;
-      const size_t legsEndIdx =
-          (supFoot == SUPPORT_FOOT::SF_DOUBLE ||
-           supFoot == SUPPORT_FOOT::SF_RIGHT)
-              ? JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT
-              : 2 + JointCalibSolvers::LEG_JOINT_COUNT;
-      while (count < 20) {
-        // save state
-        oldParams = calibratedParams;
-        oldErrorVec = finalErrorVec;
-        // get cost
-        float finalCost = finalErrorVec.squaredNorm();
-
-        /// Populate the starting point with random values
-
-        calibratedParams(JOINTS::JOINT::HEAD_PITCH) =
-            std::min(0.0f, static_cast<float>(distribution(generator)) / 2.0f *
-                               TO_RAD_FLT);
-        calibratedParams(JOINTS::JOINT::HEAD_YAW) =
-            distribution(generator) * TO_RAD_FLT;
-
-        /// We are now using the compact form
-
-        for (size_t i = legsInitialIdx; i < legsEndIdx; i++) {
-          calibratedParams(static_cast<Eigen::Index>(i)) =
-              distribution(generator) * TO_RAD_FLT;
-        }
-        /// Run Lev-Mar again
-        status = runLevMar(calibratedParams);
-        // Get the new cost
-        calibrator(calibratedParams, finalErrorVec);
-
-        /// go back to previous parameter set.
-        if (finalCost < finalErrorVec.squaredNorm()) {
-          calibratedParams = oldParams;
-          finalErrorVec = oldErrorVec;
-        }
-        count++;
-      }
-#if DEBUG_SIM_TEST
-      {
-        //      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-        logStream << "i " << count << std::endl;
-      }
-#endif
-    }
-
-    /*
-     * END lev-mar
-     */
-
-    jointCalibResidual -= calibratedParams; // Joint residual
-
-    // Get min-max info for error checking
-    const auto minCoeff = finalErrorVec.minCoeff();
-    const auto maxCoeff = finalErrorVec.maxCoeff();
-    //  const auto finalErrAbsMax = std::max(std::abs(minCoeff),
-    //  std::abs(maxCoeff));
-    const auto finalErrorAvg = finalErrorVec.mean();
-    const auto finalErrorNorm = finalErrorVec.norm();
-    //  const auto errorAvg = finalErrorVec.norm() / finalErrorVec.size();
-    const auto jointCalibResAbsMax =
-        std::max(std::abs(jointCalibResidual.maxCoeff()),
-                 std::abs(jointCalibResidual.minCoeff()));
-    const auto imageSize = naoJointSensorModel.getImSize();
-
-    // Determine success or failure
-    if (finalErrorAvg <= imageSize.minCoeff() * reprojErrTolPercent &&
-        finalErrorNorm <= initialError.norm() &&
-        jointCalibResAbsMax > jointCalibQualityTol) {
-      successStatus = CalibStatus::FAIL_LOCAL_MINIMA;
-    } else if (std::isnan(minCoeff) || std::isnan(maxCoeff)) {
-      successStatus = CalibStatus::FAIL_NUMERICAL;
-    } else if (finalErrorAvg > imageSize.minCoeff() * reprojErrTolPercent ||
-               finalErrorNorm > initialError.norm()) {
-      successStatus = CalibStatus::FAIL_NO_CONVERGE;
-    } else {
-      successStatus = CalibStatus::SUCCESS;
-    }
-
-// if failed OR if loop broken BUT calibration is bad
-/*
- * NOTE: Local minima if reprojection errr is small but jointResidual isn't
- * low!
- */
-#if DEBUG_SIM_TEST
-    if (successStatus != CalibStatus::SUCCESS ||
-        (stochasticFix && jointCalibResAbsMax > jointCalibQualityTol)) {
-
-      //    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-      logStream << "errAbsMax: "
-                << std::max(std::abs(minCoeff), std::abs(maxCoeff)) << " "
-                << " errorNorm: " << jointCalibResAbsMax
-                << " errorAvg: " << jointCalibResAbsMax
-                << " jointCalibResAbsMax: " << jointCalibResAbsMax / TO_RAD
-                << " Status: " << status << std::endl;
-    }
-#endif
-    // Update the result object
-    result.status = status;
-    result.jointParams.resize(JOINTS::JOINT::JOINTS_MAX);
-    if (!JointCalibSolvers::jointCalibParamsToRawPose(calibratedParams,
-                                                      result.jointParams)) {
-    }
-    result.reprojectionErrorNormCalib = finalErrorNorm;
-    result.reprojectionErrorAvgCalib = finalErrorAvg;
-#if DEBUG_SIM_TEST
-    logStream << "END";
-    std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-    std::cout << logStream.str() << std::endl;
-#endif
-    return {result, jointCalibResidual, initialError, finalErrorVec};
-  }
-};
-
+namespace jCalib = JointCalibration;
+namespace jCalibSolver = JointCalibSolvers;
+namespace jCEval = JointCalibEval;
 /**
  * @brief threadedFcn This function evaluate calibration of a set of errors
  * given
@@ -432,11 +45,11 @@ struct JointErrorEval {
  * @param stochasticFix Flag to enable or disable stochastic improving
  * @param badCases Count of failed calibrations.
  */
-CalibStatusStatistics
-threadedFcn(CalibEvalResiduals<double> &residuals,
-            const CombinedPoseListT combinedPoseList,
-            const SUPPORT_FOOT supFoot, const std::vector<Camera> camNames,
-            const NaoJointAndSensorModelConfig cfg,
+jCalib::CalibStatusStatistics
+threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
+            const jCEval::CombinedPoseListT combinedPoseList,
+            const jCEval::CombinedPoseListT combinedTestPoseList,
+            const SUPPORT_FOOT supFoot, const NaoJointAndSensorModelConfig cfg,
             const std::vector<rawPoseT>::iterator jointErrItrBegin,
             const std::vector<rawPoseT>::iterator jointErrItrEnd,
             const float minJointErrVal, const float maxJointErrVal,
@@ -445,9 +58,9 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
             bool stochasticFix, const bool enablePixelNoise,
             const bool enableJointNoise) {
 
-  CalibStatusStatistics calibStatusStatistics = {};
+  jCalib::CalibStatusStatistics calibStatusStatistics = {};
 
-  //  JointErrorEval(const NaoJointAndSensorModelConfig cfg,
+  //  jCEval::JointErrorEval(const NaoJointAndSensorModelConfig cfg,
   //                 const poseAndRawAngleListT poseList,
   //                 const SUPPORT_FOOT supFoot, const float
   //                 jointCalibQualityTol,
@@ -456,27 +69,29 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
   //                 const float jointNoiseStdDev, const bool stochasticFix,
   //                 const bool enablePixelNoise, const bool enableJointNoise)
 
-  JointErrorEval jointErrorEvalStruct(
-      cfg, combinedPoseList, supFoot, minJointErrVal, maxJointErrVal,
-      jointCalibQualityTol, reprojErrTolPercent, pixelNoiseStdDev,
-      jointNoiseStdDev, stochasticFix, enablePixelNoise, enableJointNoise);
+  jCEval::JointErrorEval jointErrorEvalStruct(
+      cfg, combinedPoseList, combinedTestPoseList, supFoot, minJointErrVal,
+      maxJointErrVal, jointCalibQualityTol, reprojErrTolPercent,
+      pixelNoiseStdDev, jointNoiseStdDev, stochasticFix, enablePixelNoise,
+      enableJointNoise);
 
   for (auto errSetIter = jointErrItrBegin; errSetIter != jointErrItrEnd;
        ++errSetIter) {
 
     auto &errorSet = *errSetIter;
 
-    CalibStatus calibStatus; // change this to more detailed output
-
-    JointCalibSolvers::JointCalibResult result;
+    jCalib::JointCalibResult result;
     Eigen::VectorXf preResiduals;
-    Eigen::VectorXf postResiduals;
+    Eigen::VectorXf postCalibResiduals;
+    Eigen::VectorXf postTestResiduals;
     Eigen::VectorXf jointCalibResiduals;
-    // Call evaluator for this error config.
-    std::tie(result, jointCalibResiduals, preResiduals, postResiduals) =
-        jointErrorEvalStruct.evalJointErrorSet(camNames, errorSet, calibStatus);
 
-    calibStatusStatistics[calibStatus]++;
+    // Call evaluator for this error config.
+    std::tie(result, jointCalibResiduals, preResiduals, postCalibResiduals,
+             postTestResiduals) =
+        jointErrorEvalStruct.evalJointErrorSet(errorSet);
+
+    calibStatusStatistics[result.status]++;
 
     auto prePostResSize = static_cast<size_t>(preResiduals.size());
     auto curPreResSize = residuals.preX.size();
@@ -490,10 +105,10 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
     for (long i = 0; i < preResiduals.size(); ++i) {
       if (i % 2 == 0) { // x -> even number
         residuals.preX.push_back(static_cast<double>(preResiduals(i)));
-        residuals.postX.push_back(static_cast<double>(postResiduals(i)));
+        residuals.postX.push_back(static_cast<double>(postCalibResiduals(i)));
       } else { // odd  -> newline
         residuals.preY.push_back(static_cast<double>(preResiduals(i)));
-        residuals.postY.push_back(static_cast<double>(postResiduals(i)));
+        residuals.postY.push_back(static_cast<double>(postCalibResiduals(i)));
       }
     }
     // Convert to degrees
@@ -511,6 +126,55 @@ threadedFcn(CalibEvalResiduals<double> &residuals,
 }
 
 /**
+ * @brief getCombinedPosesWROI
+ * @param poseList
+ * @param camNames
+ * @param naoJointSensorModel
+ * @param roiFileName
+ * @return
+ */
+jCEval::CombinedPoseListT getCombinedPosesWROI(
+    const poseAndRawAngleListT &poseList, const std::vector<Camera> &camNames,
+    NaoJointAndSensorModel naoJointSensorModel, std::string roiFileName = "") {
+
+  jCEval::CombinedPoseListT combinedPoseList;
+  std::fstream roiFile(roiFileName, std::ios::out);
+  bool writeToFile = false;
+  if (!roiFile.is_open()) {
+    std::cout << "file not specified or open fail;" << std::endl;
+  } else {
+    writeToFile = true;
+  }
+
+  for (const auto &elem : poseList) {
+    naoJointSensorModel.setPose(elem.angles, elem.pose.supportFoot);
+    for (const auto &cam : camNames) {
+      std::array<Vector2f, 4> corners = {};
+      // clockwise order
+      Vector2f camCenterProjPoint;
+      if (naoJointSensorModel.projectCameraFOVToGround(cam, corners,
+                                                       camCenterProjPoint)) {
+        if (writeToFile) {
+          roiFile << elem.pose.id << " "
+                  << (cam == Camera::TOP ? "top" : "bottom") << " ";
+
+          for (const auto &corner : corners) {
+            roiFile << corner.x() << " " << corner.y() << " ";
+          }
+          roiFile << camCenterProjPoint.norm() << "\n";
+        }
+        combinedPoseList.emplace_back(elem, cam);
+      }
+    }
+  }
+  if (writeToFile) {
+    roiFile.flush();
+    roiFile.close();
+  }
+  return combinedPoseList;
+}
+
+/**
  * @brief main
  * @param argc
  * @param argv
@@ -522,6 +186,7 @@ int main(int argc, char *argv[]) {
                            "give the best pose set");
   options.add_options()("f,file-prefix", "I/O File prefix",
                         cxxopts::value<std::string>())(
+      "t,testFile", "testPoseFile", cxxopts::value<std::string>())(
       "e,errorConfigs", "set of error cases",
       cxxopts::value<std::string>()->default_value("./l_1000_jointErrors.txt"))(
       "n,n-poses", "Poses to calibrate",
@@ -542,6 +207,7 @@ int main(int argc, char *argv[]) {
   auto result = options.parse(argc, argv);
 
   const std::string inFileName = result["file-prefix"].as<std::string>();
+  const std::string inTestFileName = result["testFile"].as<std::string>();
   const std::string errConfigFileName =
       result["errorConfigs"].as<std::string>();
   const size_t MAX_POSES_TO_CALIB = result["n-poses"].as<size_t>();
@@ -558,6 +224,11 @@ int main(int argc, char *argv[]) {
   std::fstream inFile(inFileName);
   if (!inFile.is_open()) {
     std::cerr << "Input file cannot be opened, exiting.." << std::endl;
+    return 1;
+  }
+  std::fstream inTestFile(inTestFileName);
+  if (!inTestFile.is_open()) {
+    std::cerr << "Test file cannot be opened, exiting.." << std::endl;
     return 1;
   }
   std::fstream errorConfFile(errConfigFileName);
@@ -601,6 +272,10 @@ int main(int argc, char *argv[]) {
 
   const float JOINT_NOISE_STD_DEV =
       static_cast<float>(confValue["jointNoiseStdDev"].asDouble());
+  const size_t testPoseCountMin =
+      static_cast<size_t>(confValue["testPoseCountMin"].asInt64());
+  const size_t testPoseCount =
+      static_cast<size_t>(confValue["testPoseCount"].asInt64());
   /*
    * Print input params
    */
@@ -656,12 +331,10 @@ int main(int argc, char *argv[]) {
   poseList.reserve(MAX_POSES_TO_CALIB);
   poseAndRawAngleT poseAndAngles;
 
-  for (size_t i = 0;
-       i < MAX_POSES_TO_CALIB &&
-       JointsAndPosesStream::getNextPoseAndRawAngles(inFile, poseAndAngles);
-       ++i) {
+  for (;
+       poseList.size() <= MAX_POSES_TO_CALIB &&
+       JointsAndPosesStream::getNextPoseAndRawAngles(inFile, poseAndAngles);) {
     if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
-      --i;
       continue;
     }
     // Mirror this pose. Nice in testing ;)
@@ -681,7 +354,29 @@ int main(int argc, char *argv[]) {
     }
     poseList.push_back(poseAndAngles);
   }
+  if (supFeet == SUPPORT_FOOT::SF_NONE) {
+    std::cerr << "No valid support feet found!! exiting..." << std::endl;
+  }
   std::cout << " reading of poses done, SF: " << supFeet << std::endl;
+
+  /// Add test poses
+  poseAndRawAngleListT testPoseList;
+  for (size_t i = 0;
+       i < std::max(size_t(100), testPoseCount) &&
+       testPoseList.size() <= testPoseCount &&
+       JointsAndPosesStream::getNextPoseAndRawAngles(inTestFile, poseAndAngles);
+       ++i) {
+    /// TODO TEMP add support for double foot
+    if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE ||
+        poseAndAngles.pose.supportFoot != supFeet) {
+      continue;
+    }
+    // Mirror this pose. Nice in testing ;)
+    if (mirrorPose) {
+      poseAndAngles.mirror();
+    }
+    testPoseList.push_back(poseAndAngles);
+  }
 
   //  std::srand(std::time(0));
   //  std::random_shuffle(poseList.begin(), poseList.end());
@@ -723,12 +418,14 @@ int main(int argc, char *argv[]) {
   // VecOfVec of CalibEvalResiduals - they contain image and joint residual
   // info
   // + others
-  std::vector<CalibEvalResiduals<double>> calibResidualList(MAX_THREADS);
+  std::vector<jCalib::CalibEvalResiduals<double>> calibResidualList(
+      MAX_THREADS);
   // This will contain all above at the end. (move-join)
-  CalibEvalResiduals<double> finalResidualSet;
+  jCalib::CalibEvalResiduals<double> finalResidualSet;
 
   // vector holding the std::threads
-  std::vector<std::future<CalibStatusStatistics>> futureList(MAX_THREADS);
+  std::vector<std::future<jCalib::CalibStatusStatistics>> futureList(
+      MAX_THREADS);
 
   // Setup offsets for iterators
   size_t threadingOffsets = JOINT_ERR_LST_COUNT / MAX_THREADS;
@@ -737,36 +434,14 @@ int main(int argc, char *argv[]) {
   std::vector<Camera> camNames = {Camera::BOTTOM, Camera::TOP};
 
   // PoseAndCamera list
-  CombinedPoseListT combinedPoseList;
+  jCEval::CombinedPoseListT combinedPoseList;
+  jCEval::CombinedPoseListT combinedTestPoseList;
   {
-    std::cout << "p";
-    std::fstream roiFile("/tmp/rois.txt", std::ios::out);
-    if (!roiFile.is_open()) {
-      std::cerr << "file open fail exit;;" << std::endl;
-      return 1;
-    }
     auto naoJointSensorModel = NaoJointAndSensorModel(cfg);
-
-    for (const auto &elem : poseList) {
-      naoJointSensorModel.setPose(elem.angles, elem.pose.supportFoot);
-      for (const auto &cam : camNames) {
-        std::array<Vector2f, 4> corners = {};
-        // clockwise order
-        Vector2f camCenterProjPoint;
-        if (naoJointSensorModel.projectCameraFOVToGround(cam, corners,
-                                                         camCenterProjPoint)) {
-          roiFile << elem.pose.id << " "
-                  << (cam == Camera::TOP ? "top" : "bottom") << " ";
-          for (const auto &corner : corners) {
-            roiFile << corner.x() << " " << corner.y() << " ";
-          }
-          roiFile << camCenterProjPoint.norm() << "\n";
-          combinedPoseList.emplace_back(elem, cam);
-        }
-      }
-    }
-    roiFile.flush();
-    roiFile.close();
+    combinedPoseList = getCombinedPosesWROI(
+        poseList, camNames, naoJointSensorModel, "/tmp/rois.txt");
+    combinedTestPoseList = getCombinedPosesWROI(
+        testPoseList, camNames, naoJointSensorModel, "/tmp/test_rois.txt");
   }
 
   // Start the threads
@@ -797,17 +472,17 @@ int main(int argc, char *argv[]) {
     //                const bool enableJointNoise)
     futureList[i] = std::async(
         std::launch::async, &threadedFcn, std::ref(calibResidualList[i]),
-        combinedPoseList, supFeet, camNames, cfg, begin, end, MIN_ERR_VAL,
-        MAX_ERR_VAL, JOINT_CALIB_QUALITY_TOL_RAD, REPROJ_ERR_TOL_PERCENT,
-        PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV, stochasticFix,
-        enablePixelNoise, enableJointNoise);
+        combinedPoseList, combinedTestPoseList, supFeet, cfg, begin, end,
+        MIN_ERR_VAL, MAX_ERR_VAL, JOINT_CALIB_QUALITY_TOL_RAD,
+        REPROJ_ERR_TOL_PERCENT, PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV,
+        stochasticFix, enablePixelNoise, enableJointNoise);
   }
 
   /*
    * Finish calibration - join threads
    * Also join all residuals into finalResidualSet
    */
-  CalibStatusStatistics stats = {};
+  jCalib::CalibStatusStatistics stats = {};
   for (size_t i = 0; i < MAX_THREADS; ++i) {
     auto &future = futureList[i];
     auto &residual = calibResidualList[i];
@@ -825,7 +500,7 @@ int main(int argc, char *argv[]) {
    */
   {
     auto printStats = [&JOINT_CALIB_QUALITY_TOL_DEG,
-                       &JOINT_ERR_LST_COUNT](Residual<double> &resVec) {
+                       &JOINT_ERR_LST_COUNT](jCalib::Residual<double> &resVec) {
       if (resVec.size() > JOINT_ERR_LST_COUNT) {
         std::cerr << "Something is wrong, resVec.size() > JOINT_ERR_LST_COUNT"
                   << std::endl;
@@ -935,27 +610,31 @@ int main(int argc, char *argv[]) {
   std::cout << "\nFinishing; Total Bad cases: "
             << (std::accumulate(stats.begin(), stats.end(),
                                 static_cast<size_t>(0)) -
-                stats[CalibStatus::SUCCESS]) *
+                stats[jCalib::CalibStatus::SUCCESS]) *
                    100 / static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%\n"
             << "FAIL_LOCAL_MINIMA: "
-            << stats[CalibStatus::FAIL_LOCAL_MINIMA] * 100 /
+            << stats[jCalib::CalibStatus::FAIL_LOCAL_MINIMA] * 100 /
                    static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%\n"
             << "FAIL_NO_CONVERGE: "
-            << stats[CalibStatus::FAIL_NO_CONVERGE] * 100 /
+            << stats[jCalib::CalibStatus::FAIL_NO_CONVERGE] * 100 /
                    static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%\n"
             << "FAIL_NUMERICAL: "
-            << stats[CalibStatus::FAIL_NUMERICAL] * 100 /
+            << stats[jCalib::CalibStatus::FAIL_NUMERICAL] * 100 /
                    static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%\n"
             << "FAIL_NO_CAPTURES: "
-            << stats[CalibStatus::FAIL_NO_CAPTURES] * 100 /
+            << stats[jCalib::CalibStatus::FAIL_NO_CAPTURES] * 100 /
+                   static_cast<float>(JOINT_ERR_LST_COUNT)
+            << "%\n"
+            << "FAIL_NO_TEST_CAPTURES: "
+            << stats[jCalib::CalibStatus::FAIL_NO_TEST_CAPTURES] * 100 /
                    static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%\n"
             << "SUCCESS: "
-            << stats[CalibStatus::SUCCESS] * 100 /
+            << stats[jCalib::CalibStatus::SUCCESS] * 100 /
                    static_cast<float>(JOINT_ERR_LST_COUNT)
             << "%\n"
             << std::endl;
