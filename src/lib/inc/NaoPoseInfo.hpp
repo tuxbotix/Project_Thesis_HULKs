@@ -420,6 +420,12 @@ public:
     torsoRotV.x() *= -1;
     otherFootRotV.x() *= -1;
   }
+
+  /**
+   * @brief getName
+   * @return
+   */
+  inline static std::string getName() { return className; }
 };
 
 template <typename T = angleT> class NaoPoseAndRawAngles {
@@ -477,12 +483,26 @@ public:
     }
     return in;
   }
+
+  /**
+   * @brief isGood
+   * @return
+   */
   inline bool isGood() { return valid; }
 
+  /**
+   * @brief mirror
+   */
   inline void mirror() {
     pose.mirror();
     PoseUtils::mirrorJoints(angles);
   }
+
+  /**
+   * @brief getName
+   * @return
+   */
+  inline static std::string getName() { return className; }
 };
 
 typedef NaoPoseAndRawAngles<dataT> poseAndRawAngleT;

@@ -441,6 +441,11 @@ int main(int argc, char **argv) {
 /// Write the remaining buffers to file
 
 #if DO_COMMIT
+    // This depends on the serialization!!!
+    const std::string rawPoseAndAnglesPreamble =
+        (poseAndRawAngleT::getName() + " " + poseT::getName() + " ");
+    const size_t subStringOffset = rawPoseAndAnglesPreamble.size();
+
     size_t newId = std::stoull(timestamp) *
                    static_cast<size_t>(std::floor(log10(maxIterCount)));
 
@@ -473,10 +478,10 @@ int main(int argc, char **argv) {
           continue;
         }
         std::string s;
-        size_t tmpId;
         while (std::getline(inStream, s)) {
-          auto spaceLoc = s.find_first_of(" ");
-          outStream << newId++ << s.substr(spaceLoc) << "\n";
+          outStream << rawPoseAndAnglesPreamble << newId++
+                    << s.substr(s.find_first_of(" ", subStringOffset)) << "\n";
+
           counter++;
           totalCounter++;
           if (counter > linesPerFile &&
