@@ -126,7 +126,7 @@ struct JointErrorEval {
  * @return pre-post residuals residuals and more infos.
  */
   std::tuple<JointCalibration::JointCalibResult, Eigen::VectorXf,
-             Eigen::VectorXf, Eigen::VectorXf, Eigen::VectorXf>
+             Eigen::VectorXf, Eigen::VectorXf, Eigen::VectorXf, Eigen::VectorXf>
   evalJointErrorSet(const rawPoseT inducedErrorStdVec) {
 
 #if DEBUG_SIM_TEST
@@ -164,7 +164,7 @@ struct JointErrorEval {
       std::lock_guard<std::mutex> lg(utils::mtx_cout_);
       std::cout << "empty test captures" << std::endl;
       successStatus = JointCalibration::CalibStatus::FAIL_NO_TEST_CAPTURES;
-      return {result, {}, {}, {}, {}};
+      return {result, {}, {}, {}, {}, {}};
     }
     // If no frames are captured, consider this as a failure
     if (frameCaptures.size() <= 0) {
@@ -176,7 +176,7 @@ struct JointErrorEval {
       std::lock_guard<std::mutex> lg(utils::mtx_cout_);
       std::cout << logStream.str() << std::endl;
 #endif
-      return {result, {}, {}, {}, {}};
+      return {result, {}, {}, {}, {}, {}};
     } else {
 #if DEBUG_SIM_TEST
       logStream << "Framecaptures: " << frameCaptures.size() << std::endl;
@@ -193,9 +193,10 @@ struct JointErrorEval {
     Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator, Eigen::Central>
         testor(testFunctor);
 
-    Eigen::VectorXf initialError(calibrator.values());
+    Eigen::VectorXf initialErrorVec(calibrator.values());
+    Eigen::VectorXf initialTestErrorVec(testor.values());
     Eigen::VectorXf finalErrorVec(calibrator.values());
-    Eigen::VectorXf finalTestErrorVec(calibrator.values());
+    Eigen::VectorXf finalTestErrorVec(testor.values());
 
     // Setting zero is very important.
     Eigen::VectorXf calibratedParams(static_cast<Eigen::Index>(
@@ -203,7 +204,8 @@ struct JointErrorEval {
     calibratedParams.setZero();
 
     // Get state of errors before calibration
-    calibrator(calibratedParams, initialError);
+    calibrator(calibratedParams, initialErrorVec);
+    testor(calibratedParams, initialTestErrorVec);
 
     /*
  * Run Lev-Mar to optimize
@@ -257,7 +259,7 @@ struct JointErrorEval {
            supFoot == SUPPORT_FOOT::SF_RIGHT)
               ? JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT
               : 2 + JointCalibSolvers::LEG_JOINT_COUNT;
-      while (count < 20) {
+      while (count < 100) {
         // save state
         oldParams = calibratedParams;
         oldErrorVec = finalErrorVec;
@@ -303,35 +305,51 @@ struct JointErrorEval {
 
     jointCalibResidual -= calibratedParams; // Joint residual
 
-    // Get min-max info for error checking
-    const auto testMinCoeff = finalTestErrorVec.minCoeff();
-    const auto testMaxCoeff = finalTestErrorVec.maxCoeff();
+    /// Initialize reprojection errors.
+    //    Eigen::VectorXf reprojErrCalibInitial(initialErrorVec.size() / 2);
+    Eigen::VectorXf reprojErrCalib(finalErrorVec.size() / 2);
+    //    Eigen::VectorXf reprojErrTestInitial(initialErrorVec.size() / 2);
+    Eigen::VectorXf reprojErrTest(finalTestErrorVec.size() / 2);
+    //    Eigen::VectorXf reprojectionError;
+    {
 
-    const auto finalTestErrorAvg = finalTestErrorVec.mean();
-    const auto finalTestErrorNorm = finalTestErrorVec.norm();
+      if (initialErrorVec.size() != finalTestErrorVec.size()) {
+        std::cerr << "Some major issue, error vector length mismatch"
+                  << std::endl;
+      }
+      for (auto i = 0; i < finalTestErrorVec.size() / 2; ++i) {
+        Eigen::Ref<Eigen::Vector2f> block = finalTestErrorVec.segment(i * 2, 2);
+        reprojErrTest(i) = block.norm();
+        //        block = initialTestErrorVec.segment(i * 2, 2);
+        //        reprojErrTestInitial(i) = block.norm();
+        block = finalErrorVec.segment(i * 2, 2);
+        reprojErrCalib(i) = block.norm();
+        //        block = initialErrorVec.segment(i * 2, 2);
+        //        reprojErrCalibInitial(i) = block.norm();
+      }
+    }
 
     // Get min-max info for error checking
-    const auto minCoeff = finalErrorVec.minCoeff();
-    const auto maxCoeff = finalErrorVec.maxCoeff();
-    //  const auto finalErrAbsMax = std::max(std::abs(minCoeff),
-    //  std::abs(maxCoeff));
-    const auto finalErrorAvg = finalErrorVec.mean();
-    const auto finalErrorNorm = finalErrorVec.norm();
-    //  const auto errorAvg = finalErrorVec.norm() / finalErrorVec.size();
+    //    const auto reprojErrMin = reprojErrTest.minCoeff();
+    //    const auto reprojErrMax = reprojErrTest.maxCoeff();
+
+    const auto reprojErrorMean = reprojErrTest.mean();
+    const auto reprojErrorNorm = reprojErrTest.norm();
+
     const auto jointCalibResAbsMax =
         std::max(std::abs(jointCalibResidual.maxCoeff()),
                  std::abs(jointCalibResidual.minCoeff()));
     const auto imageSize = naoJointSensorModel.getImSize();
 
+    bool convergeOk =
+        reprojErrorMean <= imageSize.minCoeff() * reprojErrTolPercent &&
+        finalTestErrorVec.norm() <= initialTestErrorVec.norm();
     // Determine success or failure
-    if (finalTestErrorAvg <= imageSize.minCoeff() * reprojErrTolPercent &&
-        finalErrorNorm <= initialError.norm() &&
-        jointCalibResAbsMax > jointCalibQualityTol) {
-      successStatus = JointCalibration::CalibStatus::FAIL_LOCAL_MINIMA;
-    } else if (std::isnan(minCoeff) || std::isnan(maxCoeff)) {
+    if (finalErrorVec.hasNaN() || finalTestErrorVec.hasNaN()) {
       successStatus = JointCalibration::CalibStatus::FAIL_NUMERICAL;
-    } else if (finalTestErrorAvg > imageSize.minCoeff() * reprojErrTolPercent ||
-               finalErrorNorm > initialError.norm()) {
+    } else if (convergeOk && jointCalibResAbsMax > jointCalibQualityTol) {
+      successStatus = JointCalibration::CalibStatus::FAIL_LOCAL_MINIMA;
+    } else if (!convergeOk) {
       successStatus = JointCalibration::CalibStatus::FAIL_NO_CONVERGE;
     } else {
       successStatus = JointCalibration::CalibStatus::SUCCESS;
@@ -361,19 +379,44 @@ struct JointErrorEval {
     if (!JointCalibSolvers::jointCalibParamsToRawPose(calibratedParams,
                                                       result.jointParams)) {
     }
-    result.reprojectionErrorNormCalib = finalErrorNorm;
-    result.reprojectionErrorAvgCalib = finalErrorAvg;
-    result.reprojectionErrorNormTest = finalTestErrorNorm;
-    result.reprojectionErrorAvgTest = finalTestErrorAvg;
-    result.sampleSizeTest = static_cast<size_t>(finalTestErrorVec.size());
-    result.sampleSizeCalib = static_cast<size_t>(finalErrorVec.size());
+    result.reprojectionErrorNormCalib = reprojErrCalib.norm();
+    result.reprojectionErrorMeanCalib = reprojErrCalib.mean();
+    result.reprojectionErrorNormTest = reprojErrorNorm;
+    result.reprojectionErrorMeanTest = reprojErrorMean;
+    // calculate RMS
+    {
+      Eigen::Array2d rms = {0, 0};
+      for (auto i = 0; i < finalTestErrorVec.size(); i += 2) {
+        Eigen::Ref<Eigen::Array2f> block = finalTestErrorVec.segment(i, 2);
+
+        rms += block.cast<double>().square();
+      }
+      result.rmsTest =
+          (rms / (finalTestErrorVec.size() / 2)).sqrt().cast<float>();
+      rms.setZero();
+      for (auto j = 0; j < finalErrorVec.size(); ++j) {
+        Eigen::Ref<Eigen::Array2f> block = finalErrorVec.segment(j, 2);
+        rms += block.cast<double>().square();
+      }
+      result.rmsCalib = (rms / (finalErrorVec.size() / 2)).sqrt().cast<float>();
+    }
+    // TODO std dev
+    result.sampleSizeTest = static_cast<size_t>(reprojErrTest.size());
+    result.sampleSizeCalib = static_cast<size_t>(reprojErrCalib.size());
 #if DEBUG_SIM_TEST
     logStream << "END";
     std::lock_guard<std::mutex> lg(utils::mtx_cout_);
     std::cout << logStream.str() << std::endl;
 #endif
-    return {result, jointCalibResidual, initialError, finalErrorVec,
-            finalTestErrorVec};
+    // Result, jointCalibResidual, reprojection error initial (test data),
+    // reprojection error after calib.(test data), reprojection error initial
+    // (calib dataset) reprojection error after calib (calib)
+    return {result,
+            jointCalibResidual,
+            initialTestErrorVec,
+            finalTestErrorVec,
+            initialErrorVec,
+            finalErrorVec};
   }
 };
 

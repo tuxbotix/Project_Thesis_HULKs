@@ -45,7 +45,7 @@ namespace jCEval = JointCalibEval;
  * @param stochasticFix Flag to enable or disable stochastic improving
  * @param badCases Count of failed calibrations.
  */
-jCalib::CalibStatusStatistics
+std::pair<jCalib::CalibStatusStatistics, std::vector<jCalib::JointCalibResult>>
 threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
             const jCEval::CombinedPoseListT combinedPoseList,
             const jCEval::CombinedPoseListT combinedTestPoseList,
@@ -59,7 +59,8 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
             const bool enableJointNoise) {
 
   jCalib::CalibStatusStatistics calibStatusStatistics = {};
-
+  std::vector<jCalib::JointCalibResult> resultList;
+  resultList.reserve(size_t(jointErrItrEnd - jointErrItrBegin));
   //  jCEval::JointErrorEval(const NaoJointAndSensorModelConfig cfg,
   //                 const poseAndRawAngleListT poseList,
   //                 const SUPPORT_FOOT supFoot, const float
@@ -81,19 +82,23 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
     auto &errorSet = *errSetIter;
 
     jCalib::JointCalibResult result;
-    Eigen::VectorXf preResiduals;
-    Eigen::VectorXf postCalibResiduals;
-    Eigen::VectorXf postTestResiduals;
     Eigen::VectorXf jointCalibResiduals;
+    Eigen::VectorXf preTestResiduals;
+    Eigen::VectorXf preCalibResiduals;
+    Eigen::VectorXf postTestResiduals;
+    Eigen::VectorXf postCalibResiduals;
 
-    // Call evaluator for this error config.
-    std::tie(result, jointCalibResiduals, preResiduals, postCalibResiduals,
-             postTestResiduals) =
+    //    return {result,        jointCalibResidual,    reprojErrTestInitial,
+    //            reprojErrTest, reprojErrCalibInitial, reprojErrCalib};
+    // Call evaluator for this error cnfig.
+    std::tie(result, jointCalibResiduals, preTestResiduals, postTestResiduals,
+             preCalibResiduals, postCalibResiduals) =
         jointErrorEvalStruct.evalJointErrorSet(errorSet);
 
+    resultList.push_back(result);
     calibStatusStatistics[result.status]++;
 
-    auto prePostResSize = static_cast<size_t>(preResiduals.size());
+    auto prePostResSize = static_cast<size_t>(preTestResiduals.size());
     auto curPreResSize = residuals.preX.size();
 
     // reserve vector memory to speed up the process
@@ -102,13 +107,13 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
     residuals.preY.reserve(prePostResSize + curPreResSize);
     residuals.postY.reserve(prePostResSize + curPreResSize);
 
-    for (long i = 0; i < preResiduals.size(); ++i) {
+    for (long i = 0; i < preTestResiduals.size(); ++i) {
       if (i % 2 == 0) { // x -> even number
-        residuals.preX.push_back(static_cast<double>(preResiduals(i)));
-        residuals.postX.push_back(static_cast<double>(postCalibResiduals(i)));
+        residuals.preX.push_back(static_cast<double>(preTestResiduals(i)));
+        residuals.postX.push_back(static_cast<double>(postTestResiduals(i)));
       } else { // odd  -> newline
-        residuals.preY.push_back(static_cast<double>(preResiduals(i)));
-        residuals.postY.push_back(static_cast<double>(postCalibResiduals(i)));
+        residuals.preY.push_back(static_cast<double>(preTestResiduals(i)));
+        residuals.postY.push_back(static_cast<double>(postTestResiduals(i)));
       }
     }
     // Convert to degrees
@@ -122,7 +127,7 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
           static_cast<double>(jointCalibResiduals(i)));
     }
   }
-  return calibStatusStatistics;
+  return {calibStatusStatistics, resultList};
 }
 
 /**
@@ -424,8 +429,9 @@ int main(int argc, char *argv[]) {
   jCalib::CalibEvalResiduals<double> finalResidualSet;
 
   // vector holding the std::threads
-  std::vector<std::future<jCalib::CalibStatusStatistics>> futureList(
-      MAX_THREADS);
+  std::vector<std::future<std::pair<jCalib::CalibStatusStatistics,
+                                    std::vector<jCalib::JointCalibResult>>>>
+      futureList(MAX_THREADS);
 
   // Setup offsets for iterators
   size_t threadingOffsets = JOINT_ERR_LST_COUNT / MAX_THREADS;
@@ -481,15 +487,21 @@ int main(int argc, char *argv[]) {
   /*
    * Finish calibration - join threads
    * Also join all residuals into finalResidualSet
+   * + calibration results!!
    */
   jCalib::CalibStatusStatistics stats = {};
+  std::vector<jCalib::JointCalibResult> resultList;
   for (size_t i = 0; i < MAX_THREADS; ++i) {
     auto &future = futureList[i];
     auto &residual = calibResidualList[i];
     auto temp = future.get();
     for (size_t j = 0; j < stats.size(); ++j) {
-      stats[j] += temp[j];
+      stats[j] += temp.first[j];
     }
+    // append do the result vector
+    resultList.insert(resultList.end(),
+                      std::make_move_iterator(temp.second.begin()),
+                      std::make_move_iterator(temp.second.end()));
     std::cout << "Going to join" << i << std::endl;
     finalResidualSet.joinEvalResiduals(residual, finalResidualSet);
   }
@@ -642,10 +654,23 @@ int main(int argc, char *argv[]) {
   if (!showHistogram) {
     return 0;
   }
+
   /*
    * Print the statistics & Write into files
    * TODO fix this in a better way. Maybe take OpenCV's method?
    */
+  {
+    /// write result stats
+    std::fstream resultOut("/tmp/resultOut", std::ios::out);
+    for (const auto &result : resultList) {
+      resultOut << result.status << " " << result.reprojectionErrorMeanTest
+                << " " << result.rmsTest.x() << " " << result.rmsTest.y() << " "
+                << result.reprojectionErrorMeanCalib << " "
+                << result.rmsCalib.x() << " " << result.rmsCalib.y() << "\n";
+    }
+    resultOut.flush();
+    resultOut.close();
+  }
 
   std::pair<utils::SimpleHistogram<double> &, std::string>
       originalResidualDumpX(preXhist, "/tmp/originalResidualX");

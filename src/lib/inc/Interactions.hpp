@@ -22,7 +22,7 @@ const size_t TOT_OBS_JOINT_COUNT =
 const size_t TOT_AMBIGUITY_COMBOS =
     TOT_OBS_JOINT_COUNT * (TOT_OBS_JOINT_COUNT - 1) / 2;
 
-const double TOL = 1.0 * TO_RAD_DBL/;
+const double TOL = 1.0 * TO_RAD_DBL;
 
 /* Aliases */
 using PoseMap = std::map<size_t, poseAndRawAngleT>;
@@ -174,7 +174,6 @@ struct PoseInteraction {
                             const InteractionCost &c1,
                             const InteractionCost &c2) {
     int interactionCount = 0;
-
 
     interactionCostVec = c1 * c2;
     interactionCostVec.sqrt(); // geometric average between the two poses

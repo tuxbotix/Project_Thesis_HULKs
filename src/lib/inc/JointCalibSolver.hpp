@@ -249,16 +249,19 @@ enum CalibStatus {
  * @brief The JointCalibResult struct
  */
 struct JointCalibResult {
-  CalibStatus status; // out of solver
+  int solverStatus;   // out of solver
+  CalibStatus status; // out of evaluation
 
+  Vector2f rmsCalib;
   float reprojectionErrorStdDevCalib;
   float reprojectionErrorNormCalib;
-  float reprojectionErrorAvgCalib;
+  float reprojectionErrorMeanCalib;
   size_t sampleSizeCalib;
 
+  Vector2f rmsTest;
   float reprojectionErrorStdDevTest;
   float reprojectionErrorNormTest;
-  float reprojectionErrorAvgTest;
+  float reprojectionErrorMeanTest;
   size_t sampleSizeTest;
 
   rawPoseT jointParams; // solved params
