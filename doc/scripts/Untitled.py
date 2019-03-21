@@ -27,19 +27,48 @@ def fitGauss(data):
     return curve_fit(gaus, x, y, p0=[1, mean, sigma])
 
 
+# status, reprojErrMeanTest, rmsTest, reprojErrMeanCalib, rmsCalib
+resultList = np.loadtxt("/tmp/resultOut", delimiter=' ')
+
+GoodResults = resultList[resultList[:, 0] == 5]
+BadResults = resultList[resultList[:, 0] != 5]
+
+# print(GoodResults[:10])
+# print(GoodResults[:10])
 origResX = np.loadtxt("/tmp/originalResidualX", delimiter=',')
 origResY = np.loadtxt("/tmp/originalResidualY", delimiter=',')
 
 calibResX = np.loadtxt("/tmp/calibratedResidualX", delimiter=',')
 calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
 
-calibJointRes = np.array(np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')).transpose()
-unCalibJointRes = np.array(np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')).transpose()
+calibJointRes = np.array(np.loadtxt(
+    "/tmp/calibratedJointResidual", delimiter=',')).transpose()
+unCalibJointRes = np.array(np.loadtxt(
+    "/tmp/unCalibratedJointResidual", delimiter=',')).transpose()
 
 #unCalibJointRes[:, 0] *= (180 / math.pi)
 
 print(len(calibJointRes))
 
+
+fig, _axs = plt.subplots(nrows=2, ncols=1)
+axs = _axs.flatten()
+
+ax = axs[0]
+
+n, bins, patches = ax.hist(
+    GoodResults[:,2], 200, density=True, facecolor='g', alpha=0.5)
+n, bins, patches = ax.hist(
+    BadResults[:,2], bins=bins, density=True,  facecolor='r', alpha=0.5)
+
+ax = axs[1]
+
+n, bins, patches = ax.hist(
+    GoodResults[:,3], 200, density=True, facecolor='g', alpha=0.5)
+n, bins, patches = ax.hist(
+    BadResults[:,3], bins=bins, density=True, facecolor='r', alpha=0.5)
+plt.show()
+exit(0)
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()

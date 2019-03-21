@@ -517,8 +517,13 @@ int main(int argc, char **argv) {
 /*
  * Secondary sort run with poseInteractionns
  */
-#ifndef newStuff
+#ifdef newStuff
+  /// BEGIN NEW STUFF
+  PoseInteraction rootPoseInteraction =
+      getBestPoseInteraction(sortedPoseCostVec, MAX_THREADS);
 
+/// END NEW STUFF
+#else
   std::vector<PoseInteraction> poseInteractionList;
   size_t approxMaxPosesToTry = populatePoseInteractions(
       poseInteractionList, sortedPoseCostVec, maxPoseInteractionCount);
@@ -526,12 +531,6 @@ int main(int argc, char **argv) {
   PoseInteraction rootPoseInteraction = poseInteractionList[0];
   // populate Id vec
   std::cout << "Total PoseCosts: " << sortedPoseCostVec.size() << std::endl;
-#else
-  /// BEGIN NEW STUFF
-  PoseInteraction rootPoseInteraction =
-      getBestPoseInteraction(sortedPoseCostVec, MAX_THREADS);
-
-/// END NEW STUFF
 #endif
   std::vector<size_t> poseIdVec;
   {
@@ -539,8 +538,20 @@ int main(int argc, char **argv) {
     /// a unique set of elems are here.
 
     std::unordered_set<size_t> poseIdSet;
-#ifndef newStuff
+#ifdef newStuff
+    poseIdVec.reserve(
+        std::min(size_t(100000), sortedPoseCostVec.size())); // reserve the vec
+    poseIdVec.emplace_back(rootPoseInteraction.combinedId.first);
+    poseIdVec.emplace_back(rootPoseInteraction.combinedId.second);
 
+    for (size_t i = 0; i < poseIdVec.size(); ++i) {
+      const auto &elem = sortedPoseCostVec[i];
+      auto res = poseIdSet.insert(elem.id);
+      if (res.second) {
+        poseIdVec.emplace_back(elem.id);
+      }
+    }
+#else
     poseIdVec.reserve(approxMaxPosesToTry); // reserve the vec
     poseIdSet.reserve(approxMaxPosesToTry); // reserve the set
     for (auto &elem : poseInteractionList) {
@@ -561,19 +572,6 @@ int main(int argc, char **argv) {
     poseInteractionList.clear(); // clear elements
     std::vector<PoseInteraction>().swap(
         poseInteractionList); // Actually force it to dealloc the memory
-#else
-    poseIdVec.reserve(
-        std::min(size_t(100000), sortedPoseCostVec.size())); // reserve the vec
-    poseIdVec.emplace_back(rootPoseInteraction.combinedId.first);
-    poseIdVec.emplace_back(rootPoseInteraction.combinedId.second);
-
-    for (size_t i = 0; i < poseIdVec.size(); ++i) {
-      const auto &elem = sortedPoseCostVec[i];
-      auto res = poseIdSet.insert(elem.id);
-      if (res.second) {
-        poseIdVec.emplace_back(elem.id);
-      }
-    }
 #endif
   }
 
@@ -607,7 +605,6 @@ int main(int argc, char **argv) {
           std::find(poseIdVec.begin(), poseIdVec.end(), id)) {
         testPoseIdSet.insert(id);
         poseMap.at(id);
-        std::cout << id << "\n";
       }
     }
     std::cout << std::endl;

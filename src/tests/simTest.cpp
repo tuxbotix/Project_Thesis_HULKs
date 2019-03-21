@@ -660,9 +660,43 @@ int main(int argc, char *argv[]) {
    * TODO fix this in a better way. Maybe take OpenCV's method?
    */
   {
+    /// Begin: printing and saving RMS values
+    // arr1[ <[vec2d] * 6, size_t> ]
+    // [ rmstest minRmsTest maxRmsTest rmsCalib ... ]
+    std::array<std::pair<std::array<Eigen::Vector2d, 6>, size_t>,
+               jCalib::CalibStatus::MAX_STATUS_COUNT>
+        averages;
+    for (auto &i : averages) {
+      auto &v = i.first;
+      v[0].setZero();
+      v[1].setConstant(10000);
+      v[2].setZero();
+      v[3].setZero();
+      v[4].setConstant(10000);
+      v[5].setZero();
+    }
     /// write result stats
     std::fstream resultOut("/tmp/resultOut", std::ios::out);
+    // status reprojErrMeanTest rmsTest
     for (const auto &result : resultList) {
+      auto &first = averages[result.status].first;
+      const auto rmsTestDbl = result.rmsTest.cast<double>();
+      const auto rmsCalibDbl = result.rmsCalib.cast<double>();
+      averages[result.status].first[0] += rmsTestDbl;
+      averages[result.status].first[3] += rmsCalibDbl;
+
+      first[1].x() = std::min(first[1].x(), rmsTestDbl.x());
+      first[1].y() = std::min(first[1].y(), rmsTestDbl.y());
+      first[2].x() = std::max(first[2].x(), rmsTestDbl.x());
+      first[2].y() = std::max(first[2].y(), rmsTestDbl.y());
+
+      first[4].x() = std::min(first[4].x(), rmsCalibDbl.x());
+      first[4].y() = std::min(first[4].y(), rmsCalibDbl.y());
+      first[5].x() = std::max(first[5].x(), rmsCalibDbl.x());
+      first[5].y() = std::max(first[5].y(), rmsCalibDbl.y());
+
+      averages[result.status].second++;
+
       resultOut << result.status << " " << result.reprojectionErrorMeanTest
                 << " " << result.rmsTest.x() << " " << result.rmsTest.y() << " "
                 << result.reprojectionErrorMeanCalib << " "
@@ -670,6 +704,25 @@ int main(int argc, char *argv[]) {
     }
     resultOut.flush();
     resultOut.close();
+
+    for (size_t i = 0; i < averages.size(); i++) {
+      const auto &elem = averages[i];
+      if (elem.second) {
+        std::cout << "RMS stats for status: "
+                  << (i == jCalib::CalibStatus::SUCCESS
+                          ? "Success"
+                          : "Fail " + std::to_string(i))
+                  << ": \n\tTest RMS ->  avg[ "
+                  << (elem.first[0].transpose() / elem.second) << " ]\tmin[ "
+                  << elem.first[1].transpose() << " ]\tmax[ "
+                  << elem.first[2].transpose() << " ] "
+                  << "\n\tCalib RMS -> avg[ "
+                  << (elem.first[3].transpose() / elem.second) << " ]\tmin[ "
+                  << elem.first[4].transpose() << " ]\tmax[ "
+                  << elem.first[5].transpose() << " ]\n";
+      }
+    }
+    std::cout << std::endl;
   }
 
   std::pair<utils::SimpleHistogram<double> &, std::string>

@@ -189,7 +189,8 @@ struct JointErrorEval {
     Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator, Eigen::Central>
         calibrator(functor);
 
-    auto testFunctor = JointCalibSolvers::JointCalibrator(frameCaptures, cfg);
+    auto testFunctor =
+        JointCalibSolvers::JointCalibrator(testFrameCaptures, cfg);
     Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator, Eigen::Central>
         testor(testFunctor);
 
@@ -313,7 +314,7 @@ struct JointErrorEval {
     //    Eigen::VectorXf reprojectionError;
     {
 
-      if (initialErrorVec.size() != finalTestErrorVec.size()) {
+      if (initialTestErrorVec.size() != finalTestErrorVec.size()) {
         std::cerr << "Some major issue, error vector length mismatch"
                   << std::endl;
       }
@@ -322,8 +323,11 @@ struct JointErrorEval {
         reprojErrTest(i) = block.norm();
         //        block = initialTestErrorVec.segment(i * 2, 2);
         //        reprojErrTestInitial(i) = block.norm();
-        block = finalErrorVec.segment(i * 2, 2);
-        reprojErrCalib(i) = block.norm();
+      }
+      for (auto i = 0; i < finalErrorVec.size() / 2; ++i) {
+        Eigen::Ref<Eigen::Vector2f> blockCalib =
+            finalErrorVec.segment(i * 2, 2);
+        reprojErrCalib(i) = blockCalib.norm();
         //        block = initialErrorVec.segment(i * 2, 2);
         //        reprojErrCalibInitial(i) = block.norm();
       }
@@ -394,7 +398,7 @@ struct JointErrorEval {
       result.rmsTest =
           (rms / (finalTestErrorVec.size() / 2)).sqrt().cast<float>();
       rms.setZero();
-      for (auto j = 0; j < finalErrorVec.size(); ++j) {
+      for (auto j = 0; j < finalErrorVec.size(); j += 2) {
         Eigen::Ref<Eigen::Array2f> block = finalErrorVec.segment(j, 2);
         rms += block.cast<double>().square();
       }
