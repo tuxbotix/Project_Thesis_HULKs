@@ -1,0 +1,94 @@
+%% Creator: Inkscape inkscape 0.92.4, www.inkscape.org
+%% PDF/EPS/PS + LaTeX output extension by Johan Engelen, 2010
+%% Accompanies image file 'backlash.pdf' (pdf, eps, ps)
+%%
+%% To include the image in your LaTeX document, write
+%%   \input{<filename>.pdf_tex}
+%%  instead of
+%%   \includegraphics{<filename>.pdf}
+%% To scale the image, write
+%%   \def\svgwidth{<desired width>}
+%%   \input{<filename>.pdf_tex}
+%%  instead of
+%%   \includegraphics[width=<desired width>]{<filename>.pdf}
+%%
+%% Images with a different path to the parent latex file can
+%% be accessed with the `import' package (which may need to be
+%% installed) using
+%%   \usepackage{import}
+%% in the preamble, and then including the image with
+%%   \import{<path to file>}{<filename>.pdf_tex}
+%% Alternatively, one can specify
+%%   \graphicspath{{<path to file>/}}
+%% 
+%% For more information, please see info/svg-inkscape on CTAN:
+%%   http://tug.ctan.org/tex-archive/info/svg-inkscape
+%%
+\begingroup%
+  \makeatletter%
+  \providecommand\color[2][]{%
+    \errmessage{(Inkscape) Color is used for the text in Inkscape, but the package 'color.sty' is not loaded}%
+    \renewcommand\color[2][]{}%
+  }%
+  \providecommand\transparent[1]{%
+    \errmessage{(Inkscape) Transparency is used (non-zero) for the text in Inkscape, but the package 'transparent.sty' is not loaded}%
+    \renewcommand\transparent[1]{}%
+  }%
+  \providecommand\rotatebox[2]{#2}%
+  \newcommand*\fsize{\dimexpr\f@size pt\relax}%
+  \newcommand*\lineheight[1]{\fontsize{\fsize}{#1\fsize}\selectfont}%
+  \ifx\svgwidth\undefined%
+    \setlength{\unitlength}{284.46650061bp}%
+    \ifx\svgscale\undefined%
+      \relax%
+    \else%
+      \setlength{\unitlength}{\unitlength * \real{\svgscale}}%
+    \fi%
+  \else%
+    \setlength{\unitlength}{\svgwidth}%
+  \fi%
+  \global\let\svgwidth\undefined%
+  \global\let\svgscale\undefined%
+  \makeatother%
+  \begin{picture}(1,0.47487838)%
+    \lineheight{1}%
+    \setlength\tabcolsep{0pt}%
+    \put(0,0){\includegraphics[width=\unitlength,page=1]{backlash.pdf}}%
+    \put(0.01993181,0.09281597){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Output\end{minipage}}}%
+    \put(0.18304418,0.28493702){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Input\end{minipage}}}%
+    \put(0.14005295,0.43615342){\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Deadband\end{minipage}}}%
+    \put(0.51689873,0.43334115){\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Deadband\end{minipage}}}%
+    \put(0.56270226,0.24275279){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Input\end{minipage}}}%
+    \put(0.38552847,0.09281597){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Output\end{minipage}}}%
+    \put(0.73575535,0.09281597){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Output\end{minipage}}}%
+    \put(0.8656217,0.38272007){\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Deadband\end{minipage}}}%
+    \put(0.9142375,0.19775628){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.64682486\unitlength}\raggedright Input\end{minipage}}}%
+    \put(0.11742543,0.00695175){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}(i)\end{tabular}}}}%
+    \put(0.48501401,0.00695175){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}(ii)\end{tabular}}}}%
+    \put(0.82923708,0.00695175){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}(iii)\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=2]{backlash.pdf}}%
+    \put(0.0147778,0.44917384){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 3.0\end{tabular}}}}%
+    \put(0.0147778,0.39292817){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 2.0\end{tabular}}}}%
+    \put(0.0147778,0.33668258){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 1.0\end{tabular}}}}%
+    \put(0.02493857,0.28043684){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}0.0\end{tabular}}}}%
+    \put(0.01368946,0.22419125){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-1.0\end{tabular}}}}%
+    \put(0.01368946,0.16794566){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-2.0\end{tabular}}}}%
+    \put(0.01368946,0.11169991){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-3.0\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=3]{backlash.pdf}}%
+    \put(0.38843415,0.44917384){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 3.0\end{tabular}}}}%
+    \put(0.38843415,0.39292817){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 2.0\end{tabular}}}}%
+    \put(0.38843415,0.33668258){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 1.0\end{tabular}}}}%
+    \put(0.39859492,0.28043684){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}0.0\end{tabular}}}}%
+    \put(0.38734585,0.22419125){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-1.0\end{tabular}}}}%
+    \put(0.38734585,0.16794566){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-2.0\end{tabular}}}}%
+    \put(0.38734585,0.11169991){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-3.0\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=4]{backlash.pdf}}%
+    \put(0.74033698,0.44917384){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 3.0\end{tabular}}}}%
+    \put(0.74033698,0.39292817){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 2.0\end{tabular}}}}%
+    \put(0.74033698,0.33668258){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 1.0\end{tabular}}}}%
+    \put(0.75049775,0.28043684){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}0.0\end{tabular}}}}%
+    \put(0.7392486,0.22419125){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-1.0\end{tabular}}}}%
+    \put(0.7392486,0.16794566){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-2.0\end{tabular}}}}%
+    \put(0.7392486,0.11169991){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-3.0\end{tabular}}}}%
+  \end{picture}%
+\endgroup%
