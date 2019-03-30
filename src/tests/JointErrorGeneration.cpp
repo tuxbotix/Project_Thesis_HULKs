@@ -36,8 +36,6 @@ int main(int argc, char *argv[]) {
                            "give the best pose set");
   options.add_options()("f,file-prefix", "I/O File prefix",
                         cxxopts::value<std::string>())(
-      "c,confRoot", "Conf path",
-      cxxopts::value<std::string>()->default_value("../../nao/home/"))(
       "s,supportFoot", "Support foot, l, r or d",
       cxxopts::value<std::string>()->default_value("l"))(
       "h,head", "head joints",
@@ -48,7 +46,6 @@ int main(int argc, char *argv[]) {
   const std::string outFileName = result["file-prefix"].as<std::string>();
   //  const size_t MAX_POSES_TO_CALIB = result["n-poses"].as<size_t>();
   // Default is false
-  std::string confRoot = result["confRoot"].as<std::string>();
   bool headJoints = result["head"].as<std::string>().compare("y") == 0;
 
   std::string supportFootName = result["supportFoot"].as<std::string>();

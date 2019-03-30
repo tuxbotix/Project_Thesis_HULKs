@@ -58,8 +58,10 @@ struct JointErrorEval {
       const auto &poseAndAngles = combinedPoseAndAngles.first;
       const auto &camName = combinedPoseAndAngles.second;
       naoJointSensorModel.setCalibValues(inducedErrorStdVec);
+
+      // This is actually pose error (not reaching the given pose exactly)
       if (enableJointNoise) {
-        auto poseAngles(poseAndAngles.angles);
+        rawAnglesT poseAngles = poseAndAngles.angles;
         for (auto &elem : poseAngles) {
           elem += static_cast<float>(jointNoiseDistribution(generator) *
                                      TO_RAD_DBL);

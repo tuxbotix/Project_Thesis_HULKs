@@ -57,18 +57,18 @@ axs = _axs.flatten()
 ax = axs[0]
 
 n, bins, patches = ax.hist(
-    GoodResults[:,2], 200, density=True, facecolor='g', alpha=0.5)
+    GoodResults[:,2], 200, density=False, facecolor='g', alpha=0.5)
 n, bins, patches = ax.hist(
-    BadResults[:,2], bins=bins, density=True,  facecolor='r', alpha=0.5)
+    BadResults[:,2], bins=bins, density=False,  facecolor='r', alpha=0.5)
 
 ax = axs[1]
 
 n, bins, patches = ax.hist(
-    GoodResults[:,3], 200, density=True, facecolor='g', alpha=0.5)
+    GoodResults[:,3], 200, density=False, facecolor='g', alpha=0.5)
 n, bins, patches = ax.hist(
-    BadResults[:,3], bins=bins, density=True, facecolor='r', alpha=0.5)
+    BadResults[:,3], bins=bins, density=False, facecolor='r', alpha=0.5)
 plt.show()
-exit(0)
+# exit(0)
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()

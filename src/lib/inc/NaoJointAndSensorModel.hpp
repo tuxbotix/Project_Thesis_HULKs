@@ -75,9 +75,7 @@ public:
     }
   }
 
-  const static float getMaxViewDist() {
-    return NaoJointAndSensorModel::maxViewDist;
-  }
+  static float getMaxViewDist() { return NaoJointAndSensorModel::maxViewDist; }
 
   NaoJointAndSensorModel(const NaoJointAndSensorModelConfig cfg)
       : NaoJointAndSensorModel(cfg.imSize, cfg.fc, cfg.cc, cfg.fov,

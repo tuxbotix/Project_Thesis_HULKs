@@ -1,0 +1,129 @@
+Errors to try:  10000
+Poses to try:   10
+MinMax Error val:       -6.5, 6.5
+Mirror Poses:   0
+Stochastic Fix: 0
+enablePixelNoise:       1
+enableJointNoise:       0
+Joint Calib Tol (deg) : 0.2
+[TUHH_INFO      ] Initializing NaoProvider
+[TUHH_INFO      ] My body is V5.0
+[TUHH_INFO      ] My head is V5.0
+[TUHH_DEBUG     ] mounted ../../../nao_master/home/configuration/location/default/body_v_5.json to tuhhSDK.NaoProvider.Body
+[TUHH_DEBUG     ] mounted ../../../nao_master/home/configuration/location/default/head_v_5.json to tuhhSDK.NaoProvider.Head
+initialize TUHH
+1
+[TUHH_DEBUG     ] mounted ../../../nao_master/home/configuration/location/default/head/default/Projection.json to Projection
+[TUHH_DEBUG     ] mounted ../../../nao_master/home/configuration/location/default/head/default/Projection.json to Projection
+640 480 spc: 0.05 maxGridPointsPerSize: 40
+ reading of poses done, SF: 1
+Pose 4552365301186203
+Pose 4552365301222031
+Pose 455236533348870
+Pose 455236534128818
+Pose 4552365321532365
+Pose 4552365311103620
+Pose 4552365311503571
+Pose 455236534382723
+Pose 4552365301197032
+Pose 4552365301301903
+10000error lists to try
+Starting calibrations
+starting thread: 0
+starting thread: 1
+starting thread: 2
+starting thread: 3
+starting thread: 4
+starting thread: 5
+starting thread: 6
+starting thread: 7
+Going to join0
+Going to join1
+Going to join2
+Going to join3
+Going to join4
+Going to join5
+Going to join6
+Going to join7
+Processing done
+
+Joint HEAD_YAW  bad: 3.86%      avg: -0.000150001
+Joint HEAD_PITCH        bad: 1.18%      avg: -0.00292164
+Joint L_HIP_YAW_PITCH   bad: 5.13%      avg: 0.007168
+Joint L_HIP_ROLL        bad: 2.37%      avg: 0.00949328
+Joint L_HIP_PITCH       bad: 16.64%     avg: -0.0140699
+Joint L_KNEE_PITCH      bad: 26.11%     avg: 0.0160063
+Joint L_ANKLE_PITCH     bad: 16.66%     avg: -0.0105734
+Joint L_ANKLE_ROLL      bad: 2.48%      avg: -0.00852903
+Joint R_HIP_YAW_PITCH   bad: 0%         avg: 0
+Joint R_HIP_ROLL        bad: 0%         avg: 0
+Joint R_HIP_PITCH       bad: 0%         avg: 0
+Joint R_KNEE_PITCH      bad: 0%         avg: 0
+Joint R_ANKLE_PITCH     bad: 0%         avg: 0
+Joint R_ANKLE_ROLL      bad: 0%         avg: 0
+
+Initializing histograms
+AbsMax Post Errors: 80.247
+AbsMax Joint Errors: 14.9105
+
+Finishing; Total Bad cases: 26.73%
+FAIL_LOCAL_MINIMA: 26.02%
+FAIL_NO_CONVERGE: 0.71%
+FAIL_NUMERICAL: 0%
+FAIL_NO_CAPTURES: 0%
+FAIL_NO_TEST_CAPTURES: 0%
+SUCCESS: 73.27%
+
+RMS stats for status: Fail 0: 
+        Test RMS ->  avg[ 1.28736 1.16776 ]     min[ 0.989143 0.988768 ]        max[ 10.2176 7.98286 ] 
+        Calib RMS -> avg[ 1.10109 1.10045 ]     min[ 0.959326 0.960901 ]        max[  6.5109 6.78785 ]
+RMS stats for status: Fail 1: 
+        Test RMS ->  avg[ 15.9887 7.64153 ]     min[ 8.60728 4.08029 ]  max[ 27.6524 15.0295 ] 
+        Calib RMS -> avg[ 6.61927 5.88298 ]     min[ 2.66913 2.84872 ]  max[ 11.8181 10.4804 ]
+RMS stats for status: Success: 
+        Test RMS ->  avg[ 1.00177 1.00116 ]     min[ 0.986628 0.985779 ]        max[ 1.12536 1.03181 ] 
+        Calib RMS -> avg[ 0.999422 0.999445 ]   min[ 0.955556 0.943345 ]        max[ 1.04189  1.0502 ]
+
+
+Start dump to : /tmp/originalResidualX
+75% Of Population in: -38.13813814 37.53753754
+90% Of Population in: -71.17117117 71.17117117
+95% Of Population in: -90.39039039 89.78978979
+99% Of Population in: -124.6246246 126.4264264
+99.9% Of Population in: : -169.6696697 179.8798799
+
+Start dump to : /tmp/originalResidualY
+75% Of Population in: -28.52852853 53.75375375
+90% Of Population in: -65.76576577 93.39339339
+95% Of Population in: -88.58858859 116.8168168
+99% Of Population in: -131.8318318 163.6636637
+99.9% Of Population in: : -179.2792793 218.9189189
+
+Start dump to : /tmp/calibratedResidualX
+75% Of Population in: -0.8105761595 0.8105761595
+90% Of Population in: -0.8105761595 0.8105761595
+95% Of Population in: -2.431728479 2.431728479
+99% Of Population in: -2.431728479 2.431728479
+99.9% Of Population in: : -18.64325167 17.02209935
+
+Start dump to : /tmp/calibratedResidualY
+75% Of Population in: -0.8105761595 0.8105761595
+90% Of Population in: -0.8105761595 0.8105761595
+95% Of Population in: -2.431728479 2.431728479
+99% Of Population in: -2.431728479 2.431728479
+99.9% Of Population in: : -5.674033117 8.916337755
+
+Start dump to : /tmp/unCalibratedJointResidual
+75% Of Population in: -2.913793103 2.913793103
+90% Of Population in: -5.155172414 5.155172414
+95% Of Population in: -5.603448276 5.603448276
+99% Of Population in: -6.5 6.5
+99.9% Of Population in: : -6.5 6.5
+
+Start dump to : /tmp/calibratedJointResidual
+75% Of Population in: -0.0498680287 0.0498680287
+90% Of Population in: -0.0498680287 0.0498680287
+95% Of Population in: -0.1496040861 0.1496040861
+99% Of Population in: -1.944853119 1.845117062
+99.9% Of Population in: : -5.635087243 5.934295415
+
