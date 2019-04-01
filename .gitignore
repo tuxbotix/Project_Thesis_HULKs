@@ -3,3 +3,7 @@ build/*
 *.user
 *.autosave
 */CMakeLists.txt.user.*
+
+#locks and crap
+
+*.~lock.*
