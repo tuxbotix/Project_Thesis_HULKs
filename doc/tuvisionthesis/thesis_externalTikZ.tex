@@ -1,6 +1,7 @@
 \documentclass[english, printversion, nomenclature, notitle]{tuvisionthesis} % TUVISION template
 
 \usepackage{amsmath}
+\usepackage{mathtools}
 \usepackage{tikz}
 \usepackage{cite}
 \usepackage{cleveref}
@@ -19,6 +20,7 @@
 \usepgfplotslibrary{external}
 \tikzexternalize
 
+\usepackage{pdfpages}
 \usepackage{listings}
 \usepackage{interval} 
 \lstset{language=C++}
@@ -41,6 +43,7 @@
 
 % correct appearance of calligraphic letters
 \DeclareMathAlphabet{\mathcal}{OMS}{cmsy}{m}{n}
+\DeclarePairedDelimiter{\nint}\lfloor\rceil
 
 % Information that appears on title page
 \author{Adikari Appuhamillage Darshana Sanjeewan Adikari}
@@ -212,21 +215,28 @@ Evaluating the outcome of this research is done as follows.
 \subsection{Joints \& Coordinate frames}
 
 NAO V5 and V6 have almost identical link lengths but the masses may be different. The joint actuators are explained in their documentation, but they don't mention typical backlash values. However \cite{gouaillier_nao_2008} has analyzed and presented Nao's capabilities and general information, it provides more in depth information than some sources in considerations such as joint backlash. According to it, maximum backlash tolerated is $\pm 3\degree$ for stable walking and it also mentions more about its gear train and actuators.
- \todo{cite, verify this}
 
 Nao v5 joints can be commanded at 100Hz rate, which is possible via NAOqi - a software component supplied by Softbank Robotics to actuate the joints and to read back sensor values.
 
 \subsection{Sensors}
 \subsubsection{Camera}
-\todo{datasheet \& drawings}
-NAO V5 has been the primary version used in the past few years which feature a camera with following specifications \cite{AldebaranDocumentationV5_Head}.
+NAO V5 has been the primary version used in the past few years which features two identical video cameras with positioning shown as \cref{fig:naov5_cameras}.
 
-NAO V6 will be used officially in the upcoming RoboCup, thus it is also a priority to allow the calibration framework to be used with this platform. The cameras are upgraded to higher pixel density and they also feature autofocus (most probably be disabled).
+\begin{figure}
+	\begin{center}
+		\includegraphics[width=0.8\textwidth]{nao_hardware_camera_lateral.png}
+		\caption[Nao v5 camera positioning]{This figure shows camera positioning of Nao v5. Source: \cite{softbank_robotics_video_nodate}}
+		\label{fig:naov5_cameras}
+	\end{center}
+\end{figure}
+NAO V6 will be used officially in the upcoming RoboCup, thus it is also a priority to allow the calibration framework to be used with this platform. The cameras are upgraded to higher pixel density and they also feature auto focus which will be disabled due to being impossible to have a static intrinsic matrix for a given camera.
 
 \subsubsection{Joint encoders}
 \label{subsub:jointEncoders}
 
-They feature magnetic incremental encoders with $0.1\degree$ precision. As mentioned previously, these sensors give feedback to closed loop controllers of the joints as well as let the software framework to calculate kinematic matrices. \todo{cite datasheet}. 
+They feature magnetic incremental encoders with $0.1\degree$ precision. As mentioned previously, these sensors give feedback to closed loop controllers of the joints as well as let the software framework to calculate kinematic matrices \cite{softbank_robotics_joint_nodate}.
+
+Based on experimental measurements, it could be verified that these sensors are directly connected to output of joint actuators and their resolution is 12 bits (4096 values per $360\degree$ giving $0.0878\degree$ increments which is rounded off to $0.1\degree$ in documentation. This measurement also allowed to have an idea of possible noise of these sensors. Their values are further discussed in \cref{subsec:initial_joint_error}.
 
 \subsubsection{Other Sensors}
 The NAO also house other sensors such as IMU (Intertial Measurement Unit), microphones, sonar modules, FSR (Force Sensing Resistors). For this thesis, only the IMU is used in addition to Cameras and joint sensors.
@@ -263,7 +273,7 @@ However, one disadvantage with the classic chessboard pattern is that the proces
 \begin{figure}
 	\def\svgwidth{\linewidth}
 	\input{figures/calib_patterns.pdf_tex}
-	\caption{(i) Chessboard, (ii) Aruco and (iii) Charuco calibration pattern with calibration corners depicted in red. AR (Augmented Reality) markers are used to quickly locate grid positioning and corner numbering and based on it approximate location (shown with green circles) of chessboard corners are found. Then it use subpixel optimization if specified to further optimize exact position of each chessboard corner. This approach is much faster than scanning whole image for a chessboard pattern according to \cite{romero-ramirez_speeded_2018}.}
+	\caption{(i) Chessboard, (ii) Aruco and (iii) ChAruco patterns with calibration features circled in red. AR (Augmented Reality) markers are used to quickly locate grid positioning and corner numbering and based on it approximate location (shown with green circles) of chessboard corners are found. Then it use sub-pixel optimization if specified to further optimize exact position of each chessboard corner. This approach is much faster than scanning whole image for a chessboard pattern according to \cite{romero-ramirez_speeded_2018}.}
 	\label{fig:charuco}
 \end{figure}
 \end{center}
@@ -274,12 +284,12 @@ This section discuss the fundamentals of joint errors, reasons for calibration a
 
 \subsection{Joint error types}
 
-Two major causes of joint positioning errors that affect overall positioning are backlash and shifts of sensor or actuator causing joints to position with an offset. These causes joint actuators to point at physically incorrect locations although their positioning sensors percepts otherwise). Factors such as joint elasticity, looseness of mounting, worn bearings are not considered in the scope of this thesis.
+Two major causes of joint positioning errors that affect overall positioning are backlash and shifts of sensor or actuator causing joints to position with an offset. These causes joint actuators to point at physically incorrect locations although their positioning sensors precepts otherwise). Factors such as joint elasticity, looseness of mounting, worn bearings are not considered in the scope of this thesis.
  \todo{Update the scope}
 
 \subsubsection{Backlash}
 \label{subsec:backlash}
-Backlash occurs due to necessary gap between gears (to avoid jamming) and wear occurred due to usage. Since output doesn't change when input is within this gap in a no load condition, it is also called "deadband". Precision machined gears with hardened surfaces operating with tribologically matched lubrication can minimize designed backlash and wear rate. However, such improvements don't appear to be available for the NAO as most of the joints feature plastic gears, multiple reduction stages and backlash of some joints in even brand new (Observed with Nao V5 refurbished, Nao V6 brand new) robots can be more than $1\degree$ and can be upto $\pm 5\degree$ according to \cite{hutchison_automatic_2015} (which in return cite \cite{gouaillier_nao_2008} but it only mention a maximum of $3\degree$, yet personal observations confirm the former when Naos exhibit significant wear). Due to this unavoidable phenomena, a robot may not be in the position its sensors indicate and commanded to reach.
+Backlash occurs due to necessary gap between gears (to avoid jamming) and wear occurred due to usage. Since output doesn't change when input is within this gap in a no load condition, it is also called "deadband". Precision machined gears with hardened surfaces operating with tribologically matched lubrication can minimize designed backlash and wear rate. However, such improvements don't appear to be available for the NAO as most of the joints feature plastic gears, multiple reduction stages and backlash of some joints in even brand new (Observed with Nao V5 refurbished, Nao V6 brand new) robots can be more than $1\degree$ and can be upto $\pm 5\degree$ according to \cite{kastner_automatic_2015} (which in return cite \cite{gouaillier_nao_2008} but it only mention a maximum of $3\degree$, yet personal observations confirm the former when Naos exhibit significant wear). Due to this unavoidable phenomena, a robot may not be in the position its sensors indicate and commanded to reach.
 
 Figure \ref{fig:backlash} illustrate the effect of backlash while \cref{eq:output_backlash} models it with variables $D = deadband$, $i = input$, $o_i = \text{initial output}$. 
 
@@ -337,13 +347,11 @@ Indirect measurement based methods are possibly more practical in the context of
 \subsection{Previous Work}
 \label{subsec:joint_calib_previous_work}
 
-There are several experiments done in context of the NAO Robot for indirect joint calibration. Some involves fixing a calibration pattern \todo{cite} in the form of a sticker. One of the experiments by Rbocup SPL team B-Human involves "sandles" worn by the NAO \cite{hutchison_automatic_2015}, but ultimately they concluded the results being less than satisfactory. Their experiment didn't measure nor compensate backlash, but assumed the error is a fixed offset only. In addition, the robot took measurements while lying on its back (based on images in the publication) which is not a typical pose for the usecase, thus backlash affected the joints differently than what would be observed had the robot being standing. In addition, the authors also mention possible effect from flexing of the limbs and torque modeling would have improved their experiment based on the results by Nao Devils of TU Dortmund in modeling flexing and joint torque contributions. \todo{Read nao devils literature also}
+There are several experiments done in context of the NAO Robot for indirect joint calibration. Some involves fixing a calibration pattern in the form of a sticker \cite{maier_whole-body_2015}. One of the experiments by Rbocup SPL team B-Human involves "sandles" worn by the NAO \cite{kastner_automatic_2015}, but ultimately they concluded the results being less than satisfactory. Their experiment didn't measure nor compensate backlash, but assumed the error is a fixed offset only. In addition, the robot took measurements while lying on its back (based on images in the publication) which is not a typical pose for the usecase, thus backlash affected the joints differently than what would be observed had the robot being standing. In addition, the authors also mention possible effect from flexing of the limbs and torque modeling would have improved their experiment based on the results by Nao Devils of TU Dortmund in modeling flexing and joint torque contributions. \todo{Read nao devils literature also}
 
-Later, B-Human have been using a semi-automatic method to calibrate both joints and camera extrinsic parameters. First, the robot is put to a specific pose (ie: standing), lifted to observe foot offsets and adjustments are done so that both feet are at same level and orientation. Next, the robot is placed on the ground and the distance to hip or another known joint origin is measured. This allows to measure the length of the kinematic chain of each leg. Any deviations are compensated by means of inverse kinematic values and finally the robot's leaning towards ground \todo{gait?} is also adjusted. While this appears to be a practical method, the disadvantage of manual measurements is time consuming and can be erroneous. The procedure and motivation is detailed in \cite{thomas_rofer_b-human_2018}. 
+Later, B-Human have been using a semi-automatic method to calibrate both joints and camera extrinsic parameters. First, the robot is put to a specific pose (ie: standing), lifted to observe foot offsets and adjustments are done so that both feet are at same level and orientation. Next, the robot is placed on the ground and the distance to hip or another known joint origin is measured. This allows to measure the length of the kinematic chain of each leg. Any deviations are compensated by means of inverse kinematic values and finally the robot's leaning towards ground is also adjusted. While this appears to be a practical method, the disadvantage of manual measurements is time consuming and can be erroneous. The procedure and motivation is detailed in \cite{thomas_rofer_b-human_2018}. 
 
 Several publications have covered the topic of choosing optimal poses. The approach was to obtain end effector positions for each pose and stack them as columns to build a matrix. Then the condition number of its jacobian is taken. The optimizer tries various poses and attempts to obtain the matrix with best conditioning which appears to provide the optimal set of calibration poses. Their results prove that measurements from a small amount of optimal calibration poses yields better or equal results compared to using large amount of randomly chosen measurement poses. Therefore it is sensible to focus on finding for a set of optimal poses for the Nao. However, it should be noted that these publications were applied to industrial robots where the measurements were taken by accurate 3D measurement tools, whereas the preferred constraints for this thesis's use case provides further complications as the 2D cameras can only estimate the pose of a calibration target, not get a precise position. Therefore the author's approach in this thesis has some divergence on searching the set of optimal poses.
-
-Given that previous work with regard to Nao or similar humanoid robots didn't cover some aspects shown in research mentioned for industrial robots and the fact that there isn't significant amount of previous research regarding the observability of joint errors with on board sensors (esp. 2D cameras) alone, one of the key components of this thesis would be devising an observation model for joint errors and deriving most suitable poses. This should assist to explain the quality of calibration at each joint. \todo{move to methodoliogy? or part of it}
 
 \section{Observation Models}
 Considering revelations from previous research mentioned in \cref{subsec:joint_calib_previous_work}, observations and feedback gathered from discussions with other team members and teams, deriving an observation model of joint errors with respect to various available sensors (or fused outputs) in order to find a set of optimal poses would be more effective than following a trial and error or brute force or random pose selection approach.
@@ -385,14 +393,16 @@ The evaluation of similarity between two observation directions can be done in m
 This section discuss approaches in deriving "poses" for the robot. In this context, generating a pose means obtaining appropriate joint angles or expressing a pose by means of feet positions relative to torso and head joint angles. (Arms are not moved, will be in 0deg position.)
 
 \subsection{Forward Kinematics}
+\label{subsec:forward_kinematics_gen}
 
 In this approach, the pose is directly defined in terms of joint angles. The kinematic chain is generated by means of forward kinematic equations.
 
 The drawback is that when generating in a brute-force method, it is not possible to directly identify if this pose is safe, stable, etc (these calculations is better defined via kinematic matrices). Due to this nature it is also not possible to directly define a work envelope (the region which a robot's links can access).
 
-Finally, such brute force approaches can easily end up with very large number of possible iterations to exhaust entire joint angle space even with 1 degree step size. (ex: 16~ joints, 90~ deg freedom, 1 deg step -> 90\^16 ) \todo{replace with actual calculation}
+Finally, such brute force approaches can easily end up with very large number of possible iterations to exhaust entire joint angle space even with $1\degree$ step size. For example, with 16 joints, $90\degree$ range for each joint with $1\degree$ increment would result in $ n_c = 1.8530202e+31 = (\frac{r}{i})^{n_j}, r = 90\degree, i = 1\degree, n_j = 16$. Assuming 1$\mu$s per each configuration's generation it'll take more than $5^{24}$ hours in total for computation, therefore this approach should be considered with care.
 
 \subsection{Inverse Kinematics}
+\label{subsec:inverse_kinematics_gen}
 
 Inverse kinematic approach take the target pose in terms of feet and torso position relative to each other and head joint angles. Then inverse kinematics is applied for the two legs to obtain the corresponding joint angles. The arm angles are obtained by one of the predefined poses within HULKs framework (STAND pose \todo{cite code release?})
 
@@ -427,7 +437,7 @@ In order to solve a cost function, one possible way is to try all valid values f
 
 This approach is known as brute force, as the name suggests the method isn't "smart" or efficient. In order to cut back optimization time, various solvers exist to speed up the process. They usually employ gradient of error, sum of error squared and combinations.
 
-Out of these optimizers, one class is global optimizers - they will attempt to find the best solution within the entire configuration space. For example, brute force method can do this as it explore the entire space. While the prospect of getting the best value is tempting, global solvers are computationally expensive, thus local methods are favoured when there is a good initial guess. There are also various approaches to speed up solving of global optimization problems including multi-agent, flood fill, etc methods. 
+Out of these optimization options, one is global optimization - they will attempt to find the best solution within the entire configuration space. For example, brute force method can do this as it explore the entire space. While the prospect of getting the best value is tempting, global solvers are computationally expensive, thus local methods are favoured when there is a good initial guess. There are also various approaches to speed up solving of global optimization problems including multi-agent, flood fill, etc methods. 
 \todo{cite cite cite!!!}
 
 Local optimization methods will find the closest minima (or maxima, depends on the approach) to the starting point. there is no guarantee it is the best solution. Thus the initial guess plays a major role. Levenberg Marquardt is one such popular solver/ optimizer algorithm.
@@ -438,6 +448,9 @@ Local optimization methods will find the closest minima (or maxima, depends on t
 This is a phenomena mentioned in the field of data science where the data set involve high amount of or when the cost function has large number of parameters.
 
 Due to the high dimensionality, it is not only difficult to visualize, but also difficult to compute and to clearly understand for a human. In addition, certain optimization methods are not suitable for high dimensional problems \todo{cite}
+
+\section{conclusion}
+Given that previous work with regard to Nao or similar humanoid robots didn't cover some aspects shown in research mentioned for industrial robots and the fact that there isn't significant amount of previous research regarding the observability of joint errors with on board sensors (esp. 2D cameras) alone, one of the key components of this thesis would be devising an observation model for joint errors and deriving most suitable poses. This should assist to explain the quality of calibration at each joint. \todo{move to methodoliogy? or part of it}
 
 %%%% METHODOLOGY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Methodology}
@@ -453,7 +466,31 @@ In order to identify potential sources of joint errors, a few tests were done wi
 
 Nao joint encoders can sense backlash, this was tested by setting the robot to a pose with high stiffness of joints and then each joint was manually moved with light force to 'feel' backlash while monitoring sensor values from the debug tool (MATE). It was confirmed that the sensors respond when the joint is moved within the range of backlash, thus it is possible in theory to measure this range directly; By measuring the angular difference sensed when the above test is performed. This is the usual technique used to measure backlash of lead screws and gear trains.
 
-However, it is challenge to compensate backlash of a complex kinematic chain such as the Nao Robot due to the number of joints and difficulty in identifying the direction of force acted upon a joint (as this is a real scenario including inertias and masses as opposed to simple demonstration model described in \cref{subsec:backlash}).
+However, it is challenge to compensate backlash of a complex kinematic chain such as the Nao Robot due to the number of joints and difficulty in identifying the direction of force acted upon a joint (as this is a real scenario including inertia and masses as opposed to simple demonstration model described in \cref{subsec:backlash}).
+
+Another source of error is noise when reading joint encoders. An experiment was performed to record joint angle values over a period of 50 seconds approximately (5000 samples @ 100Hz \todo{add actual rate}). A Nao was on a sitting pose without any joint stiffness and joint positions weren't at zero in general. Therefore these recordings were shifted to have zero median for better visualization and can also serve as a noise distribution for the joint sensor. Figure \ref{fig:joint_sensor_noise} depicts these recordings. It can be concluded that these values move at most by increment of sensor resolution mentioned in \cref{subsub:jointEncoders} ($0.087\degree$). Based on this, a simple zero mean Gaussian distribution based noise model can be defined as depicted in \cref{eq:joint_sensor_noise}.
+
+\begin{equation}
+	\alpha_{noise} = \frac{2 \cdot \pi}{s} \cdot \nint*{\frac{s}{2 \cdot \pi } \cdot ( \alpha + \mathcal{N}(\mu = 0,\,\sigma^{2}))}, s = 4096, \mu = 0, \sigma \approx 0.01
+	\label{eq:joint_sensor_noise}
+\end{equation}
+where:
+\begin{align*}
+	\alpha_{noise} &= \text{Joint angle sensor reading with noise}\\
+	s &= \text{steps per revolution = 4096 according to documentation}\\
+	\alpha &= \text{input angle}\\
+	\mu &= \text{Gaussian distribution mean}\\
+	\sigma &= \text{Gaussian distribution's standard deviation}
+\end{align*}
+
+\begin{center}
+	\begin{figure}
+		\def\svgwidth{\linewidth}
+		\input{figures/joint_sensor_noise.pdf_tex}
+		\caption[Joint sensor angle value distribution when at rest.]{Joint sensor value distribution when at rest. The values were shifted to zero using median for better visualization, and this is also equivalent to joint sensor noise distribution.}
+		\label{fig:joint_sensor_noise}
+	\end{figure}
+\end{center}
 
 Based on above facts and observations, following simplified joint error model is applied and assumed, with constraint of accuracy of this only valid for a subset of poses.
 
@@ -468,7 +505,7 @@ outputSimplified(i) = E_o + i -\sgn(i)\cdot\frac{D}{2}
 
 By assuming the above scenario for each joint and all poses are captured attempting to enforce this, calibration process becomes significantly simplified as joint errors become fixed offsets by fixing input direction in \cref{eq:backlash_simplified_final} instead of accounting for backlash directions, determining backlash values.
 
-\subsection{Type of poses for calibration}
+\subsection{Deciding type of poses for calibration}
 
 In \cref{subsec:initial_joint_error}, it was determined that a limited class of poses are to be used for calibration in order to ensure backlash be generally acting in the same direction.
 
@@ -477,6 +514,14 @@ In context of Robocup SPL, Nao is supposed to walk, stand up, etc similar to a h
 Therefore, it is sensible to restrict all calibration poses be standing, with one leg or both supporting. Restricting poses to single leg/ foot support will make the kinematic chain only depend on that leg, thus able to separate joint errors of each leg.
 
 In order to avoid time synchronization issues (as mentioned in section "Camera Calibration" of \cite{darshana_adikari_team_2017}), capturing is done when the robot is not moving. This also automatically implies the standing pose must be statically stable.
+
+Based on above information, a summarized set of requirements each pose must comply is given below:
+\begin{enumerate}
+	\item Be pose that is reachable by joints and obey joint constraints.
+	\item Not collide with other limbs or body parts.
+	\item Be statically stable.
+	\item Be standing with one or both feet.
+\end{enumerate}
 
 Section \ref{sec:poseGen} covers generation of poses based on these requirements.
 
@@ -501,23 +546,21 @@ This phase became a major segment of this project due to the importance of findi
 
 \subsection{Pose Generation and initial filtering}
 
-Initially, the forward kinematics approach was considered. \todo{tag the section}However due to billions of possible joint angle configurations and the lack of "direct understanding" about a given pose (position of feet, torso, etc), this approach was further disadvantagous to use.
+Initially, the forward kinematics approach mentioned in \cref{subsec:forward_kinematics_gen} was considered. However due to near infinite number of possible joint angle configurations and the lack of "direct understanding" about a given pose (position of feet, torso, etc), this approach was not practical to be used.
 
-Inverse kinematics base approach accepts the following parameters:
+Inverse kinematics based approach (\cref{subsec:inverse_kinematics_gen}) accepts the following parameters:
 \begin{itemize}
 	\item Support foot - left, right or double foot
 	\item Torso pose relative to support foot (position \& rotations)
 	\item Pose of the other foot relative to support foot
 	\item Head yaw and pitch angles
 \end{itemize}
-This approach is somewhat complicated by the need to use inverse kinematics and it was observed a given pose is not achieved by inverse kinematics (as opposed to generating a pose directly from joint angles). Thus further checks were needed to verify the generated pose is actually similar to the desired pose.
+This approach is somewhat complicated by the need to use inverse kinematics and it was observed sometimes a given pose is not achieved by inverse kinematics (as opposed to generating a pose directly from joint angles). Thus further checks were needed to verify the generated pose is actually similar to the desired pose.
 
 \todo{equations?}
-In either of the approaches, the final output is joint angles. Then these angles are used to verify whether the robot is in a stable stand-up posture.
+In either of the approaches, the final output is joint angles. Then they are used to verify whether the robot is in a stable stand-up posture.
 
-This is done by checking if robot's COM projection to ground plane is within the support polygon. Thus in case of single foot support (support foot on the ground, and other foot raised), the support polygon is the polygon comprised of portion of NAO's foot touching the ground. In case of double foot, it's the polygon containing both feet and the region between them. \todo{refer support poly. literature}
-
-Another verification added later was to confirm that the two legs does not collide with each other. The logic is based on Softbank's implementation of self-collision avoidance as explained in \todo{reference to softbank self-collision}.
+This is done by checking if robot's COM projection to ground plane is within the support polygon. In case of single foot (support foot on the ground, and other foot raised), the support polygon is the polygon comprised of portion of NAO's foot touching the ground. In case of double foot, it's the polygon containing both feet and the region between them. \todo{refer support poly. literature}
 
 If a pose pass both these checks, then it'll be appended into a file in a predefined format which is (de)serializable from the C++ program. \todo{refer to appendix?}
 
