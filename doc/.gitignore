@@ -3,6 +3,7 @@ build/*
 
 *.pdf
 !tuvisionthesis/figures/*.pdf
+!figures/*.pdf
 
 tuvisionthesis.idx
 tuvisionthesis.glo
