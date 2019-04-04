@@ -4,7 +4,6 @@
 \usepackage{mathtools}
 \usepackage{tikz}
 \usepackage{cite}
-\usepackage{cleveref}
 \usepackage{gensymb}
 \usepackage{graphicx}
 \graphicspath{ {./images/}{./figures/}  }
@@ -20,9 +19,12 @@
 \usepgfplotslibrary{external}
 \tikzexternalize
 
+\usepackage[]{algorithm2e}
 \usepackage{pdfpages}
 \usepackage{listings}
 \usepackage{interval} 
+
+\usepackage[nameinlink]{cleveref}
 \lstset{language=C++}
 
 %% Declare signum function
@@ -76,7 +78,7 @@ This thesis is organized as follows; The
 
 \section{Problem Statement}
 
-Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic) \cite{HULKs2017Report}.
+Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic) \cite{darshana_adikari_team_2017}.
 
 In recent years, with the aging NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several meters.
 
@@ -517,7 +519,8 @@ In order to avoid time synchronization issues (as mentioned in section "Camera C
 
 Based on above information, a summarized set of requirements each pose must comply is given below:
 \begin{enumerate}
-	\item Be pose that is reachable by joints and obey joint constraints.
+	\label{items:conditionsForPose}
+	\item Be a pose that is reachable by joints and obey joint constraints.
 	\item Not collide with other limbs or body parts.
 	\item Be statically stable.
 	\item Be standing with one or both feet.
@@ -546,23 +549,48 @@ This phase became a major segment of this project due to the importance of findi
 
 \subsection{Pose Generation and initial filtering}
 
-Initially, the forward kinematics approach mentioned in \cref{subsec:forward_kinematics_gen} was considered. However due to near infinite number of possible joint angle configurations and the lack of "direct understanding" about a given pose (position of feet, torso, etc), this approach was not practical to be used.
+Initially, the forward kinematics approach mentioned in \cref{subsec:forward_kinematics_gen} was considered. However due to near infinite number of possible joint angle configurations and the lack of "direct understanding" about a given pose (position of feet, torso, etc), this approach was not practical to be used. Pose of torso and "other foot" are defined with respect to support foot. This enabled to understand and visualize pose of torso and other foot relative to ground.
 
 Inverse kinematics based approach (\cref{subsec:inverse_kinematics_gen}) accepts the following parameters:
 \begin{itemize}
 	\item Support foot - left, right or double foot
-	\item Torso pose relative to support foot (position \& rotations)
-	\item Pose of the other foot relative to support foot
+	\item Torso pose relative to support foot ($\prescript{Torso}{SF}{T}$ contains both position and rotations)
+	\item Pose of the other foot relative to support foot ($\prescript{OF}{SF}{T}$)
 	\item Head yaw and pitch angles
 \end{itemize}
-This approach is somewhat complicated by the need to use inverse kinematics and it was observed sometimes a given pose is not achieved by inverse kinematics (as opposed to generating a pose directly from joint angles). Thus further checks were needed to verify the generated pose is actually similar to the desired pose.
 
-\todo{equations?}
-In either of the approaches, the final output is joint angles. Then they are used to verify whether the robot is in a stable stand-up posture.
+This approach is somewhat complicated by the need to use inverse kinematics and it was observed sometimes a given pose is not achieved by inverse kinematics (as opposed to generating a pose directly from joint angles). Thus further checks were needed to verify the generated pose is actually similar to the desired pose. While head angles are directly used and angles for arms are taken from a default pose, \cref{eq:pose_2_joint_generation} has to be used to derive leg angles.
 
-This is done by checking if robot's COM projection to ground plane is within the support polygon. In case of single foot (support foot on the ground, and other foot raised), the support polygon is the polygon comprised of portion of NAO's foot touching the ground. In case of double foot, it's the polygon containing both feet and the region between them. \todo{refer support poly. literature}
+\begin{equation}
+\label{eq:pose_2_joint_generation}
+\begin{aligned}
+\prescript{SF}{Torso}{T} &= \prescript{Torso}{SF}{T}^{-1} \\
+\prescript{OF}{Torso}{T} &= \prescript{Torso}{OF}{T}^{-1} \\
+[\alpha_{hipYawPitch}, ... , \alpha_{anklePitch}] &= legAngles_{SF} = InverseKinematics(\prescript{SF}{Torso}{T}) \\
+[\beta_{hipYawPitch}, ... , \beta_{anklePitch}] &= legAngles_{OF} = InverseKinematics(\prescript{OF}{Torso}{T}) \\ \\
+\text{where:} \\
+SF &= \text{Support foot} \\
+OF &= \text{Other foot} \\
+\prescript{Torso}{SF}{T} &= \text{Torso pose with respect to support foot} \\
+\prescript{Torso}{OF}{T} &= \text{Other foot with respect to support foot} \\
+[\alpha_n, .., \alpha_m] &= \text{Array of leg angles in support foot's side} \\
+[\beta_n, .., \beta_m] &= \text{Array of leg angles in other foot's side}
+\end{aligned}
+\end{equation}
 
-If a pose pass both these checks, then it'll be appended into a file in a predefined format which is (de)serializable from the C++ program. \todo{refer to appendix?}
+\subsubsection{Pose validation}
+
+These angles are then subjected to multiple checks to ensure conformity of this pose to the constraints in \cref{items:conditionsForPose}. 
+
+First, forward kinematics calculation to verify if inverse kinematic calculation was performed correctly. This also enabled to verify joint constraints as forward kinematic calculations check for them. \todo{cite source code?}, thus verifying first constraint.
+
+To comply with second criteria of pose constraints, collision detection was introduced based on a modeling technique published by Softbank Robotics for the Nao. \todo{cite}
+
+Third constraint is checked by computing static stability of the robot while assuming a standing pose is verified in order to comply with third pose constraint. This is done by checking if robot's COM projection to ground plane is within the support polygon. In case of single foot (support foot on the ground, and other foot raised), the support polygon is the polygon comprised of portion of NAO's foot touching the ground. In case of double foot, it's the polygon containing both feet and the region between them. \todo{refer support poly. literature}
+
+The fourth and final pose constraint is implicitly checked by the previous test by assuming the robot is standing on its own feet (or one foot if other is lifted), thus passing static stability test automatically qualify this constraint.
+
+Once a pose pass all these checks, then it'll be appended into a file in a predefined format which is (de)serializable from the C++ programs. \todo{refer to appendix?}
 
 \subsection{Observation Model}
 \todo{Complete this, explain better, figures...}
@@ -652,28 +680,106 @@ Further information about the tools and software is available in the team resear
 
 %%%% TESTING %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Testing and Evaluation}
+
 \todo{Intro para}
 \section{Tests for code quality}
 \todo{Mention unit tests, etc}
 \section{Calibration tests}
-\todo{Intro para}
+
+Evaluation of calibration was done primarily with simulated data due to difficulty in verifying calibration done with real robots; Nao V5 robots are old, not only their joints tend to be worn but their limbs exhibited looseness and elastic nature, this will adversely affect calibration and misrepresent any successes or failures. Nao V6 robots are in excellent condition due to being brand new, however certain details of hardware is not officially confirmed yet, that could also lead to false results.
+
+Following algorithms depicts the process used to evaluate calibration of the robots. This process can be used for both real and simulation scenarios. \cref{alg:getFrameCaptures} is a simulation specific algorithm which is used to generate simulated captures of a robot for a certain configuration of joint errors with a set of poses. For realistic scenario, the data structure $Fcap$ in that algorithm can be built by real captures of a robot, but in this case error configuration is induced to the robot by joint offsets (assuming robot is error free). 
+
+\begin{algorithm}[]
+	\caption{Generating an array of structures each containing: pose $p$, 3D-2D correspondence pairs observed for that pose $c$, camera used to observe $cam$ and support foot $sf$}	\label{alg:getFrameCaptures}
+	\SetKwInOut{Input}{inputs}
+	\SetKwInOut{Output}{output}
+	\SetKwProg{getFrameCaptures}{getFrameCaptures}{}{}
+	\getFrameCaptures{$(e_c,P,G, m)$}{
+		\Input{A joint error configuration, containing an error value (an offset) for each joint $e_c$; A set of poses to use in calibration $P$, a set of 3D points to use as calibration features $G$, robot's kinematic and camera projection model $M$}
+		\Output{An array of structures $Fcap$ each containing: pose $p$, 3D-2D correspondence pairs observed for that pose $c$, camera used to observe $cam$ and support foot $sf$}
+		\tcp{Initialize set of 3D-2D correspondences}
+		$Fcap \gets \emptyset$\;
+		$M$.setJointErrors($e_c$)\;
+		\ForEach{Calibration pose p $p\in P$}{%
+			$M$.setPose(p)\;
+			$c \gets M$.project3DPoints($G$)\; \tcp{Returns 2D projections and corresponding 3D point}
+			$Fcap$.append({$p$, $c$, $cam$})\;
+		}
+		\KwRet{$Fcap$}\;
+	}
+	\BlankLine
+\end{algorithm}
+
+Once $Fcap$ is obtained, it can be given to \cref{alg:evaluateJointCalibration} which is used to calibrate for each scenario and return an array containing solved calibration parameters, RMS error of pixels, calibration output and state of calibration attempt - success, local minima convergence, no convergence or numerical error.
+
+\begin{algorithm}[]
+	\caption{Evaluating Joint calibration quality for a given set of error configurations, calibration poses, ground points and a Nao model to simulate kinematic chain and projections.}	\label{alg:evaluateJointCalibration}
+	\SetKwInOut{Input}{inputs}
+	\SetKwInOut{Output}{output}
+	\SetKwProg{EvaluateJointCalibration}{EvaluateJointCalibration}{}{}
+	\EvaluateJointCalibration{$(Fcap, M)$}{
+		\Input{A set of captures, from \cref{alg:getFrameCaptures} or from real robot captures and Nao model $M$}
+		\Output{A set of statistics containing RMS error in pixels $RMS_x$, $RMS_y$, output from calibration $Y$, status of calibration $status$}
+		\BlankLine
+		\tcp{Intial value}
+		$X \gets [0] * 26$\;
+		\tcp{$Y$ is calibration offsets for joints, $status_{solver}$ is returned by solver if it failed or not, $res_{px}$ is residual in pixels.}
+		$Y, status_{solver}, res_{px} \gets calibrator(F_cap, M, X)$\;
+		\tcp{Calculate Root Mean Square errors of pixels in x and y directions}
+		$RMS_x, RMS_y \gets calculateRMS(res_{px})$\;
+		\BlankLine
+		\tcp{Determine final status of calibration}
+		\uIf{$solverStatus \ne SUCCESS$}{
+			\tcp{Numerical error or other solver failure}
+			$status \gets E_{num}$\;
+		}
+		\uElseIf{$RMS_x > rmsErrorTolerance$ or $RMS_y > rmsErrorTolerance$}{
+			\tcp{Convergence failure}
+			$status \gets E_{conv}$\;
+		}
+		\uElseIf{any of $calibratedJointOffsets > jointCalibQualityTol$}{
+			\tcp{Converged to a local minima}
+			$status \gets E_{local}$\;
+		}\uElse{
+			\tcp{No failures detected}
+			$status \gets SUCCESS$\;
+		}
+		\BlankLine
+		\KwRet{$(Y, RMS_x, RMS_y, status)$}\;
+	}
+	\BlankLine
+\end{algorithm}
+
+\todo{complete the algo}
+Finally, \cref{alg:EvaluateCalibrationPoses} is mainly used in simulated testing to run previously algorithms against a large number of artificially generated error configurations by using uniform random distributions. After obtaining results from a significant amount of test runs, these results are further treated with a set of python scripts and resulting plots are displayed in the next sections along with conditions which the experiment was conducted as well. \todo{nicely explain these data structures}
+ 
+\begin{algorithm}[H]
+	\caption{Process to execute \cref{alg:getFrameCaptures} and \cref{alg:evaluateJointCalibration} for a large number of joint error configurations.}	\label{alg:EvaluateCalibrationPoses}
+	\SetKwInOut{Input}{inputs}
+	\SetKwInOut{Output}{output}
+	\SetKwProg{EvaluateCalibrationPoses}{EvaluateCalibrationPoses}{}{}
+	\EvaluateCalibrationPoses{$(E_c,P,G, M)$}{
+		\Input{A set of joint error configurations $E_c$; A set of poses to use in calibration $P$, a set of 3D points to use as calibration features $G$, robot's kinematic and camera projection model $M$}
+		\Output{A list structures each containing statistics for each calibration run (output of \cref{alg:evaluateJointCalibration})}
+		$statsArr \gets \emptyset$\;
+		\ForEach{Error configuration $e_c \in E_c$}{
+			$Fcap \gets getFrameCaptures(e_c, P, G, M)$\;
+			$\{Y, RMS_x, RMS_y, status\} \gets EvaluateJointCalibration(Fcap, M)$\;
+			\tcp{Get residual of parameters vs error configuration, ideally this should be a zero vector.}
+			$res_{param} \gets e_c - Y$\;
+			$statsArr$.append($\{res_{param}, Y, RMS_x, RMS_y, status\}$)\;
+		}
+		\KwRet{$statsArr$}\;
+	}
+	\BlankLine
+\end{algorithm}
+
 \subsection{Simulation: Entire ground plane as a calibration pattern}
 \label{subsec:simGroundTest}
-In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process is as follows.
+In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process described by \cref{alg:EvaluateCalibrationPoses} is performed with the following conditions and a separate set of poses acting as test data was used to get RMS values instead of using calibration data for that.
 
-\todo{Replace this with psuedocode listing}
-\begin{itemize}
-	\item Generate a grid of ground points.
-	\item Generate a set of error configuration and for each;
-	\begin{enumerate}
-		\item Capture the ground points with the simulated Nao world-robot model and obtain the corresponding 2D points in camera plane for each pose. Only a small set of poses were under test (10).
-		\item Use a solver to obtain joint calibration value that can minimize the reprojection error for the above correspondance set.
-		\item Return the state of calibration (by solver), residual in camera plane (reprojection error vector), joint parameter residual.
-		\item If the reprojection error is within a certain margin, it is considered as a success.
-		\item However, the joint parameter residual is used to verify if the solver was stuch in a local minima.
-	\end{enumerate}
-	\item Accumilate all the residuals and compute the histograms.
-\end{itemize}
+\todo{do a table}
 
 \subsubsection{Error Generation}
 For this evaluation, only poses that make the robot stand in one leg was used, thus it was focussed either left foot or right foot as support foot. Therefore, only the following joints were employed to generate the error configurations.
