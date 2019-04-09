@@ -16,8 +16,9 @@
 #include "CalibrationFeatures.hpp"
 
 int main() {
-  auto pattern = ChessBoardPatternOnFloor<float>(10, 5, 1);
-  auto points = pattern.getTransformedPoints(Vector2f(10, 5), 90);
+  auto pattern = CalibrationFeatures::ChessBoardPatternOnFloor<float>(
+      10, 5, 1, Vector2f(10, 5), 90 * TO_RAD_FLT);
+  auto points = pattern.getGroundPoints();
   for (const auto &pt : points) {
     std::cout << pt.transpose() << std::endl;
   }

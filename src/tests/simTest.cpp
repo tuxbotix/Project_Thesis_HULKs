@@ -21,6 +21,7 @@
 #define DEBUG_IN_THREAD 1
 #define ENABLE_PROGRESS 1
 
+#include "CalibrationFeatures.hpp"
 #include "JointCalibEval.hpp"
 #include "JointCalibSolver.hpp"
 #include "MiniConfigHandle.hpp"
@@ -50,6 +51,8 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
             const jCEval::CombinedPoseListT combinedPoseList,
             const jCEval::CombinedPoseListT combinedTestPoseList,
             const SUPPORT_FOOT supFoot, const NaoJointAndSensorModelConfig cfg,
+            const std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
+                &calibrationFeaturePtrs,
             const std::vector<rawPoseT>::iterator jointErrItrBegin,
             const std::vector<rawPoseT>::iterator jointErrItrEnd,
             const float minJointErrVal, const float maxJointErrVal,
@@ -71,10 +74,10 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
   //                 const bool enablePixelNoise, const bool enableJointNoise)
 
   jCEval::JointErrorEval jointErrorEvalStruct(
-      cfg, combinedPoseList, combinedTestPoseList, supFoot, minJointErrVal,
-      maxJointErrVal, jointCalibQualityTol, reprojErrTolPercent,
-      pixelNoiseStdDev, jointNoiseStdDev, stochasticFix, enablePixelNoise,
-      enableJointNoise);
+      cfg, calibrationFeaturePtrs, combinedPoseList, combinedTestPoseList,
+      supFoot, minJointErrVal, maxJointErrVal, jointCalibQualityTol,
+      reprojErrTolPercent, pixelNoiseStdDev, jointNoiseStdDev, stochasticFix,
+      enablePixelNoise, enableJointNoise);
 
   for (auto errSetIter = jointErrItrBegin; errSetIter != jointErrItrEnd;
        ++errSetIter) {
@@ -439,6 +442,35 @@ int main(int argc, char *argv[]) {
   // cameras to evaluate
   std::vector<Camera> camNames = {Camera::BOTTOM, Camera::TOP};
 
+  std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
+      calibrationFeatures = {
+          //          std::make_shared<CalibrationFeatures::GroundGrid<float>>(
+          //              cfg.maxGridPointsPerSide, cfg.gridSpacing)
+          std::make_shared<
+              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
+              10, 14, 0.05, Vector2f{1.5, -0.6}, 0),
+          std::make_shared<
+              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
+              10, 14, 0.05, Vector2f{0.75, -0.25}, 0),
+          std::make_shared<
+              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
+              10, 14, 0.05, Vector2f{0.25, 0.5}, 0),
+          std::make_shared<
+              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
+              10, 14, 0.05, Vector2f{0.9, 0.75}, 0)};
+  {
+    std::fstream file("/tmp/chessBoards.txt", std::ios::out);
+    for (const auto &feat : calibrationFeatures) {
+      auto pts = feat->getGroundPoints();
+      for (const auto &pt : pts) {
+        file << pt.x() << " " << pt.y() << "\n";
+      }
+    }
+    file.flush();
+    file.close();
+    std::cout << "Save chessboard points" << std::endl;
+  }
+
   // PoseAndCamera list
   jCEval::CombinedPoseListT combinedPoseList;
   jCEval::CombinedPoseListT combinedTestPoseList;
@@ -478,10 +510,11 @@ int main(int argc, char *argv[]) {
     //                const bool enableJointNoise)
     futureList[i] = std::async(
         std::launch::async, &threadedFcn, std::ref(calibResidualList[i]),
-        combinedPoseList, combinedTestPoseList, supFeet, cfg, begin, end,
-        MIN_ERR_VAL, MAX_ERR_VAL, JOINT_CALIB_QUALITY_TOL_RAD,
-        REPROJ_ERR_TOL_PERCENT, PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV,
-        stochasticFix, enablePixelNoise, enableJointNoise);
+        combinedPoseList, combinedTestPoseList, supFeet, cfg,
+        std::ref(calibrationFeatures), begin, end, MIN_ERR_VAL, MAX_ERR_VAL,
+        JOINT_CALIB_QUALITY_TOL_RAD, REPROJ_ERR_TOL_PERCENT,
+        PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV, stochasticFix,
+        enablePixelNoise, enableJointNoise);
   }
 
   /*

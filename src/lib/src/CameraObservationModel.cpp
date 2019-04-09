@@ -1,4 +1,5 @@
 #include "CameraObservationModel.hpp"
+#include "CalibrationFeatures.hpp"
 #include "Solvers.hpp"
 #include "utils.hpp"
 
@@ -34,11 +35,12 @@ CameraObservationModel::CameraObservationModel(
     const Vector2f &fov, uint64_t dimensionExtremum,
     const size_t &maxGridPointsPerSide, const float &gridSpacing)
     : // maxGridPointsPerSide(maxGridPointsPerSide),
-      maxValPerDim(dimensionExtremum),
-      imSize(imSize), deltaThetaCorse(5.0f * TO_RAD_FLT),
-      deltaThetaFine(1.0f * TO_RAD_FLT),
-      naoJointSensorModel(imSize, fc, cc, fov, maxGridPointsPerSide,
-                          gridSpacing)
+      maxValPerDim(dimensionExtremum), imSize(imSize),
+      deltaThetaCorse(5.0f * TO_RAD_FLT), deltaThetaFine(1.0f * TO_RAD_FLT),
+      naoJointSensorModel(imSize, fc, cc, fov),
+      calibrationFeaturePtrs(
+          {std::make_shared<CalibrationFeatures::GroundGrid<float>>(
+              maxGridPointsPerSide, gridSpacing)})
 // gridSpacing(gridSpacing),
 {}
 
@@ -142,8 +144,9 @@ CameraObservationModel::getSensitivitiesForCamera(
   /// Make the basline set of points.
   updateState(jointAngles, sf, camName);
   bool success;
-  VecVector2<float> gridSet =
-      naoJointSensorModel.getGroundGrid(camName, success);
+  VecVector2<float> gridSet = naoJointSensorModel.getFilteredCalibFeatures(
+      camName, calibrationFeaturePtrs, success);
+  //      naoJointSensorModel.getGroundGrid(camName, success);
   if (success) {
     std::vector<std::pair<bool, Vector2f>> baseLinePointSet =
         naoJointSensorModel.robotToPixelMulti(camName, gridSet);

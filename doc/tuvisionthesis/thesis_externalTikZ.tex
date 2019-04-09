@@ -775,14 +775,14 @@ Finally, \cref{alg:EvaluateCalibrationPoses} is mainly used in simulated testing
 	\BlankLine
 \end{algorithm}
 
-\subsection{Simulation: Entire ground plane as a calibration pattern}
-\label{subsec:simGroundTest}
-In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process described by \cref{alg:EvaluateCalibrationPoses} is performed with the following conditions and a separate set of poses acting as test data was used to get RMS values instead of using calibration data for that.
+\section{Test configurations}
 
-\todo{do a table}
+Since basic models for joint position sensor noise and joint errors are defined with maximum error range known to be within $\pm 6.5\degree$, the following testing configurations were performed. Each combination can demonstrate the effectiveness of derived poses and their resilience with noisy environments which can lead to identifying potential behavior of overall calibration process with real hardware.
 
-\subsubsection{Error Generation}
-For this evaluation, only poses that make the robot stand in one leg was used, thus it was focussed either left foot or right foot as support foot. Therefore, only the following joints were employed to generate the error configurations.
+\todo{insert table}
+
+\subsection{Error Generation}
+For this evaluation, only poses that make the robot stand in one leg was used, thus it was focused either left foot or right foot as support foot. Therefore, only the following joints were employed to generate the error configurations.
 
 \begin{itemize}
 	\item Head Yaw
@@ -794,14 +794,20 @@ Support leg can be either left or right.
 
 Based on the observations in \todo{cite bhuman paper}, the maximum error was determined to be $5\degree$. Since the "population size" is very large (ie: $100^8$ assuming $0.1\degree$ granularity and $\pm5\degree$ range per joint), a sample size of 10000 was selected. The sample set was generated using random numbers obtained from a generator with uniform distribution (\lstinline{std::uniform_real_distribution<float>}). Floating point random numbers in range $\pm5\degree$ were inserted for each of above joint. 
 
-\subsubsection{Solvers}
+\section{Evaluation 1: Simulated calibration, ground plane as a calibration pattern}
+\label{subsec:simGroundTest}
+In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process described by \cref{alg:EvaluateCalibrationPoses} is performed with the following conditions and a separate set of poses acting as test data was used to get RMS values instead of using calibration data for that.
+
+\todo{do a table}
+
+\subsection{Solvers}
 
 Although it was planned to use global optimizers from the beginning, due to prior experience and intuition; yet the appeal of very fast convergence of Levenberg-Marquardt (often in a few iterations - under $100ms$) and abundance of high quality implementations caused the author to start with this algorithm. The implementation available with Eigen library was used (Eigen/unsupported).
 
-\subsubsection{Local Minima problems}
+\subsection{Local Minima problems}
 It was noticed that while reprojection error was low ($\pm3 pixels$ approx), the residual of joint parameters had values as large as maximum error possible. Further inspection of induced error values vs the parameters given by the solver, it was determined that the solver got stuck at local minimums. This was considered as a failure and the rate was about 60-70\%.
 
-\subsubsection{Global optimization attempts}
+\subsection{Global optimization attempts}
 Since the failure rate with the local optimizer was unacceptable, attention for possible global optimization strategies was given. The author briefly tried the following approaches.
 \begin{itemize}
 	\item dlib::find\_min\_global(). \todo{cite}
@@ -813,7 +819,7 @@ The first approach sometimes converged but the results were generally inferior t
 
 Finally, the idea of attempting to supply a sample set of the population as initial guess was formulated using uniform distribution based generation similar to the above mentioned error generation. Upon later reading, this approach appears to be similar to stochastic steepest descent, except the stochastic input is fed into Levenberg-Marquardt hoping the input helped to escape the local minima(s). \todo{literature?}
 
-\subsubsection{Results}
+\subsection{Results}
 
 Below are the results for each step of the above experiment.  
 

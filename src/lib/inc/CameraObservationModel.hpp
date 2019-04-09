@@ -5,6 +5,7 @@
 
 #include "Data/CameraMatrix.hpp"
 
+#include "CalibrationFeatures.hpp"
 #include "NaoJointAndSensorModel.hpp"
 #include "NaoProjectionDataProvider.hpp"
 #include "ObservationModel.hpp"
@@ -18,8 +19,8 @@
 class CameraObservationModel : public ObservationModel {
 private:
   /**
- * To be precise, this give sensitivity of camera observation :P
- */
+   * To be precise, this give sensitivity of camera observation :P
+   */
   typedef int16_t sensitivityOutputType;
   static const std::string name;
 
@@ -29,6 +30,8 @@ private:
   const float deltaThetaFine;
 
   NaoJointAndSensorModel naoJointSensorModel;
+  std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
+      calibrationFeaturePtrs;
 
 public:
   virtual ~CameraObservationModel() {}

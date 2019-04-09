@@ -14,6 +14,8 @@ using CombinedPoseListT =
 struct JointErrorEval {
 
   const NaoJointAndSensorModelConfig cfg;
+  const std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
+      calibrationFeaturePtrs;
   const CombinedPoseListT combinedPoseList;
   const CombinedPoseListT combinedTestPoseList;
   const SUPPORT_FOOT supFoot;
@@ -30,17 +32,20 @@ struct JointErrorEval {
   std::normal_distribution<float> pixelNoiseDistribution;
   std::normal_distribution<double> jointNoiseDistribution;
 
-  JointErrorEval(const NaoJointAndSensorModelConfig cfg,
-                 const CombinedPoseListT poseList,
-                 const CombinedPoseListT combinedTestPoseList,
-                 const SUPPORT_FOOT supFoot, const float minJointErrVal,
-                 const float maxJointErrVal, const float jointCalibQualityTol,
-                 const float reprojErrTolPercent, const float pixelNoiseStdDev,
-                 const float jointNoiseStdDev, const bool stochasticFix,
-                 const bool enablePixelNoise, const bool enableJointNoise)
-      : cfg(cfg), combinedPoseList(poseList),
-        combinedTestPoseList(combinedTestPoseList), supFoot(supFoot),
-        jointCalibQualityTol(jointCalibQualityTol),
+  JointErrorEval(
+      const NaoJointAndSensorModelConfig cfg,
+      const std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
+          &calibrationFeaturePtrs,
+      const CombinedPoseListT poseList,
+      const CombinedPoseListT combinedTestPoseList, const SUPPORT_FOOT supFoot,
+      const float minJointErrVal, const float maxJointErrVal,
+      const float jointCalibQualityTol, const float reprojErrTolPercent,
+      const float pixelNoiseStdDev, const float jointNoiseStdDev,
+      const bool stochasticFix, const bool enablePixelNoise,
+      const bool enableJointNoise)
+      : cfg(cfg), calibrationFeaturePtrs(calibrationFeaturePtrs),
+        combinedPoseList(poseList), combinedTestPoseList(combinedTestPoseList),
+        supFoot(supFoot), jointCalibQualityTol(jointCalibQualityTol),
         reprojErrTolPercent(reprojErrTolPercent), stochasticFix(stochasticFix),
         enablePixelNoise(enablePixelNoise), enableJointNoise(enableJointNoise),
         minJointErrVal(minJointErrVal), maxJointErrVal(maxJointErrVal),
@@ -75,8 +80,9 @@ struct JointErrorEval {
       {
         bool proceed = false;
         // will be relative to support foot, easier to manage
-        const auto groundGrid =
-            naoJointSensorModel.getGroundGrid(camName, proceed);
+        const auto groundGrid = naoJointSensorModel.getFilteredCalibFeatures(
+            camName, calibrationFeaturePtrs, proceed);
+        //            naoJointSensorModel.getGroundGrid(camName, proceed);
         if (proceed) {
           // world points, pixel points.
           // TODO make world points handle 3d also
@@ -106,7 +112,7 @@ struct JointErrorEval {
           }
         } else {
 #if DEBUG_SIM_TEST
-          //        std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+          //          std::lock_guard<std::mutex> lg(utils::mtx_cout_);
           logStream << "Obtaining ground grid failed, gridCount: "
                     << groundGrid.size() << " pose:" << iter << " "
                     << " cam:" << (camName == Camera::TOP ? "TOP" : "BOT")
@@ -119,14 +125,14 @@ struct JointErrorEval {
     return frameCaptures;
   }
   /**
- * @brief evalJointErrorSet Evaluate calibration capability for an error
- * config.
- * THIS IS NOT THREAD SAFE
- * @param naoModel As mentioned in threadedFcn..
- * @param poseList
- * @param inducedErrorStdVec Joint error configuration
- * @return pre-post residuals residuals and more infos.
- */
+   * @brief evalJointErrorSet Evaluate calibration capability for an error
+   * config.
+   * THIS IS NOT THREAD SAFE
+   * @param naoModel As mentioned in threadedFcn..
+   * @param poseList
+   * @param inducedErrorStdVec Joint error configuration
+   * @return pre-post residuals residuals and more infos.
+   */
   std::tuple<JointCalibration::JointCalibResult, Eigen::VectorXf,
              Eigen::VectorXf, Eigen::VectorXf, Eigen::VectorXf, Eigen::VectorXf>
   evalJointErrorSet(const rawPoseT inducedErrorStdVec) {
@@ -164,7 +170,7 @@ struct JointErrorEval {
 
     if (testFrameCaptures.size() <= 0) {
       std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-      std::cout << "empty test captures" << std::endl;
+      std::cerr << "Empty test captures" << std::endl;
       successStatus = JointCalibration::CalibStatus::FAIL_NO_TEST_CAPTURES;
       return {result, {}, {}, {}, {}, {}};
     }
@@ -185,8 +191,8 @@ struct JointErrorEval {
 #endif
     }
     /*
- * Mini eval of cost fcn to get an idea of error
- */
+     * Mini eval of cost fcn to get an idea of error
+     */
     auto functor = JointCalibSolvers::JointCalibrator(frameCaptures, cfg);
     Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator, Eigen::Central>
         calibrator(functor);
@@ -211,8 +217,8 @@ struct JointErrorEval {
     testor(calibratedParams, initialTestErrorVec);
 
     /*
- * Run Lev-Mar to optimize
- */
+     * Run Lev-Mar to optimize
+     */
     auto runLevMar = [&calibrator](Eigen::VectorXf &params) {
       Eigen::LevenbergMarquardt<
           Eigen::NumericalDiff<JointCalibSolvers::JointCalibrator,
@@ -237,7 +243,7 @@ struct JointErrorEval {
         //        && (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT
         //        ||
         //         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)
-        ) {
+    ) {
       // This will hold best params in case looping is needed
       Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
           JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));
@@ -249,9 +255,9 @@ struct JointErrorEval {
                                                          maxJointErrVal);
 
       /*
- * If status is 2 or 5, most likely we are at a local minima
- * So to give some push-start random start positions will be attempted
- */
+       * If status is 2 or 5, most likely we are at a local minima
+       * So to give some push-start random start positions will be attempted
+       */
       const size_t legsInitialIdx =
           (supFoot == SUPPORT_FOOT::SF_DOUBLE ||
            supFoot == SUPPORT_FOOT::SF_LEFT)
@@ -363,9 +369,9 @@ struct JointErrorEval {
 
 // if failed OR if loop broken BUT calibration is bad
 /*
-* NOTE: Local minima if reprojection errr is small but jointResidual isn't
-* low!
-*/
+ * NOTE: Local minima if reprojection errr is small but jointResidual isn't
+ * low!
+ */
 #if DEBUG_SIM_TEST
     if (successStatus != CalibStatus::SUCCESS ||
         (stochasticFix && jointCalibResAbsMax > jointCalibQualityTol)) {

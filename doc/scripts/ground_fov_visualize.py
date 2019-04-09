@@ -8,6 +8,17 @@ np.random.seed(19680801)
 
 file = open("/tmp/rois.txt")
 lines = [line.rstrip('\n').split() for line in file]
+file.close()
+
+fileChessBoard = open("/tmp/chessBoards.txt")
+calibFloorPoints = np.array([np.array(line.rstrip('\n').split())
+                             for line in fileChessBoard])
+fileChessBoard.close()
+
+# for line in calibFloorPoints:
+# print(calibFloorPoints[:,1])
+# plt.scatter(calibFloorPoints[:,1],calibFloorPoints[:,0])
+# plt.show()
 
 fig, ax = plt.subplots()
 
@@ -52,7 +63,7 @@ for line in lines:
     # if line[1] == "top":
         # continue
     # NOTE X-Y are swapped to match with Nao's viewpoint
-    xy = np.array([[-float(line[idx+1]), float(line[idx])]
+    xy = np.array([[float(line[idx+1]), float(line[idx])]
                    for idx in range(2, 10, 2)])
 
     minMaxList.append(np.amin(xy, axis=0))
@@ -68,20 +79,26 @@ minMaxList = [np.amin(minMaxList, axis=0), np.amax(minMaxList, axis=0)]
 bottomColors = np.random.uniform(0, 45, bottomCount)
 topColors = np.random.uniform(55, 100, len(lines) - bottomCount)
 
-colours=np.concatenate((bottomColors, topColors))
+colours = np.concatenate((bottomColors, topColors))
 print(bottomColors, topColors, colours)
 
-p=PatchCollection(patches, alpha = 0.4)
+calibPointPatches = [Circle((pt[1],pt[0]), 0.0125) for pt in calibFloorPoints]
+calibPatchCollection = PatchCollection(calibPointPatches, alpha=0.6)
+
+p = PatchCollection(patches, alpha=0.4)
 p.set_array(np.array(colours))
 
-ax.invert_yaxis()
+# _ax[1].scatter(calibFloorPoints[:, 1], calibFloorPoints[:, 0])
 
 ax.set_xlim([-4, 4])
 ax.set_ylim([-4, 4])
 ax.grid()
 ax.add_collection(p)
+ax.add_collection(calibPatchCollection)
 
+# ax.invert_yaxis()
+ax.invert_xaxis()
 
-fig.colorbar(p, ax = ax)
+fig.colorbar(p, ax=ax)
 
 plt.show()
