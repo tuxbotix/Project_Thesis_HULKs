@@ -444,8 +444,8 @@ int main(int argc, char *argv[]) {
 
   std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
       calibrationFeatures = {
-          //          std::make_shared<CalibrationFeatures::GroundGrid<float>>(
-          //              cfg.maxGridPointsPerSide, cfg.gridSpacing)
+          /*std::make_shared<CalibrationFeatures::GroundGrid<float>>(
+              cfg.maxGridPointsPerSide, cfg.gridSpacing)*/
           std::make_shared<
               CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
               10, 14, 0.05, Vector2f{1.5, -0.6}, 0),
