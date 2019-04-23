@@ -807,28 +807,15 @@ For example, error range of $\pm 4.5\degree$ should have better results than $\p
 		& Pixel positioning noise (of calibration feature points) \\ \cline{2-2}
 		& Joint sensor noise \\ \cline{2-2}
 		& Noise from both of above \\ \hline
+		\multirow{2}{*}{Pose generation filter modes.}
+		& All joints and sensors favoured similarly. \\ \cline{2-2}
+		& Joint Knee pitch favoured more. \\ \hline\hline
 		\textbf{Total evaluations:} 
-		& \textbf{48} \\ \hline
+		& \textbf{96} \\ \hline
 	\end{tabular}
 	\caption{Evaluation configurations}
 	\label{tab:calib_test_configs}
 \end{table}
-
-\begin{table}[]
-	\begin{tabular}{|l|l|}
-		\hline
-		\textbf{Parameter} & \textbf{Value} \\ \hline
-		\multirow{2}{*}{Camera image size}
-			& $640 \times 480$ pixels. (Floating point arithmetic \\
-			&used for projections to reduce errors) \\ \hline
-		Random distribution & Uniform Random Distribution \\ \hline
-		Generated error sets & 10000 test cases \\ \hline
-		Solver & Levenberg-Marquardt solver\\ \hline
-	\end{tabular}
-	\caption{Common settings for all tests.}
-	\label{tab:calib_test_configs_common}
-\end{table}
-
 
 Following subsections will explore these parameters/ constraints which evaluations are performed.
 
@@ -865,50 +852,22 @@ However, too many poses are also detrimental for quality according to .... There
 
 \subsection{Sensor noise source}
 
-This factor could perhaps be introduced as one of the most important factors in order to achieve near-real life simulation. The recorded data and statistics depicted in \cref{fig:joint_sensor_noise} in \cref{subsec:initial_joint_error} was used. Based on it, noise was assumed to be a zero mean Gaussian distribution with standard deviation of 0.001. This is depicted in \cref{fig:joint_sensor_noise_gauss}.
+This factor could perhaps be introduced as one of the most important factors in order to achieve near-real life simulation. The recorded data and statistics depicted in \cref{fig:joint_sensor_noise} in \cref{subsec:initial_joint_error} was used. Based on it, noise was assumed to be a zero mean Gaussian distribution with standard deviation of 0.01, resulting in a noise distribition 
 
-\section{Initial evaluations and observations}
-\label{subsec:initialEval}
+\section{Evaluation 1: Simulated calibration, ground plane as a calibration pattern}
+\label{subsec:simGroundTest}
+In this phase, the same concept of a the grid of ground points mentioned in the observation model is used. The process described by \cref{alg:EvaluateCalibrationPoses} is performed with the following conditions and a separate set of poses acting as test data was used to get RMS values instead of using calibration data for that.
 
-First round of evaluations were done to verify validity of these derived poses and the methodology in general. Over the course of these tests, several observations were made and improvements were introduced.
-
-Configuration is as follows:
-\begin{table}[H]
-	\begin{tabular}{|l|l|}
-		\hline
-		\textbf{Parameter} & \textbf{Options} \\ 
-		\hline
-		Joint error range
-			& $\pm 6.5\degree$ \\ 
-		\hline
-		\multirow{2}{*}{Calibration feature type}
-			& Ground plane, square grid with 5cm spacing  \\
-			&\& 50 points per side. \\ 
-		\hline
-		Number of calibration pose
-			&3 to 8\\ 
-		\hline
-		Sensor noise source
-		& No noise \\ 
-		\hline
-		\multirow{2}{*}{Pose generation filter modes.}
-		& All joints and sensors favoured similarly. \\ \cline{2-2}
-		& Joint Knee pitch favoured more. \\ 
-		\hline
-	\end{tabular}
-	\caption{Evaluation configurations for initial evaluation round.}
-	\label{tab:initial_test_config}
-\end{table}
+\todo{do a table}
 
 \subsection{Solvers}
 
-Although it was planned to use global optimization algorithms from the beginning, due to prior experience and intuition, the appeal of very fast convergence of Levenberg-Marquardt (often in a few iterations - under $100ms$) and abundance of high quality implementations caused the author to start with this algorithm. The implementation available with Eigen library was used (\todo{cite Eigen/unsupported}).
+Although it was planned to use global optimizers from the beginning, due to prior experience and intuition; yet the appeal of very fast convergence of Levenberg-Marquardt (often in a few iterations - under $100ms$) and abundance of high quality implementations caused the author to start with this algorithm. The implementation available with Eigen library was used (Eigen/unsupported).
 
 \subsection{Local Minima problems}
-It was noticed that while reprojection error was low ($\pm3 pixels$ approx), the residual of joint parameters had values as large as maximum error possible. Further inspection of induced error values vs the parameters given by the solver, it was determined that the solver got stuck at local minimums. This was considered as a failure and this failure rate was about 60-70\%.
+It was noticed that while reprojection error was low ($\pm3 pixels$ approx), the residual of joint parameters had values as large as maximum error possible. Further inspection of induced error values vs the parameters given by the solver, it was determined that the solver got stuck at local minimums. This was considered as a failure and the rate was about 60-70\%.
 
-\subsection{Global and global-like optimization attempts}
-\label{subsec:global_global_like}
+\subsection{Global optimization attempts}
 Since the failure rate with the local optimizer was unacceptable, attention for possible global optimization strategies was given. The author briefly tried the following approaches.
 \begin{itemize}
 	\item dlib::find\_min\_global(). \todo{cite}
@@ -916,159 +875,53 @@ Since the failure rate with the local optimizer was unacceptable, attention for 
 	\item Stochastic initial guess with local optimizer, retried upto a given amount.
 \end{itemize}
 
-The first approach sometimes converged but the results were generally inferior to Levenberg Marquardt algorithm (when it converged) and was more slower (it was a non-derivative based solver). Next candidate was particle swarm optimization, it almost never had any convergence, thus a full test run was not attempted. Perhaps these results were not perfect due to the expertise required to successfully utilize these algorithms or these algorithms were not suitable for the problem at hand.
+The first approach sometimes converged but the results were generally inferior to Levenberg Marquardt algorithm (when it converged) and was more slower (it was a non-derivative based solver). Next candidate was particle swarm optimization, it almost never had any convergence, thus a full test run was not attempted.
 
-The last attempt was not strictly a global optimization method, but rather using a random initial guess to act as a mutation phase in genetic algorithm terminology which is used to escape a local minima.\todo{cite genetic} At first, calibration is run as usual with Levenberg-Marquardt and then brute-force this a given number of time (100, 50 times were tested) with a new randomly generated initial guess for each iteration. While this approach was computationally expensive, it yielded better results than expected.
-
-\subsection{Effect of derivative calculation method}
-When using algorithms that require calculation of Jacobian matrix of a function for solving \todo{cite}, it is highly important to ensure that the function in question is differentiable and the approach is suitable for the task. This subsection discuss impact of choosing these methods when calibration was tested with Levenberg-Marquardt algorithm which is a derivative-based method. As mentioned before, implementation from Eigen was used.
-
-While Eigen library supports both automatic and numerical differentiation, only the latter was used due to need of re implementing all kinematic calculations with a different template type. However, automatic differentiation yields superior results.
-
-The default setting for numerical Jacobian approach uses Forward differentiation which is faster but also less precise. Switching to Central Differentiation method dropped failures by 10\% approximately.
+Finally, the idea of attempting to supply a sample set of the population as initial guess was formulated using uniform distribution based generation similar to the above mentioned error generation. Upon later reading, this approach appears to be similar to stochastic steepest descent, except the stochastic input is fed into Levenberg-Marquardt hoping the input helped to escape the local minima(s). \todo{literature?}
 
 \subsection{Results}
 
 Below are the results for each step of the above experiment.  
+
+\begin{itemize}
+	\item Grid size: 50 per side, $5cm$ between two points. ($2.5m$ per side)
+	\item Camera image size: $640 x 480$ pixels. (Floating point arithmetic used for projections to reduce errors)
+	\item Random distribution: Uniform Random Distribution.
+	\item Sample size: 10000 error configurations
+\end{itemize}
 
 \begin{table}[]
 	\begin{tabular}{|l|l|l|l|l|}
 		\hline
 		Distribution (Uniform) Range & Lev.-Mar.  & dlib::global & igl::PSO & stochastic \\
 		\hline
-		$\pm6.5\degree$& 13\% & N/A  & N/A & 1.9\% \\
-		$1\degree$ to $6.5\degree$ and $-1\degree$ to $-6.5\degree$	& 54\% & N/A & N/A &3.2\% \\ \hline
+		$\pm6.5\degree$& 13\% &  &  & 1.9\% \\
+		$1\degree$ to $6.5\degree$ and $-1\degree$ to $-6.5\degree$	& 54\% & . &  &3.2\% \\ \hline
 		%		&  &  &  &  \\
 		%		&  &  &  & 
 		
 	\end{tabular}
-	\caption{Failure rates for solvers tested. Lev-Mar - Levenberg-Marquardt, dlib::global..., igl::PSO - Particle Swarm Optimizer in libigl, stochastic - random start positions with Lev.-Mar. solver. The reason for avoiding $\pm1\degree$ in second distribution is to eliminate effect of $0 - 0 = 0$ on the errors, thus artificially inflating the perceived quality of calibration.}
+	\caption{Failure rates for solvers tested. Lev-Mar - Levenberg-Marquardt, dlib::global..., igl::PSO - Particle Swarm Optimizer in libigl, stochastic - random start positions with Lev.-Mar. solver. The reason for avoiding $\pm1\degree$ in second distribution is to eliminate effect of $0 - 0 = 0$ on the errors, thus artificially inflating the percieved quality of calibration.}
 \end{table}
+\todo{Figure... demonstrate it is not affected by tis}
 
 \begin{center}
 	\noindent\makebox[\textwidth]{
 		\includegraphics[width=0.9\paperwidth]{poselist-L-generic-L-LegaAndHeadUniRandErr0-6_5deg-pitchDiv2_stochastic_fix.png}
 	}
-	\captionof{figure}{Error distribution for $\pm6.5\degree$ error set. Top row is before calibration and Bottom row is after calibration. DO A BETTER PICTURE}
+	\captionof{figure}{Error distribution for $\pm6.5\degree$ error set. Top row is before calibration and Bottom row is after calibration.}
 \end{center}
 
-Based on results of this evaluation, it was evident that there is potential for further analysis so following sections cover important configurations which exhibited various results.
 
-\section{Ground plane feature with simulated sensor noise}
-\label{sec:ground_plane_test}
+\todo{Explain why}
+\todo{Data, randomly induced errors, individually induced errors}
+\subsection{Simulation: Actual calibration process}
+\todo{Explain why}
+\todo{Data, randomly induced errors, individually induced errors}
+\subsection{Real?: Actual calibration process}
+\todo{if above succeed, try on real robots}
 
-For the next phase of realism, sensor noise was introduced with other settings unchanged from initial evaluation described in \cref{tab:initial_test_config}. The reason for not immediately switching to sparsely positioned calibration patterns was due to need of identifying most suitable set of poses and effect of number of poses. By determining optimal amount of poses, identifying potential positions for calibration patterns for testing was simplified.
-
-\begin{table}[]
-	\begin{tabular}{|l|l|l|l|l|l|}
-		\hline
-		\multirow{2}{*}{Success/ Failure type} 
-			& \multirow{2}{1.2cm}{Pose count} 
-			& \multirow{2}{1.8cm}{No noise}
-			& \multirow{2}{1.8cm}{Pixel pos. noise} 
-			& \multirow{2}{1.8cm}{Joint pos. noise}
-			& \multirow{2}{1.8cm}{Combined noise}\\
-			& & & & & \\
-		\hline
-		\multirow{3}{*}{Success} 
-			& 3 			& 81.5\% 	& 83\% & 43.8\% & 43.7\% \\ 
-			& 5 			& 81.2\% 	& 79.2\% & 46.3\% & 48.7\% \\
-			& 8 			& 80.4\% 	& 78.5\% & 50.4\% & 50.1\% \\
-		\hline
-		\multirow{3}{*}{Local Minima } 
-			& 3	& 17.6\% 	& 16.1\% & 55.2\% & 54.8\% \\
-			& 5 & 18.8\% 	& 20.2\% & 52.7\% & 50.3\% \\
-			& 8 & 18.3\% 	& 20.9\% & 49.1\% & 49.1\% \\ 
-		\hline
-		\multirow{3}{*}{No convergence} 
-			& 3 & 0.9\% 	& 0.9\% & 1\% & 1.5\% \\
-			& 5 & 0.6\% 	& 0.6\% & 1\% & 1\% \\
-			& 8 & 1.3\% 	& 0.6\% & 0.5\% & 0.8\% \\
-		\hline
-		%		&  &  &  &  \\
-		%		&  &  &  & 
-		
-	\end{tabular}
-	\caption[Results from testing with ground-plane calibration feature.]{Results from testing with ground-plane calibration feature. The results depicts several trends between calibration pose count, type of induced errors and success/ failure statistics}
-\end{table}
-
-The following conclusions can be taken based of results from this set of evaluations.
-\begin{enumerate}
-\item 
-While minimum number of poses (3) provides highest success rate for no-noise conditions, it doesn't perform well with added noise.
-\item 
-Highest number of poses (8) performed 6.4\% better than minimal pose setup with joint noise alone and pixel + joint noise. However success rate was reduced by 1.1\% under no-noise.
-\item
-Pixel positioning noise affect success rate with more poses. Potentially due to effect of noise being higher than benefit of more captures.
-\item
-However, in case of joint noise, more poses clearly improved results. 
-\item Perhaps the reason for this is due to higher ratio of image points to joint sensor measurements (hundreds vs 26).
-\end{enumerate}
-
-
-Next phase of evaluations with calibration patterns which provides a sparse set of points might provide more insight into this matter.
-
-\todo{add results of joint noise plots}
-\todo{add results of RMS stuff and explain why hard to separate}
-
-
-\section{Multiple calibration patterns with simulated sensor noise}
-
-Based on previous experiment's results, it was noticeable that higher amount of poses is needed in order to be robust against joint sensor noise. But at the same time, increasing the number of captured calibration features (with more poses) was detrimental. This evaluation will consider effects of reduced set of calibration features which is the more practical scenario for actually calibrating robots by placing a few calibration patterns.
-
-Test configuration is same as \cref{sec:ground_plane_test} except for calibration feature type. Therefore this series of tests can be directly used to compare effect of calibration features.
-
-\begin{table}[]
-	\begin{tabular}{|l|l|l|l|l|l|}
-		\hline
-		\multirow{2}{*}{Success/ Failure type} 
-		& \multirow{2}{1.2cm}{Pose count} 
-		& \multirow{2}{1.8cm}{No noise}
-		& \multirow{2}{1.8cm}{Pixel pos. noise} 
-		& \multirow{2}{1.8cm}{Joint pos. noise}
-		& \multirow{2}{1.8cm}{Combined noise}\\
-		& & & & & \\
-		\hline
-		\multirow{3}{*}{Success} 
-		& 3 & 49.5\% 	& 24.6\% 	& 30.5\% 	& 17.4\% \\ 
-		& 5 & 61.5\% 	& 33.4\% 	& 35.1\% 	& 26.2\% \\
-		& 8 & 79.0\% 	& 63.0\% 	& 51.6\% 	& 44.9\% \\
-		\hline
-		\multirow{3}{*}{Local Minima } 
-		& 3	& 43.2\% 	& 65.5\% 	& 61.9\%	& 72.6\% \\
-		& 5 & 38.2\% 	& 65.9\% 	& 64.4\% 	& 73.4\% \\
-		& 8 & 20.6\% 	& 36.6\% 	& 48.0\% 	& 54.6\% \\ 
-		\hline
-		\multirow{3}{*}{No convergence} 
-		& 3 & 7.3\% 	& 9.9\% 	& 7.6\%		& 10\% \\
-		& 5 & 0.3\% 	& 0.7\% 	& 0.5\% 	& 0.4\% \\
-		& 8 & 0.4\% 	& 0.4\% 	& 0.4\% 	& 0.5\% \\
-		\hline
-		%		&  &  &  &  \\
-		%		&  &  &  & 
-		
-	\end{tabular}
-	\caption[Results from testing with calibration patterms.]{Results from testing with calibration patterms. The results depicts different trends than results of ground-plane but they are again dependent mainly on number of poses.}
-\end{table}
-
-The following conclusions can be taken based of results from this set of evaluations.
-\begin{enumerate}
-	\item 
-	Unlike ground-plane scenario, results improve for every noise configuration with more poses. Thus 8 poses provide best results.
-	\item
-	While increase of local minima failures between joint only and joint + pixel noise cases was $2 \to 4\%$ previously, now it is almost 10\% except for 8 poses (6.6\%).
-	\item 
-	There is a drastic difference between 3 poses and 5 or 8 poses in terms of no-convergence statistics. This seems to demonstrate that there is a minimum number of data points to be captured in order to converge (at least to a local minima).
-	\item 
-	Analyzing these results together with previous experiment show that capturing a certain amount of calibration features is necessary while too much with noise reduce quality.
-\end{enumerate}
-
-Next section explore application of global-like solver method experimented in \cref{subsec:global_global_like} which attempts usage of random generated initial positions to reduce failure rate.
-
-\todo{add results of joint noise plots}
-\todo{add results of RMS stuff and explain why hard to separate}
-
-\section{discussion}
+\subsection{discussion}
 
 
 %%%% CONCLUSION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

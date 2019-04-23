@@ -6,15 +6,12 @@
 
 import math
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from scipy.optimize import curve_fit
-import scipy.stats as stats
 from scipy import asarray as ar, exp
 from matplotlib import cm
-import matplotlib.ticker as ticker
 
-import matplotlib2tikz
 
 def gaus(x, a, x0, sigma):
     return a * exp(-(x - x0)**2 / (2 * sigma**2))
@@ -29,91 +26,22 @@ def fitGauss(data):
 
     return curve_fit(gaus, x, y, p0=[1, mean, sigma])
 
+readData():
+    origResX = np.loadtxt("/tmp/originalResidualX", delimiter=',')
+    origResY = np.loadtxt("/tmp/originalResidualY", delimiter=',')
 
-# status, reprojErrMeanTest, rmsTest, reprojErrMeanCalib, rmsCalib
-angleDump = np.loadtxt("../logs/2019-03-30_jointAngleDump.txt", dtype = np.float64).transpose()
+    calibResX = np.loadtxt("/tmp/calibratedResidualX", delimiter=',')
+    calibResY = np.loadtxt("/tmp/calibratedResidualY", delimiter=',')
 
-for i in range(0, angleDump.shape[1]):
-    arr = angleDump[:, i]
-    minVal = np.min(arr)
-    maxVal = np.max(arr)
-    average = np.median(arr)
-    arr = arr - average
-    newMinVal = np.min(arr)
-    newMaxVal = np.max(arr)
-    print(i, np.rad2deg(abs(maxVal - minVal)), np.rad2deg(minVal), np.rad2deg(maxVal))
-    print("\t", i, np.rad2deg(abs(newMinVal - newMaxVal)), np.rad2deg(newMinVal), np.rad2deg(newMaxVal),np.rad2deg(average))
+    calibJointRes = np.array(np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')).transpose()
+    unCalibJointRes = np.array(np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')).transpose()
 
-    angleDump[:, i] = np.rad2deg(arr)
-    # vals, covariance = fitGauss(angleDump[:, i])
-    # print(vals, covariance)
+return {"origResX": origResX, "origResY": origResY, "calibResX": calibResX, "calibResY": calibResY, "unClibJointRes": unClibJointRes, "calibJointRes": calibJointRes}
 
-# plt.figure(0)
-# plt.figure(num=None, figsize=(6, 6), dpi=300)
+#unCalibJointRes[:, 0] *= (180 / math.pi)
 
-fig, _axs = plt.subplots(nrows=1, ncols=1, num=None, figsize=(6, 6), dpi=200)
-# fig.figsize(6, 6)
-# fig.figsize(6, 6)
+print(len(calibJointRes))
 
-# axs = _axs.flatten()
-axs = [_axs]
-
-
-# ax.boxplot(angleDump, positions = list(range(1, angleDump.shape[1] + 1)))
-# plt.xticks(rotation=90)
-ax = axs[0]
-# plt.xticks(rotation=90)
-ax.boxplot(angleDump, vert = False, showmeans = True, positions = list(range(1, angleDump.shape[1]+1)))
-ax.xaxis.set_major_locator(ticker.MultipleLocator(0.02))
-ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.005))
-ax.xaxis.grid()
-
-# plt.xticks(rotation=90)
-
-boxMargins = ax.margins()
-ax.set_ylim(0, angleDump.shape[1] + 1)
-plt.setp(ax.get_yticklabels(), visible=True)
-ticks = ax.get_yticklabels()
-
-matplotlib2tikz.save("../tuvisionthesis/figures/joint_noise.tex",  figurewidth='15cm')
-
-plt.show()
-# ax = axs[1]
-
-# ax.violinplot(angleDump, vert = False, showmeans = True, positions = list(range(1, angleDump.shape[1]+1)))
-# ax.xaxis.set_major_locator(ticker.MultipleLocator(0.02))
-# ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.005))
-# ax.xaxis.grid()
-
-# ax.set_ylim(0, angleDump.shape[1] + 1)
-# ax.margins(boxMargins[0], boxMargins[1])
-# plt.yticks(range(0, angleDump.shape[1] + 1))
-# plt.setp(ticks)
-
-plt.figure(num=1, figsize=(6, 6), dpi=200)
-
-data = angleDump.ravel()
-dataMin=np.min(data)
-dataMax=np.max(data)
-
-# totalBins=400
-
-n, bins, patches = plt.hist(data, density=True)
-
-mu = 0.0
-sigma = 0.007
-
-p = np.arange(-1.0, 1.0, 0.01)
-y =  stats.norm.pdf(bins, mu, sigma)
-print(np.sum(y), np.max(bins))
-
-plt.plot(bins, y, '--')
-# ax.xaxis.set_major_locator(ticker.MultipleLocator(0.02))
-# ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.005))
-# plt.xaxis.grid()
-matplotlib2tikz.save("../tuvisionthesis/figures/joint_noise_gaussian.tex", figurewidth='15cm')
-plt.show()
-exit(0)
 
 fig, _axs = plt.subplots(nrows=2, ncols=3)
 axs = _axs.flatten()
@@ -169,7 +97,7 @@ ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
 print("box1")
 ax = axs[2]
 ax.set_title('Joint error distribution before calibration')
-ax.violinplot(unCalibJointRes)
+ax.violinplot(unCalibJointRes, showmeans= True, vertical= True)
 # ax.plot(unCalibJointRes[:, 0], unCalibJointRes[:, 1], 1, label='Raw')
 # ax.axis([-maxUnCalJointResX, maxUnCalJointResX, -0.02, maxAllUncalibY])
 
@@ -270,5 +198,62 @@ ax = axs[1]
 # #ax.boxplot(origResX[:, 1])
 ax.set_title('Left Leg X error distribution after calib')
 doHist(ax, fig, calibResX, calibResY)
+
+
+# plt.plot(calibResX[:, 0], calibResX[:, 1], 1, label='Raw')
+# popt,pcov = fitGauss(calibResX)
+
+# ax.text(-maxCalResX * 0.9, maxCalResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
+# ax.text(-maxCalResX * 0.9, maxCalResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
+# plt.plot(calibResX[:, 0], gaus(calibResX[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+# plt.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
+# print("X std dev and mean", popt[1:])
+# im = ax.imshow(newZ, interpolation='bilinear', cmap=cm.PRGn,
+#                origin='lower', extent=[-xAxLim, xAxLim, -yAxLim, xAxLim],
+#                vmax=zMin, vmin=-zMax)
+# print(xAxLim, yAxLim)
+# fig.colorbar(im, ax=ax)
+
+# ax = plt.subplot(232)
+# ax.set_title('Left Leg Y error distribution before calib')
+# plt.plot(origResY[:, 0], origResY[:, 1], 1)
+
+# ax = plt.subplot(235)
+# popt,pcov = fitGauss(calibResY)
+# ax.set_title('Left Leg Y error distribution after calib')
+# plt.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
+
+
+# ax.text(-maxCalResX * 0.9, maxCalResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
+# ax.text(-maxCalResX * 0.9, maxCalResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
+# plt.plot(calibResY[:, 0], gaus(calibResY[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+
+# plt.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
+# print("Y std dev and mean", popt[1:])
+
+# ax = plt.subplot(233)
+# ax.set_title('Joint error distribution before calib')
+# #plt.plot(origResY[:, 0], origResY[:, 1], 1)
+
+# ax = plt.subplot(236)
+# popt,pcov = fitGauss(calibJointRes)
+# ax.set_title('Joint error distribution after calib')
+# plt.plot(calibJointRes[:, 0], calibJointRes[:, 1], 1, label='Raw')
+
+
+# ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.9, r'$\mu='+'{:.5e}'.format(popt[1])+'$')
+# ax.text(-maxCalJointResX * 0.9, maxCalJointResY * 0.8, r'$\sigma='+'{:.5e}'.format(popt[2])+'$')
+# plt.plot(calibJointRes[:, 0], gaus(calibJointRes[:, 0], *popt), 'o', markersize = 2, label='Gaussian fit')
+
+# plt.axis([-maxCalJointResX, maxCalJointResX, -0.02, maxCalJointResY])
+# print("Y std dev and mean", popt[1:])
+
+
+# n, bins, patches = plt.hist(val[:,1], 50, density=True, facecolor='r', alpha=0.75)
+# val.size()
+# plt.plot(val)
+
+
+# In[ ]:
 
 plt.show()

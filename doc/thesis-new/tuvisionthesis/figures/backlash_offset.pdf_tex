@@ -1,0 +1,102 @@
+%% Creator: Inkscape inkscape 0.92.4, www.inkscape.org
+%% PDF/EPS/PS + LaTeX output extension by Johan Engelen, 2010
+%% Accompanies image file 'backlash_offset.pdf' (pdf, eps, ps)
+%%
+%% To include the image in your LaTeX document, write
+%%   \input{<filename>.pdf_tex}
+%%  instead of
+%%   \includegraphics{<filename>.pdf}
+%% To scale the image, write
+%%   \def\svgwidth{<desired width>}
+%%   \input{<filename>.pdf_tex}
+%%  instead of
+%%   \includegraphics[width=<desired width>]{<filename>.pdf}
+%%
+%% Images with a different path to the parent latex file can
+%% be accessed with the `import' package (which may need to be
+%% installed) using
+%%   \usepackage{import}
+%% in the preamble, and then including the image with
+%%   \import{<path to file>}{<filename>.pdf_tex}
+%% Alternatively, one can specify
+%%   \graphicspath{{<path to file>/}}
+%% 
+%% For more information, please see info/svg-inkscape on CTAN:
+%%   http://tug.ctan.org/tex-archive/info/svg-inkscape
+%%
+\begingroup%
+  \makeatletter%
+  \providecommand\color[2][]{%
+    \errmessage{(Inkscape) Color is used for the text in Inkscape, but the package 'color.sty' is not loaded}%
+    \renewcommand\color[2][]{}%
+  }%
+  \providecommand\transparent[1]{%
+    \errmessage{(Inkscape) Transparency is used (non-zero) for the text in Inkscape, but the package 'transparent.sty' is not loaded}%
+    \renewcommand\transparent[1]{}%
+  }%
+  \providecommand\rotatebox[2]{#2}%
+  \newcommand*\fsize{\dimexpr\f@size pt\relax}%
+  \newcommand*\lineheight[1]{\fontsize{\fsize}{#1\fsize}\selectfont}%
+  \ifx\svgwidth\undefined%
+    \setlength{\unitlength}{421.83033033bp}%
+    \ifx\svgscale\undefined%
+      \relax%
+    \else%
+      \setlength{\unitlength}{\unitlength * \real{\svgscale}}%
+    \fi%
+  \else%
+    \setlength{\unitlength}{\svgwidth}%
+  \fi%
+  \global\let\svgwidth\undefined%
+  \global\let\svgscale\undefined%
+  \makeatother%
+  \begin{picture}(1,0.45762627)%
+    \lineheight{1}%
+    \setlength\tabcolsep{0pt}%
+    \put(0,0){\includegraphics[width=\unitlength,page=1]{backlash_offset.pdf}}%
+    \put(0.69548366,0.43272278){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 3.0\end{tabular}}}}%
+    \put(0.69548366,0.37853727){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 2.0\end{tabular}}}}%
+    \put(0.69548366,0.32435153){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 1.0\end{tabular}}}}%
+    \put(0.70527236,0.27016594){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}0.0\end{tabular}}}}%
+    \put(0.69443522,0.21598036){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-1.0\end{tabular}}}}%
+    \put(0.69443522,0.16179462){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-2.0\end{tabular}}}}%
+    \put(0.69443522,0.10760903){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-3.0\end{tabular}}}}%
+    \put(0.78130568,0.00669714){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}(iii)\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=2]{backlash_offset.pdf}}%
+    \put(0.69124771,0.08941665){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Output\end{minipage}}}%
+    \put(0.87054332,0.29284307){\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Deadband\end{minipage}}}%
+    \put(0.90112288,0.44518598){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Input\end{minipage}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=3]{backlash_offset.pdf}}%
+    \put(0.84964651,0.16285164){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}Offset\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=4]{backlash_offset.pdf}}%
+    \put(0.44968983,0.00669714){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}(ii)\end{tabular}}}}%
+    \put(0.35384795,0.08941669){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Output\end{minipage}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=5]{backlash_offset.pdf}}%
+    \put(0.53459238,0.244076){\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Deadband\end{minipage}}}%
+    \put(0.56246265,0.39641891){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Input\end{minipage}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=6]{backlash_offset.pdf}}%
+    \put(0.51032222,0.10597752){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}Offset\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=7]{backlash_offset.pdf}}%
+    \put(0.35971063,0.43272278){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 3.0\end{tabular}}}}%
+    \put(0.35971063,0.37853712){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 2.0\end{tabular}}}}%
+    \put(0.35971063,0.32435153){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 1.0\end{tabular}}}}%
+    \put(0.36949926,0.27016594){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}0.0\end{tabular}}}}%
+    \put(0.35866215,0.21598021){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-1.0\end{tabular}}}}%
+    \put(0.35866215,0.16179462){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-2.0\end{tabular}}}}%
+    \put(0.35866215,0.10760903){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-3.0\end{tabular}}}}%
+    \put(0.09556424,0.00669714){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}(i)\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=8]{backlash_offset.pdf}}%
+    \put(0.00164133,0.08941669){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Output\end{minipage}}}%
+    \put(0.19670961,0.36661681){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Input\end{minipage}}}%
+    \put(0.1769672,0.24136672){\makebox(0,0)[lt]{\begin{minipage}{0.6231348\unitlength}\raggedright Deadband\end{minipage}}}%
+    \put(0.15065182,0.10438527){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}Offset\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=9]{backlash_offset.pdf}}%
+    \put(0,0.43286318){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 3.0\end{tabular}}}}%
+    \put(0,0.37867745){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 2.0\end{tabular}}}}%
+    \put(0,0.32449186){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l} 1.0\end{tabular}}}}%
+    \put(0.00978865,0.27030627){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}0.0\end{tabular}}}}%
+    \put(-0.00104848,0.21612054){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-1.0\end{tabular}}}}%
+    \put(-0.00104848,0.16193495){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-2.0\end{tabular}}}}%
+    \put(-0.00104848,0.10774936){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0}\smash{\begin{tabular}[t]{l}-3.0\end{tabular}}}}%
+  \end{picture}%
+\endgroup%
