@@ -5,6 +5,9 @@ build/*
 !tuvisionthesis/figures/*.pdf
 !figures/*.pdf
 
+!inst_logo*.pdf
+!tuhh_office_*.pdf
+
 tuvisionthesis.idx
 tuvisionthesis.glo
 tuvisionthesis.ilg
