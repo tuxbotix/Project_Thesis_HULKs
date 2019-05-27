@@ -26,7 +26,7 @@ def fitGauss(data):
 
     return curve_fit(gaus, x, y, p0=[1, mean, sigma])
 
-readData():
+def readData():
     origResX = np.loadtxt("/tmp/originalResidualX", delimiter=',')
     origResY = np.loadtxt("/tmp/originalResidualY", delimiter=',')
 
@@ -36,7 +36,7 @@ readData():
     calibJointRes = np.array(np.loadtxt("/tmp/calibratedJointResidual", delimiter=',')).transpose()
     unCalibJointRes = np.array(np.loadtxt("/tmp/unCalibratedJointResidual", delimiter=',')).transpose()
 
-return {"origResX": origResX, "origResY": origResY, "calibResX": calibResX, "calibResY": calibResY, "unClibJointRes": unClibJointRes, "calibJointRes": calibJointRes}
+    return {"origResX": origResX, "origResY": origResY, "calibResX": calibResX, "calibResY": calibResY, "unClibJointRes": unClibJointRes, "calibJointRes": calibJointRes}
 
 #unCalibJointRes[:, 0] *= (180 / math.pi)
 
