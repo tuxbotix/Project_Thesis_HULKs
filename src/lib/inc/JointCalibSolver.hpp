@@ -233,7 +233,8 @@ struct JointCalibrator : Functor<float> {
 
 namespace JointCalibration {
 
-template <class T> using Residual = std::vector<T>;
+template <class T> using ResidualStdVec = std::vector<T>;
+template <class T> using Residual = VectorX<T>;
 
 enum CalibStatus {
   FAIL_LOCAL_MINIMA,
@@ -265,46 +266,5 @@ struct JointCalibResult {
   size_t sampleSizeTest;
 
   rawPoseT jointParams; // solved params
-};
-
-using CalibStatusStatistics = std::array<size_t, CalibStatus::MAX_STATUS_COUNT>;
-
-template <typename T> struct CalibEvalResiduals {
-  Residual<T> preX;
-  Residual<T> preY;
-  Residual<T> postX;
-  Residual<T> postY;
-
-  std::array<Residual<T>, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
-      jointResiduals;
-
-  /**
-*@brief joinEvalResiduals move-insert ops for all vectors. Src list is
-*joined to dest list
-*@param src source CalibEvalResidual
-*@param dest destination CalibEvalResidual
-*@return Reference to dest
-*/
-  CalibEvalResiduals &joinEvalResiduals(CalibEvalResiduals &src,
-                                        CalibEvalResiduals &dest) {
-    dest.preX.insert(dest.preX.end(), std::make_move_iterator(src.preX.begin()),
-                     std::make_move_iterator(src.preX.end()));
-    dest.preY.insert(dest.preY.end(), std::make_move_iterator(src.preY.begin()),
-                     std::make_move_iterator(src.preY.end()));
-    dest.postX.insert(dest.postX.end(),
-                      std::make_move_iterator(src.postX.begin()),
-                      std::make_move_iterator(src.postX.end()));
-    dest.postY.insert(dest.postY.end(),
-                      std::make_move_iterator(src.postY.begin()),
-                      std::make_move_iterator(src.postY.end()));
-    for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
-         ++i) {
-      auto &srcjoint = src.jointResiduals[i];
-      auto &dstjoint = dest.jointResiduals[i];
-      dstjoint.insert(dstjoint.end(), std::make_move_iterator(srcjoint.begin()),
-                      std::make_move_iterator(srcjoint.end()));
-    }
-    return dest;
-  }
 };
 } // namespace JointCalibration

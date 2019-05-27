@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JointCalibSolver.hpp"
+#include <iomanip>
 
 #ifndef DEBUG_SIM_TEST
 #define DEBUG_SIM_TEST 0
@@ -10,6 +11,296 @@ namespace JointCalibEval {
 
 using CombinedPoseListT =
     std::vector<std::pair<NaoPoseAndRawAngles<float>, Camera>>;
+
+using CalibStatusStatistics =
+    std::array<size_t, JointCalibration::CalibStatus::MAX_STATUS_COUNT>;
+
+// template <typename T> struct CalibEvalResiduals {
+//  JointCalibration::Residual<T> preX;
+//  JointCalibration::Residual<T> preY;
+//  JointCalibration::Residual<T> postX;
+//  JointCalibration::Residual<T> postY;
+
+//  std::array<JointCalibration::Residual<T>,
+//             JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
+//      jointResiduals;
+
+//  /**
+//*@brief joinEvalResiduals move-insert ops for all vectors. Src list is
+//*joined to dest list
+//*@param src source CalibEvalResidual
+//*@param dest destination CalibEvalResidual
+//*@return Reference to dest
+//*/
+//  CalibEvalResiduals &joinEvalResiduals(CalibEvalResiduals &src,
+//                                        CalibEvalResiduals &dest) {
+//    dest.preX.insert(dest.preX.end(),
+//    std::make_move_iterator(src.preX.begin()),
+//                     std::make_move_iterator(src.preX.end()));
+//    dest.preY.insert(dest.preY.end(),
+//    std::make_move_iterator(src.preY.begin()),
+//                     std::make_move_iterator(src.preY.end()));
+//    dest.postX.insert(dest.postX.end(),
+//                      std::make_move_iterator(src.postX.begin()),
+//                      std::make_move_iterator(src.postX.end()));
+//    dest.postY.insert(dest.postY.end(),
+//                      std::make_move_iterator(src.postY.begin()),
+//                      std::make_move_iterator(src.postY.end()));
+//    for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+//         ++i) {
+//      auto &srcjoint = src.jointResiduals[i];
+//      auto &dstjoint = dest.jointResiduals[i];
+//      dstjoint.insert(dstjoint.end(),
+//      std::make_move_iterator(srcjoint.begin()),
+//                      std::make_move_iterator(srcjoint.end()));
+//    }
+//    return dest;
+//  }
+//};
+
+/**
+ * @brief The OutputData struct This is supposed to deprecate calibEvalResiduals
+ */
+template <typename T> struct OutputData {
+  // Pre and Post should only be calib results..
+  JointCalibration::Residual<T> preX;
+  JointCalibration::Residual<T> preY;
+  JointCalibration::Residual<T> postX;
+  JointCalibration::Residual<T> postY;
+  JointCalibration::Residual<T> jointResiduals;
+
+  Eigen::VectorXf jointError;
+
+  JointCalibration::JointCalibResult calibResult;
+  CombinedPoseListT testPoses;
+  CombinedPoseListT calibPoses;
+
+  //  static void dumpToFile(const std::vector<OutputData> &data,
+  //                         const std::string prefix) {
+  //      std::cout<
+  //  }
+};
+
+template <typename T>
+/**
+ * @brief The residualGroup struct This is only for statistics purposes.
+ */
+class ResidualGroup {
+  using residualForAngles =
+      std::array<T, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>;
+  using residualListForAngles =
+      std::array<JointCalibration::Residual<T>,
+                 JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>;
+
+public:
+  JointCalibration::ResidualStdVec<T> preX;
+  JointCalibration::ResidualStdVec<T> preY;
+  JointCalibration::ResidualStdVec<T> postX;
+  JointCalibration::ResidualStdVec<T> postY;
+
+  std::array<JointCalibration::ResidualStdVec<T>,
+             JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
+      jointResiduals;
+  std::array<JointCalibration::ResidualStdVec<T>,
+             JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
+      inducedError;
+  CalibStatusStatistics statistics;
+
+  ResidualGroup()
+      : preX(), preY(), postX(), postY(), jointResiduals(), statistics{0} {}
+
+private:
+public:
+  void dumpToFiles(const std::string &prefix) {
+
+    const auto prePostRes = "_prePostResiduals";
+    //        {preY, "_originalResidualY"},
+    //        {postX, "_calibratedResidualX"},
+    //        {postY, "_calibratedResidualY"}};
+
+    //    const auto calibJointRes = "_calibratedJointResidual";
+    //    const auto uncalibJointRes = "_unCalibratedJointResidual";
+
+    std::fstream out(prefix + prePostRes, std::ios::out);
+    if (out) {
+      for (const auto &data : {preX, preY, postX, postY}) {
+        out.precision(4);
+        std::stringstream ss;
+        for (const auto &v : data) {
+          ss << v << " ";
+        }
+        out << ss.str() << "\n";
+        out.flush();
+      }
+      out.close();
+    } else {
+      std::cerr << "File " << (prefix + prePostRes) << "not open" << std::endl;
+    }
+    //    out.open(prefix + calibJointRes);
+    //    for (const auto &data : {preX, preY, postX, postY}) {
+    //      if (out) {
+    //        out.precision(4);
+    //        out << data.transpose() << "\n";
+    //      }
+    //      out.flush();
+    //    }
+  }
+
+  /**
+  *@brief joinEvalResiduals move-insert ops for all vectors. Src list is
+  *joined to dest list
+  *@param src source CalibEvalResidual
+  *@param dest destination CalibEvalResidual
+  *@return Reference to dest
+  */
+  void joinEvalResiduals(const std::vector<OutputData<T>> &src) {
+
+    for (const auto &elem : src) {
+      preX.reserve(preX.size() + elem.preX.size());
+      copy(elem.preX.data(), elem.preX.data() + elem.preX.size(),
+           back_inserter(preX));
+
+      preY.reserve(preY.size() + elem.preY.size());
+      copy(elem.preY.data(), elem.preY.data() + elem.preY.size(),
+           back_inserter(preY));
+
+      postX.reserve(postX.size() + elem.postX.size());
+      copy(elem.postX.data(), elem.postX.data() + elem.postX.size(),
+           back_inserter(postX));
+
+      postY.reserve(postY.size() + elem.postY.size());
+      copy(elem.postY.data(), elem.postY.data() + elem.postY.size(),
+           back_inserter(postY));
+      //      if (preX.size()) {
+      //        JointCalibration::Residual<T> tempPreX;
+      //        tempPreX << preX, elem.preX;
+      //        std::swap(tempPreX, preX);
+      //      } else {
+      //        preX = elem.preX;
+      //      }
+      //      if (preY.size()) {
+      //        JointCalibration::Residual<T> tempPreY;
+      //        tempPreY << preY, elem.preY;
+      //        std::swap(tempPreY, preY);
+      //      } else {
+      //        preY = elem.preY;
+      //      }
+      //      if (postX.size()) {
+      //        JointCalibration::Residual<T> tempPoX;
+      //        tempPoX << postX, elem.postX;
+      //        std::swap(tempPoX, postX);
+      //      } else {
+      //        postX = elem.postX;
+      //      }
+      //      if (postY.size()) {
+      //        JointCalibration::Residual<T> tempPoY;
+      //        tempPoY << postY, elem.postY;
+      //        std::swap(tempPoY, postY);
+      //      } else {
+      //        postY = elem.postY;
+      //      }
+      for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+           ++i) {
+        //        if (jointResiduals[i].size()) {
+        //          JointCalibration::Residual<T> temp;
+        //          temp << jointResiduals[i], elem.jointResiduals;
+        //          std::swap(temp, jointResiduals[i]);
+        //        } else {
+        //          jointResiduals[i] = elem.jointResiduals;
+        //        }
+        jointResiduals[i].emplace_back(elem.jointResiduals(i));
+      }
+      statistics[elem.calibResult.status]++;
+      //      statistics[static_cast<size_t>(elem.calibResult.status)]++;
+    }
+  }
+
+  std::tuple<residualForAngles, residualForAngles, residualForAngles>
+  getMinMaxAvg() {
+    std::array<T, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT> minData =
+        {0};
+    std::array<T, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT> maxData =
+        {0};
+    std::array<T, JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT> avgData =
+        {0};
+    for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+         ++i) {
+      auto temp = jointResiduals[i]; //.template cast<double>();
+      avgData[i] = static_cast<T>(
+          temp.size() > 0
+              ? std::accumulate(temp.begin(), temp.end(), T(0)) / T(temp.size())
+              : T(0));
+      auto minMaxPostX = std::minmax_element(temp.begin(), temp.end());
+      minData[i] = static_cast<T>(temp.size() > 0 ? *minMaxPostX.first : T(0));
+      maxData[i] = static_cast<T>(temp.size() > 0 ? *minMaxPostX.second : T(0));
+    }
+    return {minData, maxData, avgData};
+  }
+
+  void printStats(const T JOINT_CALIB_QUALITY_TOL_DEG,
+                  const size_t JOINT_ERR_LST_COUNT) {
+    auto data = getMinMaxAvg();
+    auto &minData = std::get<0>(data);
+    auto &maxData = std::get<1>(data);
+    auto &avgData = std::get<2>(data);
+
+    std::cout << std::endl;
+    for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
+         ++i) {
+      //      tempHist.update(resVec);
+      size_t badCount = 0;
+      for (const auto &elem : jointResiduals[i]) {
+        if (elem > JOINT_CALIB_QUALITY_TOL_DEG) {
+          badCount++;
+        }
+      }
+      //      size_t badCount =
+      //          (jointResiduals[i].array() >
+      //          JOINT_CALIB_QUALITY_TOL_DEG).count();
+      std::cout << "Joint " << std::setw(18) << std::left
+                << Sensor::JOINT_NAMES[Sensor::ALL_OBS_JOINTS[i]] << std::right
+                << " \tbad: " << std::setw(6) << std::setprecision(2)
+                << (badCount * 100.0 / static_cast<double>(JOINT_ERR_LST_COUNT))
+                << "%\tmin: " << std::setw(6) << std::setprecision(2)
+                << minData[i] << "\tmax: " << std::setw(6)
+                << std::setprecision(2) << maxData[i]
+                << "\tavg: " << std::setw(6) << std::setprecision(2)
+                << avgData[i] << "\n";
+    };
+    std::cout
+        << "\nTotal Bad cases: \t"
+        << (std::accumulate(statistics.begin(), statistics.end(),
+                            static_cast<size_t>(0)) -
+            statistics[JointCalibration::CalibStatus::SUCCESS]) *
+               100 / static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << "FAIL_LOCAL_MINIMA:    \t"
+        << statistics[JointCalibration::CalibStatus::FAIL_LOCAL_MINIMA] * 100 /
+               static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << "FAIL_NO_CONVERGE:     \t"
+        << statistics[JointCalibration::CalibStatus::FAIL_NO_CONVERGE] * 100 /
+               static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << "FAIL_NUMERICAL:       \t"
+        << statistics[JointCalibration::CalibStatus::FAIL_NUMERICAL] * 100 /
+               static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << "FAIL_NO_CAPTURES:     \t"
+        << statistics[JointCalibration::CalibStatus::FAIL_NO_CAPTURES] * 100 /
+               static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << "FAIL_NO_TEST_CAPTURES:\t"
+        << statistics[JointCalibration::CalibStatus::FAIL_NO_TEST_CAPTURES] *
+               100 / static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << "SUCCESS:              \t"
+        << statistics[JointCalibration::CalibStatus::SUCCESS] * 100 /
+               static_cast<T>(JOINT_ERR_LST_COUNT)
+        << "%\n"
+        << std::endl;
+  }
+};
 
 struct JointErrorEval {
 
@@ -149,6 +440,7 @@ struct JointErrorEval {
     Eigen::VectorXf inducedErrorEigCompact;
     if (!JointCalibSolvers::rawPoseToJointCalibParams(inducedErrorStdVec,
                                                       inducedErrorEigCompact)) {
+      std::cerr << "Convertion failed" << std::endl;
     }
 
     // Initialize residual of joint calibration (this isn't squared*)
@@ -243,7 +535,7 @@ struct JointErrorEval {
         //        && (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT
         //        ||
         //         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)
-    ) {
+        ) {
       // This will hold best params in case looping is needed
       Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
           JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));

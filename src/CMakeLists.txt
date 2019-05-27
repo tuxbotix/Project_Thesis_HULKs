@@ -56,7 +56,7 @@ target_link_libraries(${target4} observability utils naoPose tuhh)
 ### Evaluations
 
 # 1st Simulation test
-set(eval1 simWholeGridTest)
+set(eval1 simulatedEvaluation)
 add_executable(${eval1} tests/simTest.cpp ${TUHHSDK_SOURCES} ${TUHHSDK_HEADERS})
 target_link_libraries(${eval1} observability utils naoPose tuhh)
 

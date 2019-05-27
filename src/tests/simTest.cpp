@@ -1,19 +1,4 @@
-﻿#include <algorithm>
-#include <array>
-#include <cmath>
-#include <fstream>
-#include <functional>
-#include <iostream>
-#include <iterator>
-#include <sstream>
-#include <thread>
-#include <tuple>
-
-#include <Data/CameraMatrix.hpp>
-
-#include <cxxopts/include/cxxopts.hpp>
-
-#define DEBUG_JOINT_AND_SENS 0
+﻿#define DEBUG_JOINT_AND_SENS 0
 #define DEBUG_SIM_TEST 0
 #define DO_COMMIT 1
 #define WRITE_PARALLEL 1
@@ -30,14 +15,31 @@
 #include "constants.hpp"
 #include "utils.hpp"
 
+#include <Data/CameraMatrix.hpp>
+#include <cxxopts/include/cxxopts.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <thread>
+#include <tuple>
+
 const unsigned int MAX_THREADS = std::thread::hardware_concurrency();
 
 namespace jCalib = JointCalibration;
 namespace jCalibSolver = JointCalibSolvers;
 namespace jCEval = JointCalibEval;
+
+using CalibResultWithResidualVec = std::vector<jCEval::OutputData<float>>;
+using StatisticsWithResults =
+    std::pair<jCEval::CalibStatusStatistics, CalibResultWithResidualVec>;
 /**
- * @brief threadedFcn This function evaluate calibration of a set of errors
- * given
+ * @brief threadedFcn function evaluate calibration of a set of errors given
  * @param residuals An object containing vectors that hold various residuals
  * @param poseList List of possible poses for calibration
  * @param naoJointSensorModel Nao's simulated model which is under test
@@ -46,23 +48,23 @@ namespace jCEval = JointCalibEval;
  * @param stochasticFix Flag to enable or disable stochastic improving
  * @param badCases Count of failed calibrations.
  */
-std::pair<jCalib::CalibStatusStatistics, std::vector<jCalib::JointCalibResult>>
-threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
-            const jCEval::CombinedPoseListT combinedPoseList,
-            const jCEval::CombinedPoseListT combinedTestPoseList,
-            const SUPPORT_FOOT supFoot, const NaoJointAndSensorModelConfig cfg,
+StatisticsWithResults
+threadedFcn(const jCEval::CombinedPoseListT &combinedPoseList,
+            const jCEval::CombinedPoseListT &combinedTestPoseList,
+            const SUPPORT_FOOT &supFoot,
+            const NaoJointAndSensorModelConfig &cfg,
             const std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
                 &calibrationFeaturePtrs,
-            const std::vector<rawPoseT>::iterator jointErrItrBegin,
-            const std::vector<rawPoseT>::iterator jointErrItrEnd,
-            const float minJointErrVal, const float maxJointErrVal,
-            const float jointCalibQualityTol, const float reprojErrTolPercent,
-            const float pixelNoiseStdDev, const float jointNoiseStdDev,
-            bool stochasticFix, const bool enablePixelNoise,
-            const bool enableJointNoise) {
+            const std::vector<rawPoseT>::iterator &jointErrItrBegin,
+            const std::vector<rawPoseT>::iterator &jointErrItrEnd,
+            const float &minJointErrVal, const float &maxJointErrVal,
+            const float &jointCalibQualityTol, const float &reprojErrTolPercent,
+            const float &pixelNoiseStdDev, const float &jointNoiseStdDev,
+            const bool &stochasticFix, const bool &enablePixelNoise,
+            const bool &enableJointNoise) {
 
-  jCalib::CalibStatusStatistics calibStatusStatistics = {};
-  std::vector<jCalib::JointCalibResult> resultList;
+  jCEval::CalibStatusStatistics calibStatusStatistics = {};
+  CalibResultWithResidualVec resultList;
   resultList.reserve(size_t(jointErrItrEnd - jointErrItrBegin));
   //  jCEval::JointErrorEval(const NaoJointAndSensorModelConfig cfg,
   //                 const poseAndRawAngleListT poseList,
@@ -84,8 +86,11 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
 
     auto &errorSet = *errSetIter;
 
-    jCalib::JointCalibResult result;
-    Eigen::VectorXf jointCalibResiduals;
+    JointCalibEval::OutputData<float> output;
+
+    auto &result = output.calibResult;
+    auto &jointCalibResiduals = output.jointResiduals;
+
     Eigen::VectorXf preTestResiduals;
     Eigen::VectorXf preCalibResiduals;
     Eigen::VectorXf postTestResiduals;
@@ -98,38 +103,48 @@ threadedFcn(jCalib::CalibEvalResiduals<double> &residuals,
              preCalibResiduals, postCalibResiduals) =
         jointErrorEvalStruct.evalJointErrorSet(errorSet);
 
-    resultList.push_back(result);
-    calibStatusStatistics[result.status]++;
-
-    auto prePostResSize = static_cast<size_t>(preTestResiduals.size());
-    auto curPreResSize = residuals.preX.size();
+    auto prePostResSize = static_cast<Eigen::Index>(preTestResiduals.size());
+    //    auto curPreResSize = residuals.preX.size();
 
     // reserve vector memory to speed up the process
-    residuals.preX.reserve(prePostResSize + curPreResSize);
-    residuals.postX.reserve(prePostResSize + curPreResSize);
-    residuals.preY.reserve(prePostResSize + curPreResSize);
-    residuals.postY.reserve(prePostResSize + curPreResSize);
+    output.preX.resize(prePostResSize);
+    output.postX.resize(prePostResSize);
+    output.preY.resize(prePostResSize);
+    output.postY.resize(prePostResSize);
 
-    for (long i = 0; i < preTestResiduals.size(); ++i) {
+    for (Eigen::Index i = 0, odd = 0, even = 0; i < preTestResiduals.size();
+         ++i) {
       if (i % 2 == 0) { // x -> even number
-        residuals.preX.push_back(static_cast<double>(preTestResiduals(i)));
-        residuals.postX.push_back(static_cast<double>(postTestResiduals(i)));
+        output.preX(even) = preTestResiduals(i);
+        output.postX(even) = postTestResiduals(i);
+        even++;
       } else { // odd  -> newline
-        residuals.preY.push_back(static_cast<double>(preTestResiduals(i)));
-        residuals.postY.push_back(static_cast<double>(postTestResiduals(i)));
+        output.preY(odd) = preTestResiduals(i);
+        output.postY(odd) = postTestResiduals(i);
+        odd++;
       }
     }
     // Convert to degrees
     jointCalibResiduals /= TO_RAD_FLT;
-    for (Eigen::Index i = 0;
-         i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT; ++i) {
-      // TODO FIX THIS
-      //      residuals.jointResiduals[static_cast<size_t>(i)].push_back(
-      //          jointCalibResiduals(i));
-      residuals.jointResiduals[static_cast<size_t>(i)].push_back(
-          static_cast<double>(jointCalibResiduals(i)));
+    output.jointResiduals = jointCalibResiduals;
+    {
+      if (!JointCalibSolvers::rawPoseToJointCalibParams(errorSet,
+                                                        output.jointError)) {
+      }
+      output.jointError /= TO_RAD_FLT;
     }
+    //    for (Eigen::Index i = 0;
+    //         i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT; ++i) {
+    //      // TODO FIX THIS
+    //      //      residuals.jointResiduals[static_cast<size_t>(i)].push_back(
+    //      //          jointCalibResiduals(i));
+    //      residuals.jointResiduals[static_cast<size_t>(i)].push_back(
+    //          static_cast<double>(jointCalibResiduals(i)));
+    //    }
+    calibStatusStatistics[result.status]++;
+    resultList.emplace_back(std::move(output));
   }
+
   return {calibStatusStatistics, resultList};
 }
 
@@ -192,16 +207,25 @@ int main(int argc, char *argv[]) {
 
   cxxopts::Options options("PoseFilter - Filter and link poses to hopefully "
                            "give the best pose set");
-  options.add_options()("f,file-prefix", "I/O File prefix",
+  options.add_options()("f,fileInput", "Input File prefix",
                         cxxopts::value<std::string>())(
+      "o,fileOutput", "Output File prefix",
+      cxxopts::value<std::string>()->default_value(utils::getISOTimeString() +
+                                                   "_simOut"))(
       "t,testFile", "testPoseFile", cxxopts::value<std::string>())(
       "e,errorConfigs", "set of error cases",
       cxxopts::value<std::string>()->default_value("./l_1000_jointErrors.txt"))(
       "n,n-poses", "Poses to calibrate",
       cxxopts::value<size_t>()->default_value("10"))(
+      "testErrorCount", "Error configs to try. Defaults to values in json..",
+      cxxopts::value<int64_t>()->default_value("-1"))(
       "m,mirror", "Mirror the poses",
       cxxopts::value<bool>()->default_value("false"))(
-      "c,confRoot", "Conf path",
+      "confRoot", "conf path",
+      cxxopts::value<std::string>()->default_value("./"))(
+      "calib", "calib features file",
+      cxxopts::value<std::string>()->default_value("calibFeatures"))(
+      "naoConfRoot", "Nao Conf path",
       cxxopts::value<std::string>()->default_value("../../nao/home/"))(
       "s,stochastic", "Stochastic mode?",
       cxxopts::value<bool>()->default_value("false"))(
@@ -213,25 +237,28 @@ int main(int argc, char *argv[]) {
       cxxopts::value<bool>()->default_value("false"));
 
   auto result = options.parse(argc, argv);
-
-  const std::string inFileName = result["file-prefix"].as<std::string>();
+  const int64_t testErrorCount = result["testErrorCount"].as<int64_t>();
+  const std::string inFileName = result["fileInput"].as<std::string>();
+  const std::string outFilePrefix = result["fileOutput"].as<std::string>();
   const std::string inTestFileName = result["testFile"].as<std::string>();
+  const std::string calibFeatureFileName = result["calib"].as<std::string>();
   const std::string errConfigFileName =
       result["errorConfigs"].as<std::string>();
   const size_t MAX_POSES_TO_CALIB = result["n-poses"].as<size_t>();
   // Default is false
   const bool mirrorPose = result["mirror"].as<bool>();
+  const std::string naoConfRoot = result["naoConfRoot"].as<std::string>();
   const std::string confRoot = result["confRoot"].as<std::string>();
   // Default is false
   const bool stochasticFix = result["stochastic"].as<bool>();
   const bool showHistogram = result["histogram"].as<bool>();
-
   const bool enablePixelNoise = result["pixelNoise"].as<bool>();
   const bool enableJointNoise = result["jointNoise"].as<bool>();
 
   std::fstream inFile(inFileName);
   if (!inFile.is_open()) {
-    std::cerr << "Input file cannot be opened, exiting.." << std::endl;
+    std::cerr << "Input file " << inFileName << "cannot be opened, exiting.."
+              << std::endl;
     return 1;
   }
   std::fstream inTestFile(inTestFileName);
@@ -247,15 +274,15 @@ int main(int argc, char *argv[]) {
 
   /// Get config values.
   Uni::Value confValue;
-  if (!MiniConfigHandle::mountFile("configuration/simGridEvalConf.json",
-                                   confValue)) {
+  if (!MiniConfigHandle::mountFile(
+          confRoot + "configuration/simGridEvalConf.json", confValue)) {
     std::cout << "couldn't open the conf file" << std::endl;
     exit(1);
   }
   /// observerModel config (to get grpound grid info, etc)
   Uni::Value obsModelConfig;
-  if (!MiniConfigHandle::mountFile("configuration/cameraObsModelConf.json",
-                                   obsModelConfig)) {
+  if (!MiniConfigHandle::mountFile(
+          confRoot + "configuration/cameraObsModelConf.json", obsModelConfig)) {
     std::cout << "couldn't open the conf file" << std::endl;
     exit(1);
   }
@@ -264,26 +291,23 @@ int main(int argc, char *argv[]) {
       static_cast<float>(confValue["errRangeMinMax"].at(0).asDouble());
   const float MAX_ERR_VAL =
       static_cast<float>(confValue["errRangeMinMax"].at(1).asDouble());
-  /// Sample Size
-  const size_t JOINT_ERR_LST_DESIRED_COUNT =
-      static_cast<size_t>(confValue["testErrorCount"].asInt64());
-
+  /// Sample Size. Defaults to config. else overridden by errorCount param
+  const size_t JOINT_ERR_LST_DESIRED_COUNT = static_cast<size_t>(
+      testErrorCount > 0 ? testErrorCount
+                         : confValue["testErrorCount"].asInt64());
   const double JOINT_CALIB_QUALITY_TOL_DEG =
       confValue["jointCalibQualityTol"].asDouble();
   const float JOINT_CALIB_QUALITY_TOL_RAD =
       static_cast<float>(JOINT_CALIB_QUALITY_TOL_DEG * TO_RAD_DBL);
   const float REPROJ_ERR_TOL_PERCENT =
       static_cast<float>(confValue["reprojErrTolPercent"].asDouble());
-
   const float PIXEL_NOISE_STD_DEV =
       static_cast<float>(confValue["pixelNoiseStdDev"].asDouble());
-
   const float JOINT_NOISE_STD_DEV =
       static_cast<float>(confValue["jointNoiseStdDev"].asDouble());
-  const size_t testPoseCountMin =
-      static_cast<size_t>(confValue["testPoseCountMin"].asInt64());
   const size_t testPoseCount =
       static_cast<size_t>(confValue["testPoseCount"].asInt64());
+
   /*
    * Print input params
    */
@@ -299,7 +323,7 @@ int main(int argc, char *argv[]) {
   /*
    * Initializing model & Nao provider
    */
-  TUHH tuhhInstance(confRoot);
+  TUHH tuhhInstance(naoConfRoot);
   Vector2f fc, cc, fov;
 
   tuhhInstance.config_.mount("Projection", "Projection.json",
@@ -423,17 +447,14 @@ int main(int argc, char *argv[]) {
    */
   std::cout << "Starting calibrations" << std::endl;
 
-  // VecOfVec of CalibEvalResiduals - they contain image and joint residual
-  // info
-  // + others
-  std::vector<jCalib::CalibEvalResiduals<double>> calibResidualList(
-      MAX_THREADS);
   // This will contain all above at the end. (move-join)
-  jCalib::CalibEvalResiduals<double> finalResidualSet;
+  jCEval::ResidualGroup<float> finalResidualSet;
 
   // vector holding the std::threads
-  std::vector<std::future<std::pair<jCalib::CalibStatusStatistics,
-                                    std::vector<jCalib::JointCalibResult>>>>
+  std::vector<std::future<StatisticsWithResults>>
+
+      //  std::vector<std::future<std::pair<jCalib::CalibStatusStatistics,
+      //                                    std::vector<jCalib::JointCalibResult>>>>
       futureList(MAX_THREADS);
 
   // Setup offsets for iterators
@@ -443,23 +464,29 @@ int main(int argc, char *argv[]) {
   std::vector<Camera> camNames = {Camera::BOTTOM, Camera::TOP};
 
   std::vector<CalibrationFeatures::CalibrationFeaturePtr<float>>
-      calibrationFeatures = {
-          /*std::make_shared<CalibrationFeatures::GroundGrid<float>>(
-              cfg.maxGridPointsPerSide, cfg.gridSpacing)*/
-          std::make_shared<
-              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
-              10, 14, 0.05, Vector2f{1.5, -0.6}, 0),
-          std::make_shared<
-              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
-              10, 14, 0.05, Vector2f{0.75, -0.25}, 0),
-          std::make_shared<
-              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
-              10, 14, 0.05, Vector2f{0.25, 0.5}, 0),
-          std::make_shared<
-              CalibrationFeatures::ChessBoardPatternOnFloor<float>>(
-              10, 14, 0.05, Vector2f{0.9, 0.75}, 0)};
+      calibrationFeatures;
+
   {
-    std::fstream file("/tmp/chessBoards.txt", std::ios::out);
+    std::fstream calibFeatureFile(calibFeatureFileName, std::ios::in);
+    if (!calibFeatureFile) {
+      std::cerr << "Calib feature file " << calibFeatureFileName
+                << " not available. Exciting.." << std::endl;
+      exit(1);
+    }
+    std::string line;
+    while (calibFeatureFile.good() && std::getline(calibFeatureFile, line)) {
+      std::stringstream ss(line);
+      try {
+
+        calibrationFeatures.emplace_back(
+            CalibrationFeatures::deserializeCalibFeature(ss));
+      } catch (...) {
+        std::cerr << "Deserialize failed: " << line << std::endl;
+      }
+    }
+
+    std::fstream file(outFilePrefix + "_calibPoints.txt", std::ios::out);
+    file << "point_x point_y" << std::endl;
     for (const auto &feat : calibrationFeatures) {
       auto pts = feat->getGroundPoints();
       for (const auto &pt : pts) {
@@ -509,12 +536,11 @@ int main(int argc, char *argv[]) {
     //                bool stochasticFix, const bool enablePixelNoise,
     //                const bool enableJointNoise)
     futureList[i] = std::async(
-        std::launch::async, &threadedFcn, std::ref(calibResidualList[i]),
-        combinedPoseList, combinedTestPoseList, supFeet, cfg,
-        std::ref(calibrationFeatures), begin, end, MIN_ERR_VAL, MAX_ERR_VAL,
-        JOINT_CALIB_QUALITY_TOL_RAD, REPROJ_ERR_TOL_PERCENT,
-        PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV, stochasticFix,
-        enablePixelNoise, enableJointNoise);
+        std::launch::async, &threadedFcn, combinedPoseList,
+        combinedTestPoseList, supFeet, cfg, std::ref(calibrationFeatures),
+        begin, end, MIN_ERR_VAL, MAX_ERR_VAL, JOINT_CALIB_QUALITY_TOL_RAD,
+        REPROJ_ERR_TOL_PERCENT, PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV,
+        stochasticFix, enablePixelNoise, enableJointNoise);
   }
 
   /*
@@ -522,171 +548,59 @@ int main(int argc, char *argv[]) {
    * Also join all residuals into finalResidualSet
    * + calibration results!!
    */
-  jCalib::CalibStatusStatistics stats = {};
-  std::vector<jCalib::JointCalibResult> resultList;
+  jCEval::CalibStatusStatistics stats = {};
+  CalibResultWithResidualVec resultList;
   for (size_t i = 0; i < MAX_THREADS; ++i) {
     auto &future = futureList[i];
-    auto &residual = calibResidualList[i];
+    //    auto &residual = calibResidualList[i];
     auto temp = future.get();
     for (size_t j = 0; j < stats.size(); ++j) {
       stats[j] += temp.first[j];
     }
     // append do the result vector
-    resultList.insert(resultList.end(),
-                      std::make_move_iterator(temp.second.begin()),
-                      std::make_move_iterator(temp.second.end()));
+    resultList.insert(resultList.end(), temp.second.begin(), temp.second.end());
     std::cout << "Going to join" << i << std::endl;
-    finalResidualSet.joinEvalResiduals(residual, finalResidualSet);
+    finalResidualSet.joinEvalResiduals(temp.second);
   }
   std::cout << "Processing done" << std::endl;
 
   /*
    * Print stats for each joint
    */
-  {
-    auto printStats = [&JOINT_CALIB_QUALITY_TOL_DEG,
-                       &JOINT_ERR_LST_COUNT](jCalib::Residual<double> &resVec) {
-      if (resVec.size() > JOINT_ERR_LST_COUNT) {
-        std::cerr << "Something is wrong, resVec.size() > JOINT_ERR_LST_COUNT"
-                  << std::endl;
-        throw("Something is wrong, resVec.size() > JOINT_ERR_LST_COUNT");
-      }
-
-      //      auto minMax = std::minmax_element(resVec.begin(), resVec.end());
-      //      utils::SimpleHistogram<double> tempHist(300, *minMax.first - 1,
-      //                                              *minMax.second + 1);
-      double avg =
-          std::accumulate(resVec.begin(), resVec.end(), 0.0) / resVec.size();
-      //      tempHist.update(resVec);
-      size_t badCount = 0;
-      for (auto &elem : resVec) {
-        if (std::fabs(elem) > JOINT_CALIB_QUALITY_TOL_DEG) {
-          badCount++;
-        }
-      }
-      std::cout << " \tbad: "
-                << badCount * 100 / static_cast<double>(JOINT_ERR_LST_COUNT)
-                << "% \tavg: " << avg << "\n";
-    };
-
-    std::cout << "\n";
-    for (size_t i = 0; i < finalResidualSet.jointResiduals.size(); ++i) {
-      std::cout << "Joint " << Sensor::JOINT_NAMES[Sensor::ALL_OBS_JOINTS[i]];
-      printStats(finalResidualSet.jointResiduals[i]);
-    }
-    std::cout << std::endl;
-  }
+  finalResidualSet.printStats(JOINT_CALIB_QUALITY_TOL_DEG, JOINT_ERR_LST_COUNT);
 
   /*
    * Post-processing -> Get min-max bounds
    */
+  //  std::cout << "Initializing histograms\n";
+  //  auto minMaxPostX = std::minmax_element(finalResidualSet.postX.begin(),
+  //                                         finalResidualSet.postX.end());
 
-  std::cout << "Initializing histograms\n";
-  auto minMaxPostX = std::minmax_element(finalResidualSet.postX.begin(),
-                                         finalResidualSet.postX.end());
+  //  auto minMaxPostY = std::minmax_element(finalResidualSet.postY.begin(),
+  //                                         finalResidualSet.postY.end());
 
-  auto minMaxPostY = std::minmax_element(finalResidualSet.postY.begin(),
-                                         finalResidualSet.postY.end());
+  //  auto maxOfJointParamsAll = [&finalResidualSet] {
+  //    auto max = 0.0;
+  //    for (const auto &vec : finalResidualSet.jointResiduals) {
+  //      auto v = std::minmax_element(vec.begin(), vec.end());
+  //      max = std::max(max, std::max(std::abs(*v.first),
+  //      std::abs(*v.second)));
+  //    }
+  //    return max;
+  //  }();
 
-  auto maxOfJointParamsAll = [&finalResidualSet] {
-    auto max = 0.0;
-    for (const auto &vec : finalResidualSet.jointResiduals) {
-      auto v = std::minmax_element(vec.begin(), vec.end());
-      max = std::max(max, std::max(std::abs(*v.first), std::abs(*v.second)));
-    }
-    return max;
-  }();
-  //  auto maxOfJointParamsAll =
-  //      1.01 * std::max(std::abs(*minMaxJointParams.first),
-  //                      std::abs(*minMaxJointParams.second));
+  //  //  auto maxOfJointParamsAll =
+  //  //      1.01 * std::max(std::abs(*minMaxJointParams.first),
+  //  //                      std::abs(*minMaxJointParams.second));
+  //  auto maxOfAll = std::max(std::abs(*minMaxPostX.first),
+  //  *minMaxPostX.second);
+  //  maxOfAll = 1.01 * std::max(std::max(std::abs(*minMaxPostY.first),
+  //                                      *minMaxPostY.second),
+  //                             maxOfAll);
 
-  auto maxOfAll = std::max(std::abs(*minMaxPostX.first), *minMaxPostX.second);
-  maxOfAll = 1.01 * std::max(std::max(std::abs(*minMaxPostY.first),
-                                      *minMaxPostY.second),
-                             maxOfAll);
-
-  std::cout << "AbsMax Post Errors: " << maxOfAll
-            << "\nAbsMax Joint Errors: " << maxOfJointParamsAll << std::endl;
-
-  /*
-   * Initialize Histograms
-   */
-  utils::SimpleHistogram<double> preXhist(1000, -300, 300);
-  utils::SimpleHistogram<double> preYhist(1000, -300, 300);
-
-  utils::SimpleHistogram<double> postXhist(100, -maxOfAll, maxOfAll);
-  utils::SimpleHistogram<double> postYhist(100, -maxOfAll, maxOfAll);
-
-  utils::SimpleHistogram<double> preParamhist(
-      30, static_cast<double>(-MAX_ERR_VAL), static_cast<double>(MAX_ERR_VAL));
-  utils::SimpleHistogram<double> postParamhist(300, -maxOfJointParamsAll,
-                                               maxOfJointParamsAll);
-
-  for (const auto &elem : jointErrList) {
-    std::vector<double> newElem;
-    for (auto &i : elem) {
-      float val = i / TO_RAD_FLT;
-      if (val > 0.01f || val < -0.01f) {
-        newElem.push_back(static_cast<double>(val));
-      }
-    }
-    preParamhist.update(newElem);
-  }
-  // Update each histogram
-  for (auto &elem : calibResidualList) {
-    preXhist.update(elem.preX);
-    preYhist.update(elem.preY);
-    postXhist.update(elem.postX);
-    postYhist.update(elem.postY);
-
-    // For the moment, all joints are bundled together
-    // TODO seperate this
-    for (auto &jointErr : elem.jointResiduals) {
-      std::vector<double> newElem;
-      for (auto &i : jointErr) {
-        if (i > __DBL_EPSILON__ || i < -__DBL_EPSILON__) {
-          newElem.push_back(i);
-        }
-      }
-      postParamhist.update(newElem);
-    }
-  }
-
-  std::cout << "\nFinishing; Total Bad cases: "
-            << (std::accumulate(stats.begin(), stats.end(),
-                                static_cast<size_t>(0)) -
-                stats[jCalib::CalibStatus::SUCCESS]) *
-                   100 / static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << "FAIL_LOCAL_MINIMA: "
-            << stats[jCalib::CalibStatus::FAIL_LOCAL_MINIMA] * 100 /
-                   static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << "FAIL_NO_CONVERGE: "
-            << stats[jCalib::CalibStatus::FAIL_NO_CONVERGE] * 100 /
-                   static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << "FAIL_NUMERICAL: "
-            << stats[jCalib::CalibStatus::FAIL_NUMERICAL] * 100 /
-                   static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << "FAIL_NO_CAPTURES: "
-            << stats[jCalib::CalibStatus::FAIL_NO_CAPTURES] * 100 /
-                   static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << "FAIL_NO_TEST_CAPTURES: "
-            << stats[jCalib::CalibStatus::FAIL_NO_TEST_CAPTURES] * 100 /
-                   static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << "SUCCESS: "
-            << stats[jCalib::CalibStatus::SUCCESS] * 100 /
-                   static_cast<float>(JOINT_ERR_LST_COUNT)
-            << "%\n"
-            << std::endl;
-
-  if (!showHistogram) {
-    return 0;
-  }
+  //  std::cout << "AbsMax Post Errors: " << maxOfAll
+  //            << "\nAbsMax Joint Errors: " << maxOfJointParamsAll <<
+  //            std::endl;
 
   /*
    * Print the statistics & Write into files
@@ -708,10 +622,27 @@ int main(int argc, char *argv[]) {
       v[4].setConstant(10000);
       v[5].setZero();
     }
-    /// write result stats
-    std::fstream resultOut("/tmp/resultOut", std::ios::out);
+
+    // Write result stats
+    std::fstream resultOut(outFilePrefix + "_resultOut", std::ios::out);
+    resultOut << "status reprojectionErrorMeanTest rmsTest_x rmsTest_y "
+                 "reprojectionErrorMeanCalib rmsCalib_x rmsCalib_y";
+    for (size_t i = 0; i < finalResidualSet.jointResiduals.size(); ++i) {
+      resultOut << "res_" << Sensor::JOINT_NAMES[Sensor::ALL_OBS_JOINTS[i]]
+                << " ";
+    }
+    for (size_t i = 0; i < finalResidualSet.jointResiduals.size(); ++i) {
+      resultOut << "err_" << Sensor::JOINT_NAMES[Sensor::ALL_OBS_JOINTS[i]]
+                << " ";
+    }
+    resultOut << std::endl;
+
     // status reprojErrMeanTest rmsTest
-    for (const auto &result : resultList) {
+    for (const auto &outputData : resultList) {
+      const auto &result = outputData.calibResult;
+      const auto &residual = outputData.jointResiduals;
+      const auto &origError = outputData.jointError;
+
       auto &first = averages[result.status].first;
       const auto rmsTestDbl = result.rmsTest.cast<double>();
       const auto rmsCalibDbl = result.rmsCalib.cast<double>();
@@ -733,7 +664,8 @@ int main(int argc, char *argv[]) {
       resultOut << result.status << " " << result.reprojectionErrorMeanTest
                 << " " << result.rmsTest.x() << " " << result.rmsTest.y() << " "
                 << result.reprojectionErrorMeanCalib << " "
-                << result.rmsCalib.x() << " " << result.rmsCalib.y() << "\n";
+                << result.rmsCalib.x() << " " << result.rmsCalib.y() << " "
+                << residual.transpose() << " " << origError.transpose() << "\n";
     }
     resultOut.flush();
     resultOut.close();
@@ -756,86 +688,142 @@ int main(int argc, char *argv[]) {
       }
     }
     std::cout << std::endl;
+
+    finalResidualSet.dumpToFiles(outFilePrefix);
   }
 
-  std::pair<utils::SimpleHistogram<double> &, std::string>
-      originalResidualDumpX(preXhist, "/tmp/originalResidualX");
-  std::pair<utils::SimpleHistogram<double> &, std::string>
-      calibratedResidualDumpX(postXhist, "/tmp/calibratedResidualX");
-  std::pair<utils::SimpleHistogram<double> &, std::string>
-      originalResidualDumpY(preYhist, "/tmp/originalResidualY");
-  std::pair<utils::SimpleHistogram<double> &, std::string>
-      calibratedResidualDumpY(postYhist, "/tmp/calibratedResidualY");
+  //  if (!showHistogram) {
+  //    return 0;
+  //  }
 
-  std::pair<utils::SimpleHistogram<double> &, std::string>
-      calibratedJointParamResidualDumpY(postParamhist,
-                                        "/tmp/calibratedJointResidual");
+  //  /*
+  //   * Initialize Histograms
+  //   */
+  //  utils::SimpleHistogram<double> preXhist(1000, -300, 300);
+  //  utils::SimpleHistogram<double> preYhist(1000, -300, 300);
 
-  std::pair<utils::SimpleHistogram<double> &, std::string> unCalibJointParams(
-      preParamhist, "/tmp/unCalibratedJointResidual");
+  //  utils::SimpleHistogram<double> postXhist(100, -maxOfAll, maxOfAll);
+  //  utils::SimpleHistogram<double> postYhist(100, -maxOfAll, maxOfAll);
 
-  for (auto elem : {originalResidualDumpX, originalResidualDumpY,
-                    calibratedResidualDumpX, calibratedResidualDumpY}) {
-    std::cout << "\nStart dump to : " << elem.second << "\n";
-    std::pair<double, double> bounds = elem.first.getPercentileBounds(0.25);
-    std::cout << "75% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.1);
-    std::cout << "90% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.05);
-    std::cout << "95% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.01);
-    std::cout << "99% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.001);
-    std::cout << "99.9% Of Population in: : " << bounds.first << " "
-              << bounds.second << std::endl;
+  //  utils::SimpleHistogram<double> preParamhist(
+  //      30, static_cast<double>(-MAX_ERR_VAL),
+  //      static_cast<double>(MAX_ERR_VAL));
+  //  utils::SimpleHistogram<double> postParamhist(300, -maxOfJointParamsAll,
+  //                                               maxOfJointParamsAll);
 
-    // Open files, stream and close
-    std::fstream file(elem.second, std::ios::out);
-    file << elem.first;
-    file.close();
-  }
+  //  for (const auto &elem : jointErrList) {
+  //    std::vector<double> newElem;
+  //    for (auto &i : elem) {
+  //      float val = i / TO_RAD_FLT;
+  //      if (val > 0.01f || val < -0.01f) {
+  //        newElem.push_back(static_cast<double>(val));
+  //      }
+  //    }
+  //    preParamhist.update(newElem);
+  //  }
+  //  // Update each histogram
+  //  for (auto &elem : calibResidualList) {
+  //    preXhist.update(elem.preX);
+  //    preYhist.update(elem.preY);
+  //    postXhist.update(elem.postX);
+  //    postYhist.update(elem.postY);
 
-  /*
-   * Put joint residuals seperately for real box plots and other stuff :P
-   */
-  for (auto elem : {unCalibJointParams, calibratedJointParamResidualDumpY}) {
-    std::cout << "\nStart dump to : " << elem.second << "\n";
-    std::pair<double, double> bounds = elem.first.getPercentileBounds(0.25);
-    std::cout << "75% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.1);
-    std::cout << "90% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.05);
-    std::cout << "95% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.01);
-    std::cout << "99% Of Population in: " << bounds.first << " "
-              << bounds.second << "\n";
-    bounds = elem.first.getPercentileBounds(0.001);
-    std::cout << "99.9% Of Population in: : " << bounds.first << " "
-              << bounds.second << std::endl;
+  //    // For the moment, all joints are bundled together
+  //    // TODO seperate this
+  //    for (auto &jointErr : elem.jointResiduals) {
+  //      std::vector<double> newElem;
+  //      for (auto &i : jointErr) {
+  //        if (i > __DBL_EPSILON__ || i < -__DBL_EPSILON__) {
+  //          newElem.push_back(i);
+  //        }
+  //      }
+  //      postParamhist.update(newElem);
+  //    }
+  //  }
 
-    // Open files, stream and close
-    std::fstream file(elem.second, std::ios::out);
-    {
-      for (const auto &residualSet : finalResidualSet.jointResiduals) {
-        for (auto p = residualSet.begin(); p != residualSet.end() - 1; ++p) {
-          file << *p << ", ";
-        }
-        if (residualSet.size() > 0) {
-          file << *residualSet.end() << std::endl;
-        } else {
-          file << std::endl;
-        }
-      }
-    }
-    file.close();
-  }
+  //  std::pair<utils::SimpleHistogram<double> &, std::string>
+  //      originalResidualDumpX(preXhist, outFilePrefix + "_originalResidualX");
+  //  std::pair<utils::SimpleHistogram<double> &, std::string>
+  //      calibratedResidualDumpX(postXhist,
+  //                              outFilePrefix + "_calibratedResidualX");
+  //  std::pair<utils::SimpleHistogram<double> &, std::string>
+  //      originalResidualDumpY(preYhist, outFilePrefix + "_originalResidualY");
+  //  std::pair<utils::SimpleHistogram<double> &, std::string>
+  //      calibratedResidualDumpY(postYhist,
+  //                              outFilePrefix + "_calibratedResidualY");
+
+  //  std::pair<utils::SimpleHistogram<double> &, std::string>
+  //      calibratedJointParamResidualDumpY(
+  //          postParamhist, outFilePrefix + "_calibratedJointResidual");
+
+  //  std::pair<utils::SimpleHistogram<double> &, std::string>
+  //  unCalibJointParams(
+  //      preParamhist, outFilePrefix + "_unCalibratedJointResidual");
+
+  //  for (auto elem : {originalResidualDumpX, originalResidualDumpY,
+  //                    calibratedResidualDumpX, calibratedResidualDumpY}) {
+  //    std::cout << "\nStart dump to : " << elem.second << "\n";
+  //    std::pair<double, double> bounds = elem.first.getPercentileBounds(0.25);
+  //    std::cout << "75% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.1);
+  //    std::cout << "90% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.05);
+  //    std::cout << "95% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.01);
+  //    std::cout << "99% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.001);
+  //    std::cout << "99.9% Of Population in: : " << bounds.first << " "
+  //              << bounds.second << std::endl;
+
+  //    // Open files, stream and close
+  //    std::fstream file(elem.second, std::ios::out);
+  //    file << elem.first;
+  //    file.close();
+  //  }
+
+  //  /*
+  //   * Put joint residuals seperately for real box plots and other stuff :P
+  //   */
+  //  for (auto elem : {unCalibJointParams, calibratedJointParamResidualDumpY})
+  //  {
+  //    std::cout << "\nStart dump to : " << elem.second << "\n";
+  //    std::pair<double, double> bounds = elem.first.getPercentileBounds(0.25);
+  //    std::cout << "75% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.1);
+  //    std::cout << "90% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.05);
+  //    std::cout << "95% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.025);
+  //    std::cout << "97.5% Of Population in: " << bounds.first << " "
+  //              << bounds.second << "\n";
+  //    bounds = elem.first.getPercentileBounds(0.01);
+  //    std::cout << "99% Of Population in: : " << bounds.first << " "
+  //              << bounds.second << std::endl;
+
+  //    // Open files, stream and close
+  //    std::fstream file(elem.second, std::ios::out);
+  //    {
+  //      for (const auto &residualSet : finalResidualSet.jointResiduals) {
+  //        for (auto p = residualSet.begin(); p != residualSet.end() - 1; ++p)
+  //        {
+  //          file << *p << ", ";
+  //        }
+  //        if (residualSet.size() > 0) {
+  //          file << *residualSet.end() << std::endl;
+  //        } else {
+  //          file << std::endl;
+  //        }
+  //      }
+  //    }
+  //    file.close();
+  //  }
 
   return 0;
 }

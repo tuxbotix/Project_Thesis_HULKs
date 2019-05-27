@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <stdexcept>
 
 #include <Tools/Math/Eigen.hpp>
 
@@ -18,6 +19,7 @@ public:
                                const Vector3<T> &orientation) = 0;
   virtual VecVector2<T> getGroundPoints() const = 0;
   virtual VecVector3<T> get3DPoints() const = 0;
+  static const std::string getClassName();
 };
 
 // template <class T> using Residual = std::vector<T>;
@@ -30,16 +32,18 @@ template <typename T = float> class GroundGrid : public CalibrationFeature<T> {
 private:
   VecVector2<T> baseGrid2D;   // relative to self-origin
   VecVector2<T> gridPoints2D; // relative to self-origin
+  static const std::string className;
+
 public:
-  GroundGrid(const size_t maxGridPointsPerSide, const float gridSpacing,
+  GroundGrid(const size_t maxGridPointsPerSide, const T gridSpacing,
              const Vector2<T> &position = {0, 0}, const T &orientation = 0)
       : CalibrationFeature<T>() {
     T x, y;
-    const int gridSizeHalf = maxGridPointsPerSide / 2;
+    const T gridSizeHalf = maxGridPointsPerSide / 2;
     for (size_t i = 0; i < maxGridPointsPerSide; i++) {
-      x = (static_cast<int>(i) - gridSizeHalf) * gridSpacing;
+      x = (static_cast<T>(i) - gridSizeHalf) * gridSpacing;
       for (size_t j = 0; j < maxGridPointsPerSide; j++) {
-        y = (static_cast<int>(j) - gridSizeHalf) * gridSpacing;
+        y = (static_cast<T>(j) - gridSizeHalf) * gridSpacing;
         baseGrid2D.emplace_back(x, y);
       }
     }
@@ -68,11 +72,15 @@ public:
   }
 
   VecVector2<T> getGroundPoints() const { return gridPoints2D; }
+
+  static const std::string getClassName() { return GroundGrid<T>::className; }
 };
 
 template <typename T = float>
 class ChessBoardPattern : public CalibrationFeature<T> {
 private:
+  static const std::string className;
+
 protected:
   int width;  // width of grid
   int height; // height of grid
@@ -129,12 +137,17 @@ public:
     }
     return output;
   }
+  static const std::string getClassName() {
+    return ChessBoardPattern<T>::className;
+  }
 };
 
 template <typename T = float>
 class ChessBoardPatternOnFloor : public ChessBoardPattern<T> {
 private:
   VecVector2<T> gridPoints; // relative to self-origin
+  static const std::string className;
+
 public:
   ChessBoardPatternOnFloor(const int &width, const int &height,
                            const T &squareSize, const Vector2<T> &position,
@@ -144,7 +157,7 @@ public:
                              {0, orientation, 0}) {
     gridPoints.resize(ChessBoardPattern<T>::baseGrid.size());
     updatePointPose(position, orientation);
-//    std::cout << "Construction done" << std::endl;
+    //    std::cout << "Construction done" << std::endl;
   }
 
   void updatePointPose(const Vector2<T> &position, const T &orientation) {
@@ -157,7 +170,8 @@ public:
     for (size_t i = 0; i < _gridPts.size(); ++i) {
       tempPt = trans * rot2 * Vector2<T>(_gridPts[i].x(), _gridPts[i].y());
       gridPoints[i] = {tempPt.x(), tempPt.y()};
-//      std::cout << _gridPts[i].x() << " " << _gridPts[i].y() << std::endl;
+      //      std::cout << _gridPts[i].x() << " " << _gridPts[i].y() <<
+      //      std::endl;
     }
   }
 
@@ -168,14 +182,66 @@ public:
   }
 
   VecVector3<T> get3DPoints() const {
-//    std::cout << "get points 3d chess" << std::endl;
+    //    std::cout << "get points 3d chess" << std::endl;
     return ChessBoardPattern<T>::get3DPoints();
   }
 
   VecVector2<T> getGroundPoints() const {
-//    std::cout << "get points floor chess " << gridPoints.size() << std::endl;
+    //    std::cout << "get points floor chess " << gridPoints.size() <<
+    //    std::endl;
     return gridPoints;
+  }
+  static const std::string getClassName() {
+    return ChessBoardPatternOnFloor<T>::className;
   }
 };
 
+template <typename T> const std::string GroundGrid<T>::className = "GroundGrid";
+template <typename T>
+const std::string ChessBoardPatternOnFloor<T>::className =
+    "ChessBoardPatternOnFloor";
+template <typename T>
+const std::string ChessBoardPattern<T>::className = "ChessBoardPattern";
+
+template <typename T = float>
+const CalibrationFeaturePtr<T> deserializeCalibFeature(std::istream &istream) {
+  std::string name;
+  istream >> name;
+
+  if (name.compare(ChessBoardPatternOnFloor<T>::getClassName()) == 0) {
+    int width;
+    int height;
+    T squareSize;
+    Vector2<T> position;
+    T orientation;
+
+    istream >> width >> height >> squareSize >> position.x() >> position.y() >>
+        orientation;
+    return std::make_shared<ChessBoardPatternOnFloor<T>>(
+        width, height, squareSize, position, orientation);
+  } else if (name.compare(ChessBoardPattern<T>::getClassName()) == 0) {
+    int width;
+    int height;
+    T squareSize;
+    Vector3<T> position;
+    Vector3<T> orientation;
+
+    istream >> width >> height >> squareSize >> position.x() >> position.y() >>
+        position.z() >> orientation.x() >> orientation.y() >> orientation.z();
+    return std::make_shared<ChessBoardPattern<T>>(width, height, squareSize,
+                                                  position, orientation);
+  } else if (name.compare(GroundGrid<T>::getClassName()) == 0) {
+    size_t maxGridPointsPerSide;
+    float gridSpacing;
+    Vector2<T> position;
+    T orientation;
+
+    istream >> maxGridPointsPerSide >> gridSpacing >> position.x() >>
+        position.y() >> orientation;
+    return std::make_shared<GroundGrid<T>>(maxGridPointsPerSide, gridSpacing,
+                                           position, orientation);
+  } else {
+    throw std::invalid_argument("Class type not found,.,");
+  }
+}
 } // namespace CalibrationFeatures
