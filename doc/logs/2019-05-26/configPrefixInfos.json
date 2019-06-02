@@ -1,0 +1,113 @@
+{
+  "configurations": {
+    "errors": [
+      [
+        "3.5_2k",
+        "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+        3.5,
+        500
+      ]
+    ],
+    "features": [
+      [
+        "charucoMulti",
+        "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt"
+      ],
+      [
+        "gnd",
+        "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureGround.txt"
+      ]
+    ],
+    "poseNum": [
+      5
+    ],
+    "noiseTypes": [
+      "noNoise",
+      "pixel",
+      "joint",
+      "both"
+    ]
+  },
+  "runInfo": [
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "noNoise",
+      "prefix": "3.5_2k_n5_charucoMulti_noNoise/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "pixel",
+      "prefix": "3.5_2k_n5_charucoMulti_pixel/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "joint",
+      "prefix": "3.5_2k_n5_charucoMulti_joint/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "both",
+      "prefix": "3.5_2k_n5_charucoMulti_both/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureGround.txt",
+      "featureName": "gnd",
+      "noiseSource": "noNoise",
+      "prefix": "3.5_2k_n5_gnd_noNoise/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureGround.txt",
+      "featureName": "gnd",
+      "noiseSource": "pixel",
+      "prefix": "3.5_2k_n5_gnd_pixel/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureGround.txt",
+      "featureName": "gnd",
+      "noiseSource": "joint",
+      "prefix": "3.5_2k_n5_gnd_joint/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_3_5degjointErrors.txt",
+      "errAmount": 3.5,
+      "errPopulation": 500,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureGround.txt",
+      "featureName": "gnd",
+      "noiseSource": "both",
+      "prefix": "3.5_2k_n5_gnd_both/out"
+    }
+  ]
+}

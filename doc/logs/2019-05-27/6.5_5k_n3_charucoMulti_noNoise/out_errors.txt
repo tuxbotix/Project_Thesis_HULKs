@@ -1,0 +1,5 @@
+ ChessBoardPattern 3D not implemented
+ ChessBoardPattern 3D not implemented
+ ChessBoardPattern 3D not implemented
+ ChessBoardPattern 3D not implemented
+simulatedEvaluation: /home/IBEO.AS/da/personal/HULKs/libraries/include/eigen3/Eigen/src/Core/DenseCoeffsBase.h:180: Eigen::DenseCoeffsBase<type-parameter-0-0, 0>::CoeffReturnType Eigen::DenseCoeffsBase<Eigen::Matrix<float, -1, 1, 0, -1, 1>, 0>::operator()(Eigen::Index) const [Derived = Eigen::Matrix<float, -1, 1, 0, -1, 1>, Level = 0]: Assertion `index >= 0 && index < size()' failed.

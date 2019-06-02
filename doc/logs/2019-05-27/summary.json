@@ -1,0 +1,222 @@
+[
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "noNoise",
+    "successRate": 67.52,
+    "localMinimaRate": 32.4,
+    "noConvergeRate": 0.08,
+    "prefix": "6.5_5k_n5_charucoMulti_noNoise/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "pixel",
+    "successRate": 38.98,
+    "localMinimaRate": 60.88,
+    "noConvergeRate": 0.13999999999999999,
+    "prefix": "6.5_5k_n5_charucoMulti_pixel/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "joint",
+    "successRate": 38.519999999999996,
+    "localMinimaRate": 61.38,
+    "noConvergeRate": 0.1,
+    "prefix": "6.5_5k_n5_charucoMulti_joint/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "both",
+    "successRate": 27.42,
+    "localMinimaRate": 72.44,
+    "noConvergeRate": 0.13999999999999999,
+    "prefix": "6.5_5k_n5_charucoMulti_both/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "noNoise",
+    "successRate": 84.08,
+    "localMinimaRate": 15.9,
+    "noConvergeRate": 0.02,
+    "prefix": "6.5_5k_n8_charucoMulti_noNoise/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "pixel",
+    "successRate": 68.0,
+    "localMinimaRate": 31.879999999999995,
+    "noConvergeRate": 0.12,
+    "prefix": "6.5_5k_n8_charucoMulti_pixel/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "joint",
+    "successRate": 54.32,
+    "localMinimaRate": 45.62,
+    "noConvergeRate": 0.06,
+    "prefix": "6.5_5k_n8_charucoMulti_joint/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "both",
+    "successRate": 45.4,
+    "localMinimaRate": 54.50000000000001,
+    "noConvergeRate": 0.1,
+    "prefix": "6.5_5k_n8_charucoMulti_both/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 3,
+    "noiseSource": "noNoise",
+    "successRate": 87.02,
+    "localMinimaRate": 12.94,
+    "noConvergeRate": 0.04,
+    "prefix": "6.5_5k_n3_gnd_noNoise/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 3,
+    "noiseSource": "pixel",
+    "successRate": 86.36,
+    "localMinimaRate": 13.58,
+    "noConvergeRate": 0.06,
+    "prefix": "6.5_5k_n3_gnd_pixel/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 3,
+    "noiseSource": "joint",
+    "successRate": 47.260000000000005,
+    "localMinimaRate": 52.66,
+    "noConvergeRate": 0.08,
+    "prefix": "6.5_5k_n3_gnd_joint/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 3,
+    "noiseSource": "both",
+    "successRate": 46.56,
+    "localMinimaRate": 53.36,
+    "noConvergeRate": 0.08,
+    "prefix": "6.5_5k_n3_gnd_both/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "noNoise",
+    "successRate": 85.9,
+    "localMinimaRate": 14.04,
+    "noConvergeRate": 0.06,
+    "prefix": "6.5_5k_n5_gnd_noNoise/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "pixel",
+    "successRate": 84.64,
+    "localMinimaRate": 15.299999999999999,
+    "noConvergeRate": 0.06,
+    "prefix": "6.5_5k_n5_gnd_pixel/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "joint",
+    "successRate": 53.74,
+    "localMinimaRate": 46.22,
+    "noConvergeRate": 0.04,
+    "prefix": "6.5_5k_n5_gnd_joint/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "both",
+    "successRate": 53.38,
+    "localMinimaRate": 46.58,
+    "noConvergeRate": 0.04,
+    "prefix": "6.5_5k_n5_gnd_both/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "noNoise",
+    "successRate": 83.94,
+    "localMinimaRate": 15.9,
+    "noConvergeRate": 0.16,
+    "prefix": "6.5_5k_n8_gnd_noNoise/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "pixel",
+    "successRate": 83.82,
+    "localMinimaRate": 16.04,
+    "noConvergeRate": 0.13999999999999999,
+    "prefix": "6.5_5k_n8_gnd_pixel/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "joint",
+    "successRate": 58.3,
+    "localMinimaRate": 41.38,
+    "noConvergeRate": 0.32,
+    "prefix": "6.5_5k_n8_gnd_joint/out",
+    "featureName": "gnd"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "both",
+    "successRate": 57.32000000000001,
+    "localMinimaRate": 42.52,
+    "noConvergeRate": 0.16,
+    "prefix": "6.5_5k_n8_gnd_both/out",
+    "featureName": "gnd"
+  }
+]
