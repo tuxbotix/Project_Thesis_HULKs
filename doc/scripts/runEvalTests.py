@@ -11,16 +11,18 @@ import testConfigUtils as testCUtils
 def runCalibSimProcess(stdParams, extraParams, outPrefix):
     os.makedirs(os.path.realpath(outPrefix), exist_ok=True)
 
-    p = subprocess.Popen(
-        (stdParams + extraParams), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    returncode = -1
+    with open(os.path.join(os.path.realpath(outPrefix), "out_log.txt"), "wb") as fo:
+        # f.write(data[0])
+        with open(os.path.join(os.path.realpath(outPrefix), "out_errors.txt"), "wb") as fe:
+            # f.write(data[1])
+            p = subprocess.Popen(
+                (stdParams + extraParams), stdout=fo, stderr=fe)
 
-    data = p.communicate()
+            p.communicate()
 
-    with open(os.path.join(os.path.realpath(outPrefix), "out_log.txt"), "wb") as f:
-        f.write(data[0])
-    with open(os.path.join(os.path.realpath(outPrefix), "out_errors.txt"), "wb") as f:
-        f.write(data[1])
-    return p.returncode
+            returncode = p.returncode
+    return returncode
 
 
 def main():
@@ -53,19 +55,36 @@ def main():
     # Test configurations.
     configurations = {
         # Error types.
-        "errors": [("3.5_2k", errors10k3_5deg, 3.5, 500)],
-        # errors = [("3.5_10k", errors10k3_5deg, 3.5, 10000),
-        #           ("6.5_10k", errors10k6_5deg, 6.5, 10000)]
+        # "errors": [("3.5_2k", errors10k3_5deg, 3.5, 500)],
+        # ("3.5_5k", errors10k3_5deg, 3.5, 2000),
+        "errors": [("6.5_5k", errors10k6_5deg, 6.5, 5000)],
         # errors = [("6.5_1k", errors1k6_5deg, 6.5, 1000)]
-        "features": [("charucoMulti", calibCharucoMulti), ("gnd", calibGround)],
+        "features": [("charucoMulti", calibCharucoMulti)
+                     # , ("gnd", calibGround)
+                     ],
         # pose Number
-        # poseNum = [3, 5, 8]
-        "poseNum": [5],
-        "noiseTypes": [testCUtils.noiseConfigs.noNoise, testCUtils.noiseConfigs.pixelOnly,
-                       testCUtils.noiseConfigs.jointOnly, testCUtils.noiseConfigs.both]
+        "poseNum": [
+            # 3,
+            # 5,
+            8
+        ],
+        # "poseNum": [5],
+        "noiseTypes": [
+            # testCUtils.noiseConfigs.noNoise,
+            # testCUtils.noiseConfigs.pixelOnly,
+            testCUtils.noiseConfigs.jointOnly,
+            testCUtils.noiseConfigs.both
+        ],
+        "jointSampleCount": [
+            # 1,
+            3
+        ],
+        "solvers": [
+            testCUtils.SolverTypes.stochasticLM
+        ]
     }
 
-    outputDir = os.path.join(logDir, "2019-05-26")
+    outputDir = os.path.join(logDir, "2019-06-01")
 
     if not os.path.isdir(os.path.abspath(os.path.join(outputDir, os.pardir))):
         print("Output dir not existing..")
@@ -91,7 +110,7 @@ def main():
             if returnCode == 0:
                 infoArr.append(config[1])
             else:
-                print("failed running...")
+                print("failed running...", returnCode)
 
         configsWithInfo = {
             "configurations": configurations, "runInfo": infoArr}

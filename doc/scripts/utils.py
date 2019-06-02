@@ -53,7 +53,7 @@ def selectLogLocation(baseDir):
     manifestFile = os.path.join(curDir, "configPrefixInfos.json")
 
     if os.path.isfile(manifestFile):
-        return curDir, json.load(open(manifestFile))
+        return curDir, json.load(open(manifestFile, 'r'))
 
     # files = os.listdir(os.path.join(location, date))
     # folders = [folder for folder in files if os.path.join(

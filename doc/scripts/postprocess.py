@@ -17,7 +17,9 @@ import utils
 
 import matplotlib2tikz
 
-plt.rcParams["figure.figsize"] = (6, 6.5)
+import testConfigUtils
+
+plt.rcParams["figure.figsize"] = (6, 8)
 
 
 class TestRun:
@@ -72,17 +74,17 @@ def loadLogs(log_root):
     GoodResults = resultList[resultList[:, 0] == 5]
     BadResults = resultList[resultList[:, 0] != 5]
 
-    prePostResiduals = []
-    with open(log_root + "_prePostResiduals") as f:
-        # for line in lines:
-        lines = f.readlines()
-        prePostResiduals = [
-            np.array(line.split(), dtype=float) for line in lines]
+    # prePostResiduals = []
+    # with open(log_root + "_prePostResiduals") as f:
+    #     # for line in lines:
+    #     lines = f.readlines()
+    #     prePostResiduals = [
+    #         np.array(line.split(), dtype=float) for line in lines]
 
-    origResX = prePostResiduals[0]
-    origResY = prePostResiduals[1]
-    calibResX = prePostResiduals[2]
-    calibResY = prePostResiduals[3]
+    # origResX = prePostResiduals[0]
+    # origResY = prePostResiduals[1]
+    # calibResX = prePostResiduals[2]
+    # calibResY = prePostResiduals[3]
 
     goodCalibJointRes = np.array(
         [val.residual for val in testRuns if val.status == 5])
@@ -102,8 +104,8 @@ def loadLogs(log_root):
             "SUCCESS": (stats.get(5, 0) / resultLen)
         },
         "GoodResults": GoodResults, "BadResults": BadResults,
-        "origResX": origResX, "origResY": origResY,
-        "calibResX": calibResX, "calibResY": calibResY,
+        # "origResX": origResX, "origResY": origResY,
+        # "calibResX": calibResX, "calibResY": calibResY,
         "badCalibJointRes": badCalibJointRes, "goodCalibJointRes": goodCalibJointRes,
         "unCalibJointRes": unCalibJointRes
     }
@@ -112,16 +114,14 @@ def loadLogs(log_root):
 def plotResults(logs, log_dir):
     GoodResults = logs["GoodResults"]
     BadResults = logs["BadResults"]
-    origResX = logs["origResX"]
-    origResY = logs["origResY"]
-    calibResX = logs["calibResX"]
-    calibResY = logs["calibResY"]
+    # origResX = logs["origResX"]
+    # origResY = logs["origResY"]
+    # calibResX = logs["calibResX"]
+    # calibResY = logs["calibResY"]
     goodCalibJointRes = logs["goodCalibJointRes"]
     badCalibJointRes = logs["badCalibJointRes"]
     unCalibJointRes = logs["unCalibJointRes"]
     stats = logs["stats"]
-
-    print(origResY.shape)
 
     fig, _axs = plt.subplots(nrows=2, ncols=1)
     axs = _axs.flatten()
@@ -143,58 +143,60 @@ def plotResults(logs, log_dir):
     matplotlib2tikz.save(log_dir + "rms_hist.tex",  figurewidth='15cm',
                          figureheight='10cm')
     fig.savefig(log_dir + "rms_hist.pdf", bbox_inches='tight')
+    plt.close(fig)
     # plt.show()
     # exit(0)
 
-    fig, _axs = plt.subplots(nrows=2, ncols=1, num=None, figsize=(6, 7), dpi=200)
-    plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.5, hspace=0.5)
+    # fig, _axs = plt.subplots(nrows=2, ncols=1, num=None, figsize=(6, 7), dpi=200)
+    # plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.5, hspace=0.5)
 
-    axs = _axs.flatten()
-    axs[0].get_shared_x_axes().join(axs[0], axs[1])
+    # axs = _axs.flatten()
+    # axs[0].get_shared_x_axes().join(axs[0], axs[1])
 
-    maxCalResX = max(calibResX.max(), calibResY.max()) * 1.1
-    maxCalResY = max(calibResX.max(), calibResY.max()) * 1.1
-    maxOrigResY = max(origResX.max(), origResY.max()) * 1.1
-    maxOrigResX = max(origResX.max(), origResY.max()) * 1.1
+    # maxCalResX = max(calibResX.max(), calibResY.max()) * 1.1
+    # maxCalResY = max(calibResX.max(), calibResY.max()) * 1.1
+    # maxOrigResY = max(origResX.max(), origResY.max()) * 1.1
+    # maxOrigResX = max(origResX.max(), origResY.max()) * 1.1
 
-    maxAllUncalibY = max(maxOrigResY, 0)
+    # maxAllUncalibY = max(maxOrigResY, 0)
 
-    ax = axs[0]
+    # ax = axs[0]
 
-    mybins = np.linspace(-100, 100, 100)
-    ax.set_title('Reproj. error (x ax.) distribution before calibration.')
-    n, bins, patches = ax.hist(origResX, bins=mybins, range=(-100, 100),
-                               density=True, alpha=0.5)
-    ax.hist(origResY, bins=bins, range=(-100, 100), density=True, alpha=0.5)
+    # mybins = np.linspace(-100, 100, 100)
+    # ax.set_title('Reproj. error (x ax.) distribution before calibration.')
+    # n, bins, patches = ax.hist(origResX, bins=mybins, range=(-100, 100),
+    #                            density=True, alpha=0.5)
+    # ax.hist(origResY, bins=bins, range=(-100, 100), density=True, alpha=0.5)
 
-    # ax.boxplot(angleDump,  showmeans = True, positions = list(range(1, angleDump.shape[1]+1)))
+    # # ax.boxplot(angleDump,  showmeans = True, positions = list(range(1, angleDump.shape[1]+1)))
 
-    ax.axis([-75, 75, -0.02, 0.5])
-    # ax.axis([-maxOrigResX, maxOrigResX, -0.02, maxAllUncalibY])
+    # ax.axis([-75, 75, -0.02, 0.5])
+    # # ax.axis([-maxOrigResX, maxOrigResX, -0.02, maxAllUncalibY])
 
-    ax = axs[1]
-    # ax.boxplot(origResX[:, 1])
-    ax.set_title('Reproj. error (x ax.) distribution after calibration.')
-    # ax.plot(calibResX, calibResX[:, 1], 1, label='Raw')
-    # ax.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
-    ax.axis([-75, 75, -0.02, 0.5])
-    n, bins, patches = ax.hist(calibResX, bins=mybins,
-                               range=(-100, 100), density=True, alpha=0.5)
-    ax.hist(calibResY, bins=bins, range=(-100, 100), density=True, alpha=0.5)
-    # ax.hist(calibResY)
-    # ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
+    # ax = axs[1]
+    # # ax.boxplot(origResX[:, 1])
+    # ax.set_title('Reproj. error (x ax.) distribution after calibration.')
+    # # ax.plot(calibResX, calibResX[:, 1], 1, label='Raw')
+    # # ax.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
+    # ax.axis([-75, 75, -0.02, 0.5])
+    # n, bins, patches = ax.hist(calibResX, bins=mybins,
+    #                            range=(-100, 100), density=True, alpha=0.5)
+    # ax.hist(calibResY, bins=bins, range=(-100, 100), density=True, alpha=0.5)
+    # # ax.hist(calibResY)
+    # # ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
 
-    fig.savefig(log_dir + "main_reproj_err.pdf")
-    matplotlib2tikz.save(log_dir + "main_reproj_err.tex",  figurewidth='15cm',
-                         figureheight='9cm')
-    plt.close(fig)
+    # fig.savefig(log_dir + "main_reproj_err.pdf")
+    # matplotlib2tikz.save(log_dir + "main_reproj_err.tex",  figurewidth='15cm',
+    #                      figureheight='9cm')
+    # plt.close(fig)
 ##########################################################
 
-    plt.figure(num=None, figsize=(6, 3), dpi=200)
-    fig, _axs = plt.subplots(nrows=2, ncols=1, num=None, figsize=(6, 12), dpi=200)
-    # plt.subplots_adjust(top=0.95, bottom=0.05)
-    # plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.5, hspace=0.5)
-    
+    # plt.figure(num=None, figsize=(6, 3), dpi=200)
+    fig, _axs = plt.subplots(nrows=2, ncols=1, num=None,
+                             figsize=(6, 12), dpi=200)
+    plt.subplots_adjust(top=0.95, bottom=0.05)
+    # plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
+
     axs = _axs.flatten()
     axs[0].get_shared_x_axes().join(axs[0], axs[1])
 
@@ -202,14 +204,14 @@ def plotResults(logs, log_dir):
                       alpha=0.4, markeredgecolor='purple')
     capprops = dict(linestyle='--', linewidth=1.5, color='black')
 
-    print("box1")
-    # ax = plt.axes
+    # print("box1")
+    # ax = plt.gca()
     ax = axs[0]
 
-    ax.set_xlabel('Error in Degrees')
+    # ax.set_xlabel('Error in Degrees')
     ax.set_ylabel('Joint number (excluding arms)')
 
-    ax.set_title('Joint error distribution before calibration')
+    # ax.set_title('Joint error distribution before calibration')
     # ax.violinplot(unCalibJointRes, vert=False)
     ax.boxplot(unCalibJointRes, vert=False,
                whis=[5, 95], showfliers=True,
@@ -219,21 +221,25 @@ def plotResults(logs, log_dir):
 
     ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
     ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.2))
+    ax.set_xlim([-8, 8])
+
     # ax.set_yticklabels(TestRun.jointNames, minor=False)
 
     # ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.005))
     ax.xaxis.grid()
-
+    fig.tight_layout()
     # fig.savefig(log_dir + "main_hist.pdf")
     matplotlib2tikz.save(log_dir + "before_hist.tex",  figurewidth='15cm',
                          figureheight='8cm')
-## after
+    plt.close(fig)
 
+# after
+    # plt.figure(num=None, figsize=(6, 3), dpi=200)
     # violinMargins = ax.margins()
     ax = axs[1]
-    # ax = plt
+    # ax = plt.gca()
 
-    ax.set_title('Joint error distribution after calibration')
+    # ax.set_title('Joint error distribution after calibration')
     ax.set_xlabel('Error in Degrees')
     ax.set_ylabel('Joint number (excluding arms)')
 
@@ -246,6 +252,7 @@ def plotResults(logs, log_dir):
     ax.set_yticks(list(range(1, len(TestRun.jointNames) + 1)), minor=False)
     ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
     ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.2))
+    ax.set_xlim([-8, 8])
     ax.xaxis.grid()
 
     # ax.set_yticklabels(TestRun.jointNames, minor=False)
@@ -260,8 +267,8 @@ def plotResults(logs, log_dir):
     # plt.tight_layout()
     fig.tight_layout()
 
-    # fig.savefig(log_dir + "main_hist.pdf")
-    matplotlib2tikz.save(log_dir + "main_hist.tex",  figurewidth='15cm',
+    fig.savefig(log_dir + "main_hist.pdf")
+    matplotlib2tikz.save(log_dir + "after_hist.tex",  figurewidth='15cm',
                          figureheight='8cm')
     # plt.show()
     plt.close(fig)
@@ -288,15 +295,20 @@ if __name__ == "__main__":
         errPopulation = testRun["errPopulation"]
         noiseSource = testRun["noiseSource"]
         featureName = testRun["featureName"]
+        featureName = testRun["featureName"]
+        jointSampleCounts = testRun.get("jointSampleCount", 1)
+        solver = testRun.get("solver", testConfigUtils.SolverTypes.stdLM.value)
 
         successRate = logs["stats"]["SUCCESS"] * 100
         localMinimaRate = logs["stats"]["FAIL_LOCAL_MINIMA"] * 100
         noConvergeRate = logs["stats"]["FAIL_NO_CONVERGE"] * 100
 
         data = {"errPopulation": errPopulation, "errAmount": errAmount,
-                " poseNumber": poseNumber, "noiseSource": noiseSource,
+                "poseNumber": poseNumber, "noiseSource": noiseSource,
                 "successRate": successRate, "localMinimaRate": localMinimaRate,
-                "noConvergeRate": noConvergeRate, "prefix": prefix
+                "noConvergeRate": noConvergeRate, "prefix": prefix,
+                "featureName": featureName, "jointSampleCount": jointSampleCounts,
+                "solver": solver
                 }
 
         dataInfo.append(data)
@@ -304,7 +316,7 @@ if __name__ == "__main__":
         plotResults(logs, os.path.join(log_root, testRun["prefix"]))
 
     with open(os.path.join(log_root, "summary.json"), 'w') as f:
-        json.dump(dataInfo, f)
+        json.dump(dataInfo, f, indent=2)
 
     # for data in dataInfo:
     #     print(data)
