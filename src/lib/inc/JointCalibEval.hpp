@@ -63,10 +63,10 @@ using CalibStatusStatistics =
  */
 template <typename T> struct OutputData {
   // Pre and Post should only be calib results..
-  JointCalibration::Residual<T> preX;
-  JointCalibration::Residual<T> preY;
-  JointCalibration::Residual<T> postX;
-  JointCalibration::Residual<T> postY;
+  //  JointCalibration::Residual<T> preX;
+  //  JointCalibration::Residual<T> preY;
+  //  JointCalibration::Residual<T> postX;
+  //  JointCalibration::Residual<T> postY;
   JointCalibration::Residual<T> jointResiduals;
 
   Eigen::VectorXf jointError;
@@ -93,10 +93,10 @@ class ResidualGroup {
                  JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>;
 
 public:
-  JointCalibration::ResidualStdVec<T> preX;
-  JointCalibration::ResidualStdVec<T> preY;
-  JointCalibration::ResidualStdVec<T> postX;
-  JointCalibration::ResidualStdVec<T> postY;
+  //  JointCalibration::ResidualStdVec<T> preX;
+  //  JointCalibration::ResidualStdVec<T> preY;
+  //  JointCalibration::ResidualStdVec<T> postX;
+  //  JointCalibration::ResidualStdVec<T> postY;
 
   std::array<JointCalibration::ResidualStdVec<T>,
              JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT>
@@ -107,44 +107,47 @@ public:
   CalibStatusStatistics statistics;
 
   ResidualGroup()
-      : preX(), preY(), postX(), postY(), jointResiduals(), statistics{0} {}
+      : /*preX(), preY(), postX(), postY(), */ jointResiduals(), statistics{0} {
+  }
 
 private:
 public:
-  void dumpToFiles(const std::string &prefix) {
+  //  void dumpToFiles(const std::string &prefix) {
 
-    const auto prePostRes = "_prePostResiduals";
-    //        {preY, "_originalResidualY"},
-    //        {postX, "_calibratedResidualX"},
-    //        {postY, "_calibratedResidualY"}};
+  //    const auto prePostRes = "_prePostResiduals";
+  //    //        {preY, "_originalResidualY"},
+  //    //        {postX, "_calibratedResidualX"},
+  //    //        {postY, "_calibratedResidualY"}};
 
-    //    const auto calibJointRes = "_calibratedJointResidual";
-    //    const auto uncalibJointRes = "_unCalibratedJointResidual";
+  //    //    const auto calibJointRes = "_calibratedJointResidual";
+  //    //    const auto uncalibJointRes = "_unCalibratedJointResidual";
 
-    std::fstream out(prefix + prePostRes, std::ios::out);
-    if (out) {
-      for (const auto &data : {preX, preY, postX, postY}) {
-        out.precision(4);
-        std::stringstream ss;
-        for (const auto &v : data) {
-          ss << v << " ";
-        }
-        out << ss.str() << "\n";
-        out.flush();
-      }
-      out.close();
-    } else {
-      std::cerr << "File " << (prefix + prePostRes) << "not open" << std::endl;
-    }
-    //    out.open(prefix + calibJointRes);
-    //    for (const auto &data : {preX, preY, postX, postY}) {
-    //      if (out) {
-    //        out.precision(4);
-    //        out << data.transpose() << "\n";
-    //      }
-    //      out.flush();
-    //    }
-  }
+  //    std::fstream out(prefix + prePostRes, std::ios::out);
+  //    if (out) {
+  //      std::stringstream ss;
+  //      for (const auto &data : {preX, preY, postX, postY}) {
+  //        ss.precision(4);
+  //        for (const auto &v : data) {
+  //          ss << v << " ";
+  //        }
+  //        out << ss.str() << "\n";
+  //        ss.clear();
+  //      }
+  //      out.flush();
+  //      out.close();
+  //    } else {
+  //      std::cerr << "File " << (prefix + prePostRes) << "not open" <<
+  //      std::endl;
+  //    }
+  //    //    out.open(prefix + calibJointRes);
+  //    //    for (const auto &data : {preX, preY, postX, postY}) {
+  //    //      if (out) {
+  //    //        out.precision(4);
+  //    //        out << data.transpose() << "\n";
+  //    //      }
+  //    //      out.flush();
+  //    //    }
+  //  }
 
   /**
   *@brief joinEvalResiduals move-insert ops for all vectors. Src list is
@@ -156,49 +159,22 @@ public:
   void joinEvalResiduals(const std::vector<OutputData<T>> &src) {
 
     for (const auto &elem : src) {
-      preX.reserve(preX.size() + elem.preX.size());
-      copy(elem.preX.data(), elem.preX.data() + elem.preX.size(),
-           back_inserter(preX));
+      //      preX.reserve(preX.size() + elem.preX.size());
+      //      copy(elem.preX.data(), elem.preX.data() + elem.preX.size(),
+      //           back_inserter(preX));
 
-      preY.reserve(preY.size() + elem.preY.size());
-      copy(elem.preY.data(), elem.preY.data() + elem.preY.size(),
-           back_inserter(preY));
+      //      preY.reserve(preY.size() + elem.preY.size());
+      //      copy(elem.preY.data(), elem.preY.data() + elem.preY.size(),
+      //           back_inserter(preY));
 
-      postX.reserve(postX.size() + elem.postX.size());
-      copy(elem.postX.data(), elem.postX.data() + elem.postX.size(),
-           back_inserter(postX));
+      //      postX.reserve(postX.size() + elem.postX.size());
+      //      copy(elem.postX.data(), elem.postX.data() + elem.postX.size(),
+      //           back_inserter(postX));
 
-      postY.reserve(postY.size() + elem.postY.size());
-      copy(elem.postY.data(), elem.postY.data() + elem.postY.size(),
-           back_inserter(postY));
-      //      if (preX.size()) {
-      //        JointCalibration::Residual<T> tempPreX;
-      //        tempPreX << preX, elem.preX;
-      //        std::swap(tempPreX, preX);
-      //      } else {
-      //        preX = elem.preX;
-      //      }
-      //      if (preY.size()) {
-      //        JointCalibration::Residual<T> tempPreY;
-      //        tempPreY << preY, elem.preY;
-      //        std::swap(tempPreY, preY);
-      //      } else {
-      //        preY = elem.preY;
-      //      }
-      //      if (postX.size()) {
-      //        JointCalibration::Residual<T> tempPoX;
-      //        tempPoX << postX, elem.postX;
-      //        std::swap(tempPoX, postX);
-      //      } else {
-      //        postX = elem.postX;
-      //      }
-      //      if (postY.size()) {
-      //        JointCalibration::Residual<T> tempPoY;
-      //        tempPoY << postY, elem.postY;
-      //        std::swap(tempPoY, postY);
-      //      } else {
-      //        postY = elem.postY;
-      //      }
+      //      postY.reserve(postY.size() + elem.postY.size());
+      //      copy(elem.postY.data(), elem.postY.data() + elem.postY.size(),
+      //           back_inserter(postY));
+
       for (size_t i = 0; i < JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT;
            ++i) {
         //        if (jointResiduals[i].size()) {
@@ -322,6 +298,7 @@ struct JointErrorEval {
   std::default_random_engine generator; // random gen
   std::normal_distribution<float> pixelNoiseDistribution;
   std::normal_distribution<double> jointNoiseDistribution;
+  const size_t jointSamplingNum; // for multiple samples to filter.
 
   JointErrorEval(
       const NaoJointAndSensorModelConfig cfg,
@@ -332,8 +309,8 @@ struct JointErrorEval {
       const float minJointErrVal, const float maxJointErrVal,
       const float jointCalibQualityTol, const float reprojErrTolPercent,
       const float pixelNoiseStdDev, const float jointNoiseStdDev,
-      const bool stochasticFix, const bool enablePixelNoise,
-      const bool enableJointNoise)
+      const size_t jointSamplingNum, const bool stochasticFix,
+      const bool enablePixelNoise, const bool enableJointNoise)
       : cfg(cfg), calibrationFeaturePtrs(calibrationFeaturePtrs),
         combinedPoseList(poseList), combinedTestPoseList(combinedTestPoseList),
         supFoot(supFoot), jointCalibQualityTol(jointCalibQualityTol),
@@ -341,7 +318,8 @@ struct JointErrorEval {
         enablePixelNoise(enablePixelNoise), enableJointNoise(enableJointNoise),
         minJointErrVal(minJointErrVal), maxJointErrVal(maxJointErrVal),
         generator(), pixelNoiseDistribution(0.0f, pixelNoiseStdDev),
-        jointNoiseDistribution(0.0, static_cast<double>(jointNoiseStdDev)) {}
+        jointNoiseDistribution(0.0, static_cast<double>(jointNoiseStdDev)),
+        jointSamplingNum(jointSamplingNum) {}
 
   JointCalibSolvers::CaptureList
   getFrameCaptures(NaoJointAndSensorModel &naoJointSensorModel,
@@ -356,12 +334,24 @@ struct JointErrorEval {
       naoJointSensorModel.setCalibValues(inducedErrorStdVec);
 
       // This is actually pose error (not reaching the given pose exactly)
-      if (enableJointNoise) {
+      if (enableJointNoise && jointSamplingNum > 0) {
         rawAnglesT poseAngles = poseAndAngles.angles;
-        for (auto &elem : poseAngles) {
-          elem += static_cast<float>(jointNoiseDistribution(generator) *
-                                     TO_RAD_DBL);
+
+        rawAnglesT poseAngleNoise(poseAngles.size(), 0.0f);
+        // Simulate n readings and averaging it..
+        for (size_t i = 0; i < jointSamplingNum; ++i) {
+          for (auto &elem : poseAngleNoise) {
+            elem += static_cast<float>(jointNoiseDistribution(generator) *
+                                       TO_RAD_DBL);
+          }
         }
+
+        for (size_t i = 0; i < poseAngles.size(); ++i) {
+          poseAngles[i] +=
+              (poseAngleNoise[i] /
+               static_cast<rawAnglesT::value_type>(jointSamplingNum));
+        }
+
         naoJointSensorModel.setPose(poseAngles, poseAndAngles.pose.supportFoot);
       } else {
         naoJointSensorModel.setPose(poseAndAngles.angles,
@@ -531,11 +521,9 @@ struct JointErrorEval {
     // Just to note if the loop was done and broken with success
     //    bool loopedAndBroken = false;
     // Do stochastic fixing?
-    if (stochasticFix
-        //        && (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT
-        //        ||
-        //         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)
-        ) {
+    if (stochasticFix ||
+        (calibratedParams.minCoeff() < minJointErrVal * TO_RAD_FLT ||
+         calibratedParams.maxCoeff() > maxJointErrVal * TO_RAD_FLT)) {
       // This will hold best params in case looping is needed
       Eigen::VectorXf oldParams(static_cast<Eigen::Index>(
           JointCalibSolvers::COMPACT_JOINT_CALIB_PARAM_COUNT));

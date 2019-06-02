@@ -38,15 +38,27 @@ namespace jCEval = JointCalibEval;
 using CalibResultWithResidualVec = std::vector<jCEval::OutputData<float>>;
 using StatisticsWithResults =
     std::pair<jCEval::CalibStatusStatistics, CalibResultWithResidualVec>;
+
 /**
- * @brief threadedFcn function evaluate calibration of a set of errors given
- * @param residuals An object containing vectors that hold various residuals
- * @param poseList List of possible poses for calibration
- * @param naoJointSensorModel Nao's simulated model which is under test
- * @param jointErrItrBegin begin iterator of jointErrorVector
- * @param jointErrItrEnd end iterator of jointErrorVector
- * @param stochasticFix Flag to enable or disable stochastic improving
- * @param badCases Count of failed calibrations.
+ * @brief threadedFcn
+ * @param combinedPoseList
+ * @param combinedTestPoseList
+ * @param supFoot
+ * @param cfg
+ * @param calibrationFeaturePtrs
+ * @param jointErrItrBegin
+ * @param jointErrItrEnd
+ * @param minJointErrVal
+ * @param maxJointErrVal
+ * @param jointCalibQualityTol
+ * @param reprojErrTolPercent
+ * @param pixelNoiseStdDev
+ * @param jointNoiseStdDev
+ * @param jointSampleCount
+ * @param stochasticFix
+ * @param enablePixelNoise
+ * @param enableJointNoise
+ * @return
  */
 StatisticsWithResults
 threadedFcn(const jCEval::CombinedPoseListT &combinedPoseList,
@@ -60,8 +72,8 @@ threadedFcn(const jCEval::CombinedPoseListT &combinedPoseList,
             const float &minJointErrVal, const float &maxJointErrVal,
             const float &jointCalibQualityTol, const float &reprojErrTolPercent,
             const float &pixelNoiseStdDev, const float &jointNoiseStdDev,
-            const bool &stochasticFix, const bool &enablePixelNoise,
-            const bool &enableJointNoise) {
+            const size_t &jointSampleCount, const bool &stochasticFix,
+            const bool &enablePixelNoise, const bool &enableJointNoise) {
 
   jCEval::CalibStatusStatistics calibStatusStatistics = {};
   CalibResultWithResidualVec resultList;
@@ -78,8 +90,8 @@ threadedFcn(const jCEval::CombinedPoseListT &combinedPoseList,
   jCEval::JointErrorEval jointErrorEvalStruct(
       cfg, calibrationFeaturePtrs, combinedPoseList, combinedTestPoseList,
       supFoot, minJointErrVal, maxJointErrVal, jointCalibQualityTol,
-      reprojErrTolPercent, pixelNoiseStdDev, jointNoiseStdDev, stochasticFix,
-      enablePixelNoise, enableJointNoise);
+      reprojErrTolPercent, pixelNoiseStdDev, jointNoiseStdDev, jointSampleCount,
+      stochasticFix, enablePixelNoise, enableJointNoise);
 
   for (auto errSetIter = jointErrItrBegin; errSetIter != jointErrItrEnd;
        ++errSetIter) {
@@ -107,23 +119,24 @@ threadedFcn(const jCEval::CombinedPoseListT &combinedPoseList,
     //    auto curPreResSize = residuals.preX.size();
 
     // reserve vector memory to speed up the process
-    output.preX.resize(prePostResSize);
-    output.postX.resize(prePostResSize);
-    output.preY.resize(prePostResSize);
-    output.postY.resize(prePostResSize);
+    //    output.preX.resize(prePostResSize);
+    //    output.postX.resize(prePostResSize);
+    //    output.preY.resize(prePostResSize);
+    //    output.postY.resize(prePostResSize);
 
-    for (Eigen::Index i = 0, odd = 0, even = 0; i < preTestResiduals.size();
-         ++i) {
-      if (i % 2 == 0) { // x -> even number
-        output.preX(even) = preTestResiduals(i);
-        output.postX(even) = postTestResiduals(i);
-        even++;
-      } else { // odd  -> newline
-        output.preY(odd) = preTestResiduals(i);
-        output.postY(odd) = postTestResiduals(i);
-        odd++;
-      }
-    }
+    //    for (Eigen::Index i = 0, odd = 0, even = 0; i <
+    //    preTestResiduals.size();
+    //         ++i) {
+    //      if (i % 2 == 0) { // x -> even number
+    //        output.preX(even) = preTestResiduals(i);
+    //        output.postX(even) = postTestResiduals(i);
+    //        even++;
+    //      } else { // odd  -> newline
+    //        output.preY(odd) = preTestResiduals(i);
+    //        output.postY(odd) = postTestResiduals(i);
+    //        odd++;
+    //      }
+    //    }
     // Convert to degrees
     jointCalibResiduals /= TO_RAD_FLT;
     output.jointResiduals = jointCalibResiduals;
@@ -234,7 +247,9 @@ int main(int argc, char *argv[]) {
       "j,jointNoise", "apply joint noise",
       cxxopts::value<bool>()->default_value("false"))(
       "p,pixelNoise", "apply pixel noise",
-      cxxopts::value<bool>()->default_value("false"));
+      cxxopts::value<bool>()->default_value("false"))(
+      "jointSampleCount", "Joint sample count",
+      cxxopts::value<size_t>()->default_value("1"));
 
   auto result = options.parse(argc, argv);
   const int64_t testErrorCount = result["testErrorCount"].as<int64_t>();
@@ -254,6 +269,9 @@ int main(int argc, char *argv[]) {
   const bool showHistogram = result["histogram"].as<bool>();
   const bool enablePixelNoise = result["pixelNoise"].as<bool>();
   const bool enableJointNoise = result["jointNoise"].as<bool>();
+  const size_t jointSampleCount =
+      result["jointSampleCount"].as<size_t>(); // how many times to sample joint
+                                               // angle readings and average it
 
   std::fstream inFile(inFileName);
   if (!inFile.is_open()) {
@@ -533,6 +551,7 @@ int main(int argc, char *argv[]) {
     //                reprojErrTolPercent,
     //                const float pixelNoiseStdDev, const float
     //                jointNoiseStdDev,
+    //                jointSampleCount
     //                bool stochasticFix, const bool enablePixelNoise,
     //                const bool enableJointNoise)
     futureList[i] = std::async(
@@ -540,7 +559,7 @@ int main(int argc, char *argv[]) {
         combinedTestPoseList, supFeet, cfg, std::ref(calibrationFeatures),
         begin, end, MIN_ERR_VAL, MAX_ERR_VAL, JOINT_CALIB_QUALITY_TOL_RAD,
         REPROJ_ERR_TOL_PERCENT, PIXEL_NOISE_STD_DEV, JOINT_NOISE_STD_DEV,
-        stochasticFix, enablePixelNoise, enableJointNoise);
+        jointSampleCount, stochasticFix, enablePixelNoise, enableJointNoise);
   }
 
   /*
@@ -553,14 +572,16 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < MAX_THREADS; ++i) {
     auto &future = futureList[i];
     //    auto &residual = calibResidualList[i];
+    std::cout << "get future" << i << std::endl;
     auto temp = future.get();
+    std::cout << "got " << utils::getMilliSecondsString() << std::endl;
     for (size_t j = 0; j < stats.size(); ++j) {
       stats[j] += temp.first[j];
     }
     // append do the result vector
     resultList.insert(resultList.end(), temp.second.begin(), temp.second.end());
-    std::cout << "Going to join" << i << std::endl;
     finalResidualSet.joinEvalResiduals(temp.second);
+    std::cout << "joined Data" << i << std::endl;
   }
   std::cout << "Processing done" << std::endl;
 
@@ -689,7 +710,7 @@ int main(int argc, char *argv[]) {
     }
     std::cout << std::endl;
 
-    finalResidualSet.dumpToFiles(outFilePrefix);
+    //    finalResidualSet.dumpToFiles(outFilePrefix);
   }
 
   //  if (!showHistogram) {
