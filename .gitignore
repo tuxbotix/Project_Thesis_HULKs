@@ -7,3 +7,5 @@ build/*
 #locks and crap
 
 *.~lock.*
+
+*.pyc
