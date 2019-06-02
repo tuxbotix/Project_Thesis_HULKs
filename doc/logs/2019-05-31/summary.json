@@ -1,0 +1,90 @@
+[
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "noNoise",
+    "successRate": 99.96000000000001,
+    "localMinimaRate": 0.02,
+    "noConvergeRate": 0.02,
+    "prefix": "6.5_5k_n5_charucoMulti_noNoise/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "pixel",
+    "successRate": 51.44,
+    "localMinimaRate": 48.480000000000004,
+    "noConvergeRate": 0.08,
+    "prefix": "6.5_5k_n5_charucoMulti_pixel/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "joint",
+    "successRate": 54.66,
+    "localMinimaRate": 45.32,
+    "noConvergeRate": 0.02,
+    "prefix": "6.5_5k_n5_charucoMulti_joint/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 5,
+    "noiseSource": "both",
+    "successRate": 33.42,
+    "localMinimaRate": 66.52,
+    "noConvergeRate": 0.06,
+    "prefix": "6.5_5k_n5_charucoMulti_both/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "noNoise",
+    "successRate": 99.98,
+    "localMinimaRate": 0.0,
+    "noConvergeRate": 0.02,
+    "prefix": "6.5_5k_n8_charucoMulti_noNoise/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "pixel",
+    "successRate": 82.58,
+    "localMinimaRate": 17.36,
+    "noConvergeRate": 0.06,
+    "prefix": "6.5_5k_n8_charucoMulti_pixel/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "joint",
+    "successRate": 65.38000000000001,
+    "localMinimaRate": 34.599999999999994,
+    "noConvergeRate": 0.02,
+    "prefix": "6.5_5k_n8_charucoMulti_joint/out",
+    "featureName": "charucoMulti"
+  },
+  {
+    "errPopulation": 5000,
+    "errAmount": 6.5,
+    "poseNumber": 8,
+    "noiseSource": "both",
+    "successRate": 52.82,
+    "localMinimaRate": 47.14,
+    "noConvergeRate": 0.04,
+    "prefix": "6.5_5k_n8_charucoMulti_both/out",
+    "featureName": "charucoMulti"
+  }
+]

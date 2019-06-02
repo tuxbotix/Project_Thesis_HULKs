@@ -1,0 +1,111 @@
+{
+  "configurations": {
+    "errors": [
+      [
+        "6.5_5k",
+        "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+        6.5,
+        5000
+      ]
+    ],
+    "features": [
+      [
+        "charucoMulti",
+        "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt"
+      ]
+    ],
+    "poseNum": [
+      3,
+      5,
+      8
+    ],
+    "noiseTypes": [
+      "noNoise",
+      "pixel",
+      "joint",
+      "both"
+    ]
+  },
+  "runInfo": [
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "noNoise",
+      "prefix": "6.5_5k_n5_charucoMulti_noNoise/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "pixel",
+      "prefix": "6.5_5k_n5_charucoMulti_pixel/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "joint",
+      "prefix": "6.5_5k_n5_charucoMulti_joint/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 5,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "both",
+      "prefix": "6.5_5k_n5_charucoMulti_both/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 8,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "noNoise",
+      "prefix": "6.5_5k_n8_charucoMulti_noNoise/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 8,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "pixel",
+      "prefix": "6.5_5k_n8_charucoMulti_pixel/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 8,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "joint",
+      "prefix": "6.5_5k_n8_charucoMulti_joint/out"
+    },
+    {
+      "errName": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/l_10k_jointErrors.txt",
+      "errAmount": 6.5,
+      "errPopulation": 5000,
+      "poseNumber": 8,
+      "feature": "/home/IBEO.AS/da/personal/HULKs/Project_Thesis/Data/calibFeatureCharucoMulti.txt",
+      "featureName": "charucoMulti",
+      "noiseSource": "both",
+      "prefix": "6.5_5k_n8_charucoMulti_both/out"
+    }
+  ]
+}
