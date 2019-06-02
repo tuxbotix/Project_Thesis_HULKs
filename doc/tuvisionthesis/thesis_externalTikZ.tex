@@ -1,32 +1,40 @@
 \documentclass[english, printversion, nomenclature, notitle]{tuvisionthesis} % TUVISION template
+
 \usepackage{amsmath}
 \usepackage{mathtools}
 \usepackage{tikz}
 \usepackage{cite}
 \usepackage{gensymb}
+
+\usepackage{multirow}
+%\usepackage{tabularx}
+\usepackage{booktabs}
 \usepackage{graphicx}
 \graphicspath{ {./images/}{./figures/}  }
 
 \usepackage[]{algorithm2e}
 \usepackage{pdfpages}
 \usepackage{listings}
-\usepackage{interval} 
-\usepackage{multirow}
+\usepackage{interval}
+
 \usepackage{hyperref}
-\usepackage{tabularx}
+
 \usepackage[nameinlink]{cleveref}
 \lstset{language=C++}
 
 
 % use other format for captions
 \usepackage[labelfont=bf,textfont=it]{caption}
+\usepackage{subcaption}
 
 \usepackage{pgfplots}
+
 \pgfplotsset{compat=newest}
 \pgfplotsset{plot coordinates/math parser=false}
 \usetikzlibrary{arrows}
 \usetikzlibrary{plotmarks}
 \usepgfplotslibrary{external}
+\usepgfplotslibrary{groupplots}
 \tikzexternalize[prefix=tikz/]
 
 \usepackage[colorinlistoftodos,prependcaption,textsize=tiny]{todonotes}
@@ -66,17 +74,17 @@
 
 Robotics has evolved from caged industrial machines to aesthetically appealing and "smart" robots that aim to be friendly with humans. Their proposed roles range from being learning aids for children to caring the elderly and also to play soccer!.
 
-The RoboCup was inaugurated 21 years ago (1997) in Japan as an annual competition in robotics with the vision of robots playing against FIFA champions in the year 2050. It also features  logistics and rescue categories, highlighting  the fact that robots should be able to handle complex environments opposed to highly structured industrial settings in order to successfully interact with humans in day-to-day life.  Since 2008, the Robocup SPL (Standard Platform League) has been using NAO, a 58cm tall humanoid robot by Softbank robotics.
+The RoboCup was inaugurated 21 years ago (1997) in Japan as an annual competition in robotics with the vision of robots playing against FIFA champions in the year 2050. It also features  logistics and rescue categories, highlighting  the fact that robots should be able to handle complex environments opposed to highly structured industrial settings in order to successfully interact with humans in day-to-day life.  Since 2008, the Robocup Soccer Standard Platform League (will be referred as RoboCup SPL in this thesis) has been using NAO, a 58cm tall humanoid robot by Softbank robotics.
 
-This thesis presents the design, implementation and application of a Camera and Joint calibration process for the NAO, in the context of "HULKs", the SPL team of Hamburg University of Technology. Not only the technical challenges, but also factors like time to calibrate, logistics are also considered due to the varying venues and competitive nature of the world championship.
+This thesis presents the design, implementation and application of a Camera and Joint calibration process for the NAO, in the context of "HULKs", the SPL team of Hamburg University of Technology. Not only the technical challenges, but also factors like time to calibrate, logistics are also considered due to the varying venues of the world championship.
 
-This thesis is organized as follows; The 
+This thesis is organized as follows; The next sections discuss problem statement, potential reasons and solutions together with goals, limitation and scope. Next chapters cover milestones, literature review, implementation, Testing and Evaluation which also discuss results and finally the conclusion.
 
 \section{Problem Statement}
 
 Calibrating the two cameras of the NAO has been a prerequisite for obtaining good coordination of the robots and several methods has been derived at HULKs for the purpose of Camera Calibration (Intrinsic and Extrinsic) \cite{darshana_adikari_team_2017}.
 
-In recent years, with the aging NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as 20 degrees. For a joint such as the neck, this means the error of perception is easily in the magnitude of several meters.
+In recent years, with the aging NAO V5 robots of the team, it was observed that NAO's joints exhibits significant amount of backlash. In certain occasions, the origin of joint position were also found to be shifted as much as $\pm20\degree$. For a joint such as the neck, this means the error of perception with head mounted cameras is easily in the magnitude of several meters.
 
 Therefore it has come to attention the need for automatic joint error detection and calibration as this also affects camera extrinsic calibration process.
 
@@ -87,7 +95,7 @@ Prior to presentation of a solution, it is imperative to identify potential sour
 
 \begin{itemize}
 	\label{itemize:possible_reasons}
-	\item Used calibration poses weren't optimal, resulting in incomplete coverage of the observable subspace (considering the joint error domain\todo{is this the right wording?}) which leads to poor calibration quality inclusing lack of convergence and local minimum exits.
+	\item Used calibration poses weren't optimal, resulting in incomplete coverage of the observable subspace (considering the joint error domain) which leads to poor calibration quality including lack of convergence and local minimum exits.
 	\item While a global minimizer could improve the results, it is still not immune from observation noise which can distort the cost function such that solved global minima is not the real one.
 	\item As noted in B-Human's research, joint backlash plays a crucial role. Therefore, captures should also contain information about direction of backlash or limit the scope of calibration assuming the robot's usable poses always load joints in the ways resulting same backlash effects.
 	\item Camera based calibration also depend on intrinsic and extrinsic parameters; The former can be calibrated without reliance of robot's positioning, but the latter depends on calibrated joints causing a cyclic dependency which can possibly be resolved by multiple cycles of calibration for joints and extrinsic parameters. This concern is already mentioned in Team Research Report of B-Human and their manual calibration procedure appears to address it in the above mentioned method.
@@ -97,7 +105,7 @@ Prior to presentation of a solution, it is imperative to identify potential sour
 
 The aim of this thesis is to develop a fully or semi-automatic joint and camera calibration. This includes theoretical observer modelling, optimal  pose generation and the implementation of necessary tools, modules into HULKs NAO framework and the debug tooling (which will be extending the current calibration tools).
 
-Since item 1 and 2 of \cref{itemize:possible_reasons} are not covered well in most literature or only in industrial context (which use laser trackers), this thesis will pay more attention for importance of picking optimal poses, observability, reduction of ambiguities (somewhat inverse to coverage of observable subspace) \todo{use a section to define wording} and improving calibration optimizers. Finally the evaluation phase will be used to validate the hypotheses. A detailed 
+Since item 1 and 2 of \cref{itemize:possible_reasons} are not covered well in most literature or only in industrial context (which use laser trackers), this thesis will pay more attention for importance of picking optimal poses, observability, reduction of ambiguities and improving calibration optimizers. Finally the evaluation phase will be used to validate the hypotheses. A detailed 
 
 Below listed is a summarized set of goals. A detailed breakdown into milestones is presented in \cref{chap:milestones}.
 
@@ -125,21 +133,21 @@ This research is performed with the following constraints.
 This chapter describe the goals in details in terms of milestones and the proposed workflow.
 
 \section{Initial preparations}
-Tasks:
+\textbf{Tasks:}
 \begin{enumerate}
 	\item Determine which type of errors affect the accuracy of robot's perception.
 	\subitem Note: Joint backlash might be observable from joint angle sensors.
 	\subitem Note: Joint offsets cannot be directly observed from onboard sensors.
 	\item Determine which poses the robot frequently use and how the errors affect.
-	\item If backlash is not directly observed, a model is needed.
-	\subitem Else; It can be assumed only joint offsets affect the kinematic chain.
+	\item \textbf{If} backlash is not directly observed, a model is needed.
+	\subitem \textbf{Else}; It can be assumed only joint offsets affect the kinematic chain.
 	\item prepare and setup necessary software frameworks.
 \end{enumerate}
 
 \section{Generating candidate poses}
 Given the amount of joints and movement range, virtually infinite number of poses can be reached by the NAO. Considering the requirement of capturing in similar conditions to real gameplay, stable, standing poses are preferred. However, captures while moving will not be considered due to concerns of temporal synchronizing joint sensors with camera capture.
 
-Tasks:
+\textbf{Tasks:}
 \begin{enumerate}
 	\item Identify criterion for a "valid" pose.
 	\item Implement necessary software for generating poses that follow the given criterion.
@@ -149,10 +157,10 @@ Tasks:
 \section{Observation model}
 In order to identify the ability of sensors under consideration and their observation capability of joint errors, developing  models is proposed.
 
-Tasks:
+\textbf{Tasks:}
 \begin{enumerate}
 	\item Define and observation model/ framework for joint and camera extrinsic error space.
-	\item Consider abstraction of obs. models in order for transparent expansion with different sensors in future.
+	\item Consider abstraction of observation models in order for transparent expansion with different sensors in future.
 \end{enumerate}
 
 \section{Extracting optimal poses}
@@ -160,7 +168,7 @@ Given the large amount of possible candidate poses, an optimal subset of these p
 
 Previous work has demonstrated that selecting a set of optimal calibration poses is more beneficial than randomly selected set of poses.
 
-Tasks:
+\textbf{Tasks:}
 \begin{enumerate}
 	\item Apply the observation model to each possible pose and obtain information such as magnitude and direction vector of observation space.
 	\item Poses that do not exhibit satisfactory amount of observation capabilities should be removed.
@@ -172,17 +180,11 @@ Tasks:
 \section{Calibration Process}
 The following tasks aim to derive a calibration process that will use poses obtained by the method proposed in the previous section.
 
-Tasks:
+\textbf{Tasks:}
 \begin{enumerate}
 	\item Prepare necessary software for performing simulated calibration, including making the robot reach each pose, capture sensor values. (Cameras, joint angles, etc).
-	\subitem the uniqueness of observation direction for each joint at a given pose highly influence quality/ possibility of observing joint error without much ambiguity. This will be further discussed in *state of art* and *methodology*
 	\item Iteratively solve to determine joint errors and camera extrinsic values.
-	\item Obtain statistics with a suitable population size.
-\end{enumerate}
-
-\section{Testing and evaluation of software}
-\begin{enumerate}
-	\item Unit tests or similar tests to verify data storage, computational methods
+	\item Obtain statistics with a suitable sample size.
 \end{enumerate}
 
 \section{Testing and evaluation of calibration poses and process}
@@ -190,26 +192,20 @@ Evaluating the outcome of this research is done as follows.
 
 \begin{enumerate}
 	\item Simulated joint calibration testing with a dense set of captured data (3D-2D correspondences in case of camera) with a suitable population size.
-	\subitem The goal is to verify calibration is possible to a high degree of confidence.
+	\subitem The goal is to verify calibration is possible to a high e of confidence.
 	\item Simulated testing with relatively sparse set of captured data. This would demonstrate the ability to use a calibration pattern (a relatively sparse feature with limited amount of points) at a given place.
 	\item Identify the effect of noisy camera captures and noisy joint readings.
 	\item If time permits, real world testing with actual NAO robots will be performed in the same manner as the previous method. Obtaining reliable ground truth might be a challenge.
 	
 \end{enumerate}
 
-\section{Finalization}
-\todo{Complete this}
-
-\section{Timeline}
-\todo{Complete this}
-
 %%%% LIT REVIEW %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Literature Review}
 
 \section{NAO Robot}
 
+The Nao robot is a 58cm tall Humanoid robot introduced by Aldebaran Robotics (now part of Softbank Robotics). It is used in humanoid robotics research as a ready-to-use platform. Since 2008, this robot became the platform in RoboCup Soccer Standard Platform league. The following subsections cover information related to this robot and this thesis.
 
-\todo{is it the right place?}
 \subsection{Joints \& Coordinate frames}
 
 NAO V5 and V6 have almost identical link lengths but the masses may be different. The joint actuators are explained in their documentation, but they don't mention typical backlash values. However \cite{gouaillier_nao_2008} has analyzed and presented Nao's capabilities and general information, it provides more in depth information than some sources in considerations such as joint backlash. According to it, maximum backlash tolerated is $\pm 3\degree$ for stable walking and it also mentions more about its gear train and actuators.
@@ -234,17 +230,17 @@ NAO V6 will be used officially in the upcoming RoboCup, thus it is also a priori
 
 They feature magnetic incremental encoders with $0.1\degree$ precision. As mentioned previously, these sensors give feedback to closed loop controllers of the joints as well as let the software framework to calculate kinematic matrices \cite{softbank_robotics_joint_nodate}.
 
-Based on experimental measurements, it could be verified that these sensors are directly connected to output of joint actuators and their resolution is 12 bits (4096 values per $360\degree$ giving $0.0878\degree$ increments which is rounded off to $0.1\degree$ in documentation. This measurement also allowed to have an idea of possible noise of these sensors. Their values are further discussed in \cref{subsec:initial_joint_error}.
+Based on experimental measurements in \cref{subsec:initial_joint_error}, it could be verified that these sensors are directly connected to output of joint actuators and their resolution is 12 bits (4096 values per $360\degree$ giving $0.0878\degree$ increments which is rounded off to $0.1\degree$ in documentation. This measurement also allowed to have an idea of possible noise of these sensors.
 
 \subsubsection{Other Sensors}
-The NAO also house other sensors such as IMU (Intertial Measurement Unit), microphones, sonar modules, FSR (Force Sensing Resistors). For this thesis, only the IMU is used in addition to Cameras and joint sensors.
+The NAO also house other sensors such as IMU (Inertial Measurement Unit), microphones, sonar modules, FSR (Force Sensing Resistors). For this thesis, only the IMU is used in addition to Cameras and joint sensors.
 
 \subsection{HULKs NAO framework}
-This is the software framework developed by HULKs for NAO to play soccer in RoboCup SPL. It access robot's hardware through several software components provided by SoftBank Robotics. However it access cameras via a Linux kernel driver (Video For Linux - V4L2). Due to this difference and their cycle rates, two major threads are employed; Vision (+ "brain" -> perception \& behavior) \todo{check this} and Motion. They cycle at 60Hz (30FPS per camera x 2) and 100Hz (rate set by NAOqi - the interface to access hardware)\todo{V6 updates}. Synchronization is done with a set of timestamped buffers and nearest (in temporal space) set of kinematic chain is selected For calibration purposes, therefore static poses are desirable for capturing images and joint values to avoid time-synchronization induced shifts.
+This is the software framework developed by HULKs for NAO to play soccer in RoboCup SPL. It access robot's hardware through several software components provided by SoftBank Robotics. However it access cameras via a Linux kernel driver (Video For Linux - V4L2). Due to this difference and their cycle rates, two threads are employed for capturing sensor data; Vision (+ "brain" $\rightarrow$ perception \& behavior) and Motion. They cycle at 60Hz (30FPS per camera $x 2$) and 100Hz (rate set by NAOqi - the interface to access hardware)\todo{V6 updates}. Synchronization is done with a set of timestamped buffers and nearest (in temporal space) set of kinematic chain is selected for calibration purposes, therefore static poses are desirable for capturing images and joint values to get reliable readings due to limitations of this synchronizing method.
 
-The framework also supports debugging and configuration via a debug tool "MATE" - also developed by HULKs. It also contains user interface and calculations for Camera Calibration at the moment.
+The framework also supports debugging and configuration via a debug tool "MATE" - also developed by HULKs.
 
-This framework includes a module to compensate joint offset errors \todo{cite Code release?}. It offsets joints movement commands by the given value and it also compensate this value from sensor output, making the robot's perception unaware of induced offsets while correcting real-world shifts. \todo{Maybe include a block diagram?}
+In addition, this framework includes a module to compensate joint offset errors \todo{cite Code release?}. It offsets joints movement commands by the given value and it also compensate this value from sensor output, making the robot's perception unaware of induced offsets while correcting real-world shifts. Furthermore, camera calibration is possible with a module implemented for MATE.
 
 Further information about HULKs NAO framework and tools is present in \cite{darshana_adikari_team_2017}.
 
@@ -252,20 +248,21 @@ Further information about HULKs NAO framework and tools is present in \cite{dars
 
 Camera calibration is a well researched topic as it is a primary dependency for obtaining good results with camera systems. In this thesis, these standard methods \& tools for intrinsic calibration is employed, while extrinsic calibration is considered as well.
 
-However, given that head yaw and pitch joints are close to camera origins and they are somewhat parallel to camera extrinsic parameters yaw and pitch respectively, they might cause a linear dependancy or difficulty to observe together. Therefore it was decided not to calibrate camera extrinsics at the same time as joints, but do seperately with multiple rounds. This approach seem to be used by B-Human in their calibration procedure \cite{thomas_rofer_b-human_2018} and appear to be converging well. \todo{rewrite}
+However, given that head yaw and pitch joints are close to camera origins and they are somewhat parallel to camera extrinsic parameters yaw and pitch respectively, they might cause a linear dependency or difficulty to observe together. Therefore it was decided not to calibrate camera extrinsic parameters at the same time as joints, but do separately with multiple rounds. This approach seem to be used by B-Human in their calibration procedure \cite{thomas_rofer_b-human_2018} and appear to be converging well.
 
 \subsection{Method of HULKs}
 
-The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (LM). The method of operation and usage is explained in \cite{darshana_adikari_team_2017}.
+The calibration process is based on the debug tool used by HULKs (MATE) as well as the HULKs NAO framework. In summary, the calibration is achieved by capturing images and kinematic chain with time synchronization to solve the following system of equations .with a non linear solver (Levenberg–Marquardt). The method of operation and usage is explained in \cite{darshana_adikari_team_2017}.
 
-\subsection{Other teams}
-The team B-Human employs a method combined with joint calibration \cite{thomas_rofer_b-human_2018}. HTWK-Lepzig use center circle of a SPL soccer field as the calibration feature, their robots gather enough feature points in several poses to solve for calibration parameters. Berlin United also employs a similar approach but they do this with the robots in a sit down (un-stiffened) pose and they can use all line-features in a SPL field. \todo{cite Berlin United \& HTWK}
+\subsection{Other RoboCup SPL teams}
+\label{subsec:other_extrinsic_calib}
+The team B-Human employs a method combined with joint calibration \cite{thomas_rofer_b-human_2018}. Nao-Team HTWK use center circle of a SPL soccer field as the calibration feature \cite{rico_tilgner_nto-team_2019}, their robots gather enough feature points in several poses to solve for calibration parameters. Berlin United also employs a similar approach but they do this with the robots in a sit down (un-stiffened) pose and they can use all line-features in a SPL field \cite{Berlin_United_TRR}.
 
 \subsection{Calibration features}
 
 For typical intrinsic calibration, a chessboard or similar pattern is used. For extrinsic calibration, the same can be used. In methods such as photogrammetry, a dense feature set is used to identify the relative position of the camera. 
 
-However, one disadvantage with the classic chessboard pattern is that the processing taken for identifying the corners are time consuming. ChAruco - a hybridization of the classic chessboard and AR markers to achieve fast detection and obtaining 3D points for partially visible patterns (Traditiona chessboard based methods relies on having complete visibility of the chessboard) \cite{garrido-jurado_generation_2016}, \cite{romero-ramirez_speeded_2018}.
+However, one disadvantage with the classic chessboard pattern is that identification of the corners is a time consuming process and the existing methods relies on full visibility of the pattern in the image. As a solution for both limitations, ChAruco \cite{garrido-jurado_generation_2016}, \cite{romero-ramirez_speeded_2018} - a hybridization of the classic chessboard and AR markers to achieve fast detection and obtaining 3D points for partially visible patterns is employed via the implementation available in OpenCV library. \todo{cite}
 
 \begin{center}
 	\begin{figure}
@@ -282,16 +279,15 @@ This section discuss the fundamentals of joint errors, reasons for calibration a
 
 \subsection{Joint error types}
 
-Two major causes of joint positioning errors that affect overall positioning are backlash and shifts of sensor or actuator causing joints to position with an offset. These causes joint actuators to point at physically incorrect locations although their positioning sensors precepts otherwise). Factors such as joint elasticity, looseness of mounting, worn bearings are not considered in the scope of this thesis.
-\todo{Update the scope}
+Two major causes of joint positioning errors that affect overall end effector location are backlash and shifts of sensor or actuator causing joints to position with an offset. These causes joint actuators to point at physically incorrect locations although their positioning sensors precepts otherwise). Factors such as joint elasticity, looseness of mounting, worn bearings are not considered in the scope of this thesis.
 
 \subsubsection{Backlash}
 \label{subsec:backlash}
-Backlash occurs due to necessary gap between gears (to avoid jamming) and wear occurred due to usage. Since output doesn't change when input is within this gap in a no load condition, it is also called "deadband". Precision machined gears with hardened surfaces operating with tribologically matched lubrication can minimize designed backlash and wear rate. However, such improvements don't appear to be available for the NAO as most of the joints feature plastic gears, multiple reduction stages and backlash of some joints in even brand new (Observed with Nao V5 refurbished, Nao V6 brand new) robots can be more than $1\degree$ and can be upto $\pm 5\degree$ according to \cite{kastner_automatic_2015} (which in return cite \cite{gouaillier_nao_2008} but it only mention a maximum of $3\degree$, yet personal observations confirm the former when Naos exhibit significant wear). Due to this unavoidable phenomena, a robot may not be in the position its sensors indicate and commanded to reach.
+Backlash occurs due to necessary gap between gears (to avoid jamming) and wear occurred due to usage. Since output doesn't change when input is within this gap in a no load condition, it is also called "deadband". Even though the Nao appears to use gears aimed for low friction and low backlash, there is some amount of unavoidable backlash (Observed with Nao V5 refurbished, Nao V6 brand new) robots can be more than $1\degree$ and can be upto $\pm 5\degree$ according to \cite{kastner_automatic_2015} (which in return cite \cite{gouaillier_nao_2008} but it only mention a maximum of $3\degree$, yet personal observations confirm the former when Naos exhibit significant wear). Due to this unavoidable phenomena, a robot may not be in the position its sensors indicate and commanded to reach.
 
 Figure \ref{fig:backlash} illustrate the effect of backlash while \cref{eq:output_backlash} models it with variables $D = deadband$, $i = input$, $o_i = \text{initial output}$. 
 
-It should be noted that this model assumes initial velocity of output is zero whereas a complete model has to account forces/ torques applied upon the given joint's motion axis as that truly determines engagement direction or disengagement of input vs output. In addition, this model only cover simple case of backlash where gap is uniform throughout whole range of motion, no elastic deformations, etc.
+It should be noted that this model assumes initial velocity of output is zero whereas a complete model has to account forces/ torques applied upon the given joint's motion axis as that truly determines engagement direction or disengagement of input vs output. In addition, this model only cover simple case of backlash where gap is uniform throughout whole range of motion, no elastic deformations.
 
 \begin{figure}
 	\def\svgwidth{\linewidth}
@@ -313,9 +309,9 @@ Based on this information, it can be concluded that effects of backlash is a con
 
 \subsubsection{Joint offsets due to sensor or actuator mounting errors}
 
-The secondary source of error occurs due to assembling tolerances of a robot's joints or faults of sensors or shifting of actuator; in these cases an encoder or servo motor belonging to a given joint might not align it's index or "zero" position when the joint is at it's zero position as designed. Thus any motion command given to this joint will exhibit a fixed amount of positioning error equating to the difference of sensor zero position vs designed zero position of a joint, even if other factors are ideal such as zero backlash.
+The secondary source of error occurs due to assembling tolerances of a robot's joints or faults of sensors or shifting of actuator; in these cases an encoder or servo motor belonging to a given joint might not align it's index or "zero" position with joint's intended zero position when commanded to reach it with this type of error. Thus any motion command given to this joint will exhibit a fixed amount of positioning error equating to the difference of sensor zero position vs designed zero position of a joint, even if other factors are ideal such as zero backlash.
 
-This type of shifting errors were observed with the Nao Robots during RoboCup 2018; especially with their head yaw joints, sometimes the error being as much as 20\degree which usually occurred after a fall in a game. \todo{is this right? for this place}
+This type of shifting errors were observed with the Nao Robots during RoboCup 2018; especially with their head yaw joints, sometimes the error being as much as 20\degree which usually occurred after a fall in a game.
 
 Figure \ref{fig:backlash} illustrate the effect of backlash with a fixed offset while \cref{eq:output_offset_engaged} models it with variables $E_o = offset error$, $i = input$, $outputWithBacklash$ from \cref{eq:output_backlash} (with $o_i$ in frame of backlash output. See \cref{fig:backlash}).
 
@@ -337,7 +333,7 @@ This joint error model can be used to compensate both types of errors and also p
 
 This approach is commonly used for lathes, milling machines and similar equipment with the use of dial indicators. While this is possible for the NAO as well, the "curvy" nature of the limbs (with almost no easily identifiable reference points) present a massive challenge in employing dial indicator based or similar approaches in a time efficient manner.
 
-Another option is using an angle measuring tool or to 3D scan the joint at  two extremes of backlash at a given position and obtain the angle.\todo{Clean up this, possibly give some figures?} But this approach require more specialized equipment, processing power and possibly less portability. Yet this is a suitable method to obtain ground truth for the purpose of evaluating a particular calibration method. \todo{ references? }
+Another option is using an angle measuring tool or to 3D scan the joint at  two extremes of backlash at a given position and obtain the angle.\todo{Clean up this, possibly give some figures?} But this approach require more specialized equipment, processing power and possibly less portability. Yet this is a suitable method to obtain ground truth for the purpose of evaluating a particular calibration method.
 
 \subsection{Indirect measurement}
 Indirect measurement based methods are possibly more practical in the context of NAO robot, as they involve in less specialized sensors or eliminate need to measure each sensor individually.
@@ -345,11 +341,17 @@ Indirect measurement based methods are possibly more practical in the context of
 \subsection{Previous Work}
 \label{subsec:joint_calib_previous_work}
 
-There are several experiments done in context of the NAO Robot for indirect joint calibration. Some involves fixing a calibration pattern in the form of a sticker \cite{maier_whole-body_2015}. One of the experiments by Rbocup SPL team B-Human involves "sandles" worn by the NAO \cite{kastner_automatic_2015}, but ultimately they concluded the results being less than satisfactory. Their experiment didn't measure nor compensate backlash, but assumed the error is a fixed offset only. In addition, the robot took measurements while lying on its back (based on images in the publication) which is not a typical pose for the usecase, thus backlash affected the joints differently than what would be observed had the robot being standing. In addition, the authors also mention possible effect from flexing of the limbs and torque modeling would have improved their experiment based on the results by Nao Devils of TU Dortmund in modeling flexing and joint torque contributions. \todo{Read nao devils literature also}
+There are several experiments done in context of the NAO Robot for indirect joint calibration. Some involves fixing a calibration pattern in the form of a sticker \cite{maier_whole-body_2015}. One of the experiments by RoboCup SPL team B-Human involves "sandles" worn by the NAO \cite{kastner_automatic_2015}, but ultimately they concluded the results being less than satisfactory. Their experiment didn't measure nor compensate backlash, but assumed the error is a fixed offset only. In addition, the robot took measurements while lying on its back (based on images in the publication) which is not a typical pose for the use case, thus backlash affected the joints differently than what would be observed had the robot being standing. In addition, the authors also mention possible effect from flexing of the limbs and torque modeling would have improved their experiment based on the results by Nao Devils of TU Dortmund in modeling flexing and joint torque contributions. \todo{Read nao devils literature also}
 
-Later, B-Human have been using a semi-automatic method to calibrate both joints and camera extrinsic parameters. First, the robot is put to a specific pose (ie: standing), lifted to observe foot offsets and adjustments are done so that both feet are at same level and orientation. Next, the robot is placed on the ground and the distance to hip or another known joint origin is measured. This allows to measure the length of the kinematic chain of each leg. Any deviations are compensated by means of inverse kinematic values and finally the robot's leaning towards ground is also adjusted. While this appears to be a practical method, the disadvantage of manual measurements is time consuming and can be erroneous. The procedure and motivation is detailed in \cite{thomas_rofer_b-human_2018}. 
+Later, B-Human have been using a semi-automatic method to calibrate both joints and camera extrinsic parameters as mentioned in \cref{subsec:other_extrinsic_calib}. First, the robot is put to a specific pose (ie: standing), lifted to observe foot offsets and adjustments are done so that both feet are at same level and orientation. Next, the robot is placed on the ground and the distance to hip or another known joint origin is measured. This allows to measure the length of the kinematic chain of each leg. Any deviations are compensated by means of inverse kinematic values and finally the robot's leaning towards ground is also adjusted. While this appears to be a practical method, the disadvantage of manual measurements is time consuming and can be erroneous. 
 
 Several publications have covered the topic of choosing optimal poses. The approach was to obtain end effector positions for each pose and stack them as columns to build a matrix. Then the condition number of its jacobian is taken. The optimizer tries various poses and attempts to obtain the matrix with best conditioning which appears to provide the optimal set of calibration poses. Their results prove that measurements from a small amount of optimal calibration poses yields better or equal results compared to using large amount of randomly chosen measurement poses. Therefore it is sensible to focus on finding for a set of optimal poses for the Nao. However, it should be noted that these publications were applied to industrial robots where the measurements were taken by accurate 3D measurement tools, whereas the preferred constraints for this thesis's use case provides further complications as the 2D cameras can only estimate the pose of a calibration target, not get a precise position. Therefore the author's approach in this thesis has some divergence on searching the set of optimal poses.
+
+\subsection{Nao Kinematic and Camera Projection Model}
+
+The following equations are based on above mentioned literature for Joint and Camera extrinsic calibration. Since any calibration feature can be positioned relative to robot's position on ground, it is possible to express these features in camera coordinate system through robot's kinematic chain.
+
+\todo{ put equations}
 
 \section{Observation Models}
 Considering revelations from previous research mentioned in \cref{subsec:joint_calib_previous_work}, observations and feedback gathered from discussions with other team members and teams, deriving an observation model of joint errors with respect to various available sensors (or fused outputs) in order to find a set of optimal poses would be more effective than following a trial and error or brute force or random pose selection approach.
@@ -960,35 +962,19 @@ Based on results of this evaluation, it was evident that there is potential for 
 For the next phase of realism, sensor noise was introduced with other settings unchanged from initial evaluation described in \cref{tab:initial_test_config}. The reason for not immediately switching to sparsely positioned calibration patterns was due to need of identifying most suitable set of poses and effect of number of poses. By determining optimal amount of poses, identifying potential positions for calibration patterns for testing was simplified.
 
 \begin{table}[]
-	\begin{tabular}{|l|l|l|l|l|l|}
-		\hline
-		\multirow{2}{*}{Success/ Failure type} 
-			& \multirow{2}{1.2cm}{Pose count} 
-			& \multirow{2}{1.8cm}{No noise}
-			& \multirow{2}{1.8cm}{Pixel pos. noise} 
-			& \multirow{2}{1.8cm}{Joint pos. noise}
-			& \multirow{2}{1.8cm}{Combined noise}\\
-			& & & & & \\
-		\hline
-		\multirow{3}{*}{Success} 
-			& 3 			& 81.5\% 	& 83\% & 43.8\% & 43.7\% \\ 
-			& 5 			& 81.2\% 	& 79.2\% & 46.3\% & 48.7\% \\
-			& 8 			& 80.4\% 	& 78.5\% & 50.4\% & 50.1\% \\
-		\hline
-		\multirow{3}{*}{Local Minima } 
-			& 3	& 17.6\% 	& 16.1\% & 55.2\% & 54.8\% \\
-			& 5 & 18.8\% 	& 20.2\% & 52.7\% & 50.3\% \\
-			& 8 & 18.3\% 	& 20.9\% & 49.1\% & 49.1\% \\ 
-		\hline
-		\multirow{3}{*}{No convergence} 
-			& 3 & 0.9\% 	& 0.9\% & 1\% & 1.5\% \\
-			& 5 & 0.6\% 	& 0.6\% & 1\% & 1\% \\
-			& 8 & 1.3\% 	& 0.6\% & 0.5\% & 0.8\% \\
-		\hline
-		%		&  &  &  &  \\
-		%		&  &  &  & 
-		
-	\end{tabular}
+	\resizebox{\textwidth}{!}{%
+		\def\arraystretch{1.5}%  1 is the default, change whatever you need
+		\begin{tabular}{@{}cccccccccc@{}}
+			\toprule
+			& \multicolumn{3}{c}{3 Poses}& \multicolumn{3}{c}{5 Poses}& \multicolumn{3}{c}{8 Poses}\\ \cmidrule(r{4pt}){2-4} \cmidrule(r{4pt}){5-7} \cmidrule(r{4pt}){8-10} 
+			Noise Src. &  Succ.\% & LocMin.\% & Other\% & Succ.\% & LocMin.\% & Other\% & Succ.\% & LocMin.\% & Other\% \\ \cmidrule(r{4pt}){1-1} \cmidrule(r{4pt}){2-4} \cmidrule(r{4pt}){5-7} \cmidrule(r{4pt}){8-10} 
+			noNoise &       87.02 & 12.94 & 0.04 &85.90 & 14.04 & 0.06 &83.94 & 15.90 & 0.16 \\ 
+			pixel & 86.36 & 13.58 & 0.06 &84.64 & 15.30 & 0.06 &83.82 & 16.04 & 0.14 \\ 
+			joint & 47.26 & 52.66 & 0.08 &53.74 & 46.22 & 0.04 &58.30 & 41.38 & 0.32 \\ 
+			both &  46.56 & 53.36 & 0.08 &53.38 & 46.58 & 0.04 &57.32 & 42.52 & 0.16 \\ 
+			\bottomrule
+		\end{tabular}%
+	}
 	\caption[Results from testing with ground-plane calibration feature.]{Results from testing with ground-plane calibration feature. The results depicts several trends between calibration pose count, type of induced errors and success/ failure statistics}
 \end{table}
 
@@ -1006,6 +992,36 @@ However, in case of joint noise, more poses clearly improved results.
 \end{enumerate}
 
 
+%\begin{figure}
+%	\begin{subfigure}{\textwidth}
+%		\centering
+%		\input{figures/outbefore_hist.tex}
+%		\caption{before}
+%		\label{fig:sfig1}
+%	\end{subfigure}%
+%
+%	\begin{subfigure}{\textwidth}
+%		\centering
+%		\input{figures/outafter_hist.tex}
+%		\caption{after}
+%		\label{fig:sfig2}
+%	\end{subfigure}
+%	\caption{plots of....}
+%	\label{fig:fig}
+%\end{figure}
+
+\begin{center}
+	\begin{figure}
+		%		\resizebox{\linewidth}{!}{
+		%	\def\svgwidth{\linewidth}
+		\input{figures/outafter_hist.tex}
+		%}
+		%	\input{figures/test.tex}
+		\caption{Approximated fitting of a Gaussian distribution to joint position sensor noise (based on \cref{fig:joint_sensor_noise}. Standard deviation is 0.0011 with zero mean.)}
+%		\label{fig:joint_sensor_noise_gauss}
+	\end{figure}
+\end{center}
+
 Next phase of evaluations with calibration patterns which provides a sparse set of points might provide more insight into this matter.
 
 \todo{add results of joint noise plots}
@@ -1017,38 +1033,55 @@ Next phase of evaluations with calibration patterns which provides a sparse set 
 Based on previous experiment's results, it was noticeable that higher amount of poses is needed in order to be robust against joint sensor noise. But at the same time, increasing the number of captured calibration features (with more poses) was detrimental. This evaluation will consider effects of reduced set of calibration features which is the more practical scenario for actually calibrating robots by placing a few calibration patterns.
 
 Test configuration is same as \cref{sec:ground_plane_test} except for calibration feature type. Therefore this series of tests can be directly used to compare effect of calibration features.
+%
+%\begin{table}[]
+%	\begin{tabular}{|l|l|l|l|l|l|}
+%		\hline
+%		\multirow{2}{*}{Success/ Failure type} 
+%		& \multirow{2}{1.2cm}{Pose count} 
+%		& \multirow{2}{1.8cm}{No noise}
+%		& \multirow{2}{1.8cm}{Pixel pos. noise} 
+%		& \multirow{2}{1.8cm}{Joint pos. noise}
+%		& \multirow{2}{1.8cm}{Combined noise}\\
+%		& & & & & \\
+%		\hline
+%		\multirow{3}{*}{Success} 
+%		& 3 & 49.5\% 	& 24.6\% 	& 30.5\% 	& 17.4\% \\ 
+%		& 5 & 61.5\% 	& 33.4\% 	& 35.1\% 	& 26.2\% \\
+%		& 8 & 79.0\% 	& 63.0\% 	& 51.6\% 	& 44.9\% \\
+%		\hline
+%		\multirow{3}{*}{Local Minima } 
+%		& 3	& 43.2\% 	& 65.5\% 	& 61.9\%	& 72.6\% \\
+%		& 5 & 38.2\% 	& 65.9\% 	& 64.4\% 	& 73.4\% \\
+%		& 8 & 20.6\% 	& 36.6\% 	& 48.0\% 	& 54.6\% \\ 
+%		\hline
+%		\multirow{3}{*}{No convergence} 
+%		& 3 & 7.3\% 	& 9.9\% 	& 7.6\%		& 10\% \\
+%		& 5 & 0.3\% 	& 0.7\% 	& 0.5\% 	& 0.4\% \\
+%		& 8 & 0.4\% 	& 0.4\% 	& 0.4\% 	& 0.5\% \\
+%		\hline
+%		%		&  &  &  &  \\
+%		%		&  &  &  & 
+%		
+%	\end{tabular}
+%	\caption[Results from testing with calibration patterms.]{Results from testing with calibration patterms. The results depicts different trends than results of ground-plane but they are again dependent mainly on number of poses.}
+%\end{table}
 
 \begin{table}[]
-	\begin{tabular}{|l|l|l|l|l|l|}
-		\hline
-		\multirow{2}{*}{Success/ Failure type} 
-		& \multirow{2}{1.2cm}{Pose count} 
-		& \multirow{2}{1.8cm}{No noise}
-		& \multirow{2}{1.8cm}{Pixel pos. noise} 
-		& \multirow{2}{1.8cm}{Joint pos. noise}
-		& \multirow{2}{1.8cm}{Combined noise}\\
-		& & & & & \\
-		\hline
-		\multirow{3}{*}{Success} 
-		& 3 & 49.5\% 	& 24.6\% 	& 30.5\% 	& 17.4\% \\ 
-		& 5 & 61.5\% 	& 33.4\% 	& 35.1\% 	& 26.2\% \\
-		& 8 & 79.0\% 	& 63.0\% 	& 51.6\% 	& 44.9\% \\
-		\hline
-		\multirow{3}{*}{Local Minima } 
-		& 3	& 43.2\% 	& 65.5\% 	& 61.9\%	& 72.6\% \\
-		& 5 & 38.2\% 	& 65.9\% 	& 64.4\% 	& 73.4\% \\
-		& 8 & 20.6\% 	& 36.6\% 	& 48.0\% 	& 54.6\% \\ 
-		\hline
-		\multirow{3}{*}{No convergence} 
-		& 3 & 7.3\% 	& 9.9\% 	& 7.6\%		& 10\% \\
-		& 5 & 0.3\% 	& 0.7\% 	& 0.5\% 	& 0.4\% \\
-		& 8 & 0.4\% 	& 0.4\% 	& 0.4\% 	& 0.5\% \\
-		\hline
-		%		&  &  &  &  \\
-		%		&  &  &  & 
-		
-	\end{tabular}
-	\caption[Results from testing with calibration patterms.]{Results from testing with calibration patterms. The results depicts different trends than results of ground-plane but they are again dependent mainly on number of poses.}
+	\resizebox{\textwidth}{!}{%
+		\def\arraystretch{1.5}%  1 is the default, change whatever you need
+		\begin{tabular}{@{}cccccccccc@{}}
+			\toprule
+			& \multicolumn{3}{c}{3 Poses}& \multicolumn{3}{c}{5 Poses}& \multicolumn{3}{c}{8 Poses}\\ \cmidrule(r{4pt}){2-4} \cmidrule(r{4pt}){5-7} \cmidrule(r{4pt}){8-10}
+			Noise Src. &  Succ.\% & LocMin.\% & Other\% & Succ.\% & LocMin.\% & Other\% & Succ.\% & LocMin.\% & Other\% \\ \cmidrule(r{4pt}){1-1} \cmidrule(r{4pt}){2-4} \cmidrule(r{4pt}){5-7} \cmidrule(r{4pt}){8-10}
+			noNoise &       0.00 & 0.00 & 0.00 &67.52 & 32.40 & 0.08 &84.08 & 15.90 & 0.02 \\ 
+			pixel & 0.00 & 0.00 & 0.00 &38.98 & 60.88 & 0.14 &68.00 & 31.88 & 0.12 \\ 
+			joint & 0.00 & 0.00 & 0.00 &38.52 & 61.38 & 0.10 &54.32 & 45.62 & 0.06 \\ 
+			both &  0.00 & 0.00 & 0.00 &27.42 & 72.44 & 0.14 &45.40 & 54.50 & 0.10 \\ 
+			\bottomrule	
+		\end{tabular}%
+	}
+	\caption[Results from testing with Charuco Patterns]{Results from testing with Charuco  calibration features on ground. The results depicts several trends between calibration pose count, type of induced noise and success/ failure statistics}
 \end{table}
 
 The following conclusions can be taken based of results from this set of evaluations.
@@ -1073,7 +1106,19 @@ Next section explore application of global-like solver method experimented in \c
 
 %%%% CONCLUSION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Conclusion and future work}
-\todo{Complete this}
+
+In this project thesis, a detailed analysis of possibility to perform joint calibration with onboard sensors was performed and further tests were performed to observe resilience for noise in the inputs.
+
+During the literature review, it was discovered that multiple teams had attempted Joint calibration for the Nao and concluded less than successful outcome from their experiments. During this thesis, these concerns were confirmed with the reason due to adjascent joints that are always parallel in the kinematic chain under consideration (ex: knee pitch and hip pitch) where the highest failures were reported on these joints.
+
+The use of observation model and specific focus to minimize the effect of having similar observations for two joints causing ambiguity made it possible to obtain good poses that generally had a high success rate of 80\% (without noise) even with a local minimizing solver. But more poses and observations were needed to counter the effect of noise to an extent. This portion of the experiment reveal that joint calibration is simply difficult to achieve when sensor noise is present as it severely affect the cost function. This is further shown with the histograms containing successful and unsuccessful calibrations where RMS value from the cost function is nearly same with high amount of noise making it difficult to even detect if a local minima was reached.
+
+Although this calibration procedure was not tested on a real Nao, it can be concluded that the use of noise models for joint and image noise should at least be close to realism. 
+
+Based on the above, it can be concluded that obtaining poses by means of an observation model or a condition number method is more effective than arbitrarily choosing some poses. Furthermore, this selection enabled to sustain relatively acceptable success rate as well. 
+
+However, it cannot be conclusively decided whether this approach will be sufficient for joint calibration as there is a minimum of 20\% failure rate, therefore the author would like to recommend direct measurements if feasible and to restrict joints that are being calibrated to reduce the degrees of freedom in the system in hope of reducing local minimizations and employ this method for calibration with caution.
+
 %%% include your text here %%%
 \bibliographystyle{splncs03}
 \bibliography{bibliography}{}

@@ -65,8 +65,8 @@
 \ifmitschrift{
 \newcommand{\theremark{
 Anmmerkung:
-Der Stoffumfang ist noch nicht vollst‰ndig enthalten,
- und es kˆnnen sich auch noch Fehler eingeschlichen haben.
+Der Stoffumfang ist noch nicht vollst√§ndig enthalten,
+ und es k√∂nnen sich auch noch Fehler eingeschlichen haben.
 Fehlerhinweise bitte an: grigat@tuhh.de }}
 }
 \fi
@@ -139,8 +139,8 @@ Fehlerhinweise bitte an: grigat@tuhh.de }}
   \fi
 \fi
 \RequirePackage{lmodern}
+\RequirePackage[utf8]{inputenc}
 \RequirePackage[T1]{fontenc}
-\RequirePackage[latin9]{inputenc}
 \RequirePackage[nottoc]{tocbibind}
 \ifnomenclature
 
@@ -203,7 +203,7 @@ Fehlerhinweise bitte an: grigat@tuhh.de }}
 \lfoot{}
 \cfoot{\insertthesisfootnote}
 \rfoot[]{}%
-\addtolength{\headheight}{1cm}  % Headerhˆhe vergrˆﬂern, sonst Fehlermeldung
+\addtolength{\headheight}{1cm}  % Headerh√∂he vergr√∂√üern, sonst Fehlermeldung
 \ifprintversion
 \RequirePackage[pdfpagelabels,plainpages=false, bookmarks=true,%
 bookmarksopen=true, colorlinks=false, pageanchor=false]{hyperref}
@@ -242,7 +242,7 @@ Prof. Dr.-Ing. R.-R. Grigat\par
 \vspace{1cm}
 \fi
 \ifngerman
-Technische Universit‰t Hamburg\par
+Technische Universit√§t Hamburg\par
 Vision Systems\par
 \vspace{5mm}
 Prof. Dr.-Ing. R.-R. Grigat\par
@@ -303,7 +303,7 @@ Prof. Dr.-Ing. R.-R. Grigat\par
 
 \end{center}
 \end{titlepage}
-\clearpage{\thispagestyle{empty}\cleardoublepage} % sicherstellen, daﬂ Seitenumbruch
+\clearpage{\thispagestyle{empty}\cleardoublepage} % sicherstellen, da√ü Seitenumbruch
 \pagenumbering{roman}
 \InputIfFileExists{\thepreamblefile}
 {\ClassInfo{tuvisionthesis}{loading \thepreamblefile}}
