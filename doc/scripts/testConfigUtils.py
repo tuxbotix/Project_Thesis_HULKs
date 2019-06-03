@@ -62,7 +62,10 @@ def makeConfigs(cfgParams, outputDir):
                 for poseNum in poseNumbers:
                     for noise in noiseTypes:
                         for jointSampleCount in jointSampleCounts:
-                            if jointSampleCount == 1 and (noise == noiseConfigs.noNoise or noise == noiseConfigs.pixelOnly):
+
+                            if jointSampleCount != 1 and (noise == noiseConfigs.noNoise or noise == noiseConfigs.pixelOnly):
+                                continue
+                            if feature[0] == "gnd" and solver != SolverTypes.stdLM:
                                 continue
 
                             errPopulation = err[3]

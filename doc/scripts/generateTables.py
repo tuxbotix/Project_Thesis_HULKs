@@ -76,10 +76,19 @@ class calibStatTable:
             rowData = self.rowCols[noiseSource]
 
             row = str(noiseSource) + " &\t"
+
+            # notAvailableCount = 0
+
             for poseNum in self.poseSet:
                 p = rowData[poseNum]
-                row += "{:.2f}".format(p["s"]) + " & " + "{:.2f}".format(p["l"]) +\
-                    " & " + "{:.2f}".format(p["o"]) + " &"
+                success = p["s"]
+                localMin = p["l"]
+                otherFail = p["o"]
+                if (success + localMin + otherFail) > 50.0:
+                    row += "{:.2f}".format(success) + " & " + "{:.2f}".format(localMin) +\
+                        " & " + "{:.2f}".format(otherFail) + " &"
+                else:
+                    row += "N/A & N/A & N/A &"
 
             # remove trailing & and attach line breaks
             output += row[:-1] + "\\\\ \n"
@@ -111,12 +120,16 @@ def drawTable(configData, summaryData):
 
     for sampleCount in jointSampleCounts:
         for noise in configData["noiseTypes"]:
+            if sampleCount > 1 and (noise == str(testConfigUtils.noiseConfigs.pixelOnly.value) or
+                                    noise == str(testConfigUtils.noiseConfigs.noNoise.value)):
+                continue
             noiseWithSampleInfo.append(
                 combineNoiseSrcWithJointSample(noise, sampleCount))
 
     for feat in configData["features"]:
         for solver in solvers:
-            featureWithSolvers.append(combineFeatureWithSolver(feat[0], solver))
+            featureWithSolvers.append(
+                combineFeatureWithSolver(feat[0], solver))
 
     featureTables = {
         val: calibStatTable(configData["poseNum"], noiseWithSampleInfo)
@@ -150,6 +163,7 @@ def drawTable(configData, summaryData):
         print(featName, "\n")
         print(table.renderTable())
     print()
+
 
 if __name__ == "__main__":
     summaryFileName = os.path.join(sys.argv[1], "summary.json")

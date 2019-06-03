@@ -58,7 +58,7 @@ def loadLogs(log_root):
     resultList = []
     labels = None
 
-    with open(log_root + "_resultOut") as f:
+    with open(log_root + "_resultOut", "r") as f:
         labels = f.readline()
         lines = f.readlines()
         # for line in lines:
