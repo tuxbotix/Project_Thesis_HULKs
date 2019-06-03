@@ -185,6 +185,15 @@ bool poseStreamingTest() {
   bool success = p.compare(ss1.str()) == 0;
   std::cout << "NaoPoseAndRaw Istreamed vs Ostreamed compare: "
             << (success ? "success" : "fail") << std::endl;
+
+  std::cout << "orig \n"
+            << poseAndAngles1.pose << "\n"
+            << poseAndAngles1 << std::endl;
+
+  poseAndAngles1.mirror();
+  std::cout << "mirrored\n"
+            << poseAndAngles1.pose << "\n"
+            << poseAndAngles1 << std::endl;
   return success;
 }
 

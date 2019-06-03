@@ -187,9 +187,10 @@ public:
      */
     for (int j = JOINTS_L_ARM::L_SHOULDER_ROLL; j < JOINTS_L_ARM::L_ARM_MAX;
          j++) {
-      params[JOINTS::L_SHOULDER_ROLL + j] *= -1;
-      params[JOINTS::R_SHOULDER_ROLL + j] *= -1;
+      params[JOINTS::L_SHOULDER_PITCH + j] *= -1;
+      params[JOINTS::R_SHOULDER_PITCH + j] *= -1;
     }
+    params[JOINTS::HEAD_YAW] *= -1;
     params[JOINTS::L_HIP_ROLL] *= -1;
     params[JOINTS::R_HIP_ROLL] *= -1;
     params[JOINTS::L_ANKLE_ROLL] *= -1;
@@ -414,7 +415,7 @@ public:
     } else if (supportFoot == SUPPORT_FOOT::SF_RIGHT) {
       supportFoot = SUPPORT_FOOT::SF_LEFT;
     }
-
+    headYawPitch.yaw *= -1;
     torsoPosV.y() *= -1;
     otherFootPosV.y() *= -1;
     torsoRotV.x() *= -1;

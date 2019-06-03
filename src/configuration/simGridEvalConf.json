@@ -9,7 +9,7 @@
     "testPoseCountMin": 8,
 
     "jointCalibQualityTol": 0.2, // degrees
-    "reprojErrTolPercent": 0.02, // 5% of image size is too bad.
+    "reprojErrTolPercent": 0.02, // 2% of image size is too bad.
 
     "preHistLims": [1000, -300, 300], // bins, x min max
     "postHistLims": [100, -300, 300]  // bins, x min max

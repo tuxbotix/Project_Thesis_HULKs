@@ -234,6 +234,8 @@ int main(int argc, char *argv[]) {
       cxxopts::value<int64_t>()->default_value("-1"))(
       "m,mirror", "Mirror the poses",
       cxxopts::value<bool>()->default_value("false"))(
+      "mirrorDouble", "Test both legs with poses for one",
+      cxxopts::value<bool>()->default_value("false"))(
       "confRoot", "conf path",
       cxxopts::value<std::string>()->default_value("./"))(
       "calib", "calib features file",
@@ -262,6 +264,9 @@ int main(int argc, char *argv[]) {
   const size_t MAX_POSES_TO_CALIB = result["n-poses"].as<size_t>();
   // Default is false
   const bool mirrorPose = result["mirror"].as<bool>();
+  const bool mirrorDouble =
+      result["mirrorDouble"]
+          .as<bool>(); // mirror given poses to test for both legs
   const std::string naoConfRoot = result["naoConfRoot"].as<std::string>();
   const std::string confRoot = result["confRoot"].as<std::string>();
   // Default is false
@@ -378,31 +383,42 @@ int main(int argc, char *argv[]) {
   SUPPORT_FOOT supFeet = SUPPORT_FOOT::SF_NONE;
 
   poseAndRawAngleListT poseList;
-  poseList.reserve(MAX_POSES_TO_CALIB);
-  poseAndRawAngleT poseAndAngles;
+  {
+    const size_t actualPoseCount =
+        mirrorDouble ? MAX_POSES_TO_CALIB * 2 : MAX_POSES_TO_CALIB;
+    poseList.reserve(actualPoseCount);
+    poseAndRawAngleT poseAndAngles;
 
-  for (;
-       poseList.size() <= MAX_POSES_TO_CALIB &&
-       JointsAndPosesStream::getNextPoseAndRawAngles(inFile, poseAndAngles);) {
-    if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
-      continue;
-    }
-    // Mirror this pose. Nice in testing ;)
-    if (mirrorPose) {
-      poseAndAngles.mirror();
-    }
-    // if already double, skip
-    if (supFeet != SUPPORT_FOOT::SF_DOUBLE) {
-      // if none, first try..
-      if (supFeet == SUPPORT_FOOT::SF_NONE) {
-        supFeet = poseAndAngles.pose.supportFoot;
-      } else if (supFeet != poseAndAngles.pose.supportFoot) { // if differs but
-                                                              // not none, then
-                                                              // double it is ;)
-        supFeet = SUPPORT_FOOT::SF_DOUBLE;
+    for (; poseList.size() <= actualPoseCount &&
+           JointsAndPosesStream::getNextPoseAndRawAngles(inFile,
+                                                         poseAndAngles);) {
+      if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
+        continue;
+      }
+      if (!mirrorPose) {
+        // as it is
+        poseList.push_back(poseAndAngles);
+      }
+      // Mirror this pose. Nice in testing ;)
+      if (mirrorDouble || mirrorPose) {
+        poseAndAngles.mirror();
+        poseList.push_back(poseAndAngles);
+      }
+
+      // if already double, skip
+      if (supFeet != SUPPORT_FOOT::SF_DOUBLE) {
+        // if none, first try..
+        if (supFeet == SUPPORT_FOOT::SF_NONE) {
+          supFeet = poseAndAngles.pose.supportFoot;
+        } else if (mirrorDouble ||
+                   supFeet !=
+                       poseAndAngles.pose.supportFoot) { // if differs but
+                                                         // not none, then
+                                                         // double it is ;)
+          supFeet = SUPPORT_FOOT::SF_DOUBLE;
+        }
       }
     }
-    poseList.push_back(poseAndAngles);
   }
   if (supFeet == SUPPORT_FOOT::SF_NONE) {
     std::cerr << "No valid support feet found!! exiting..." << std::endl;
@@ -411,23 +427,37 @@ int main(int argc, char *argv[]) {
 
   /// Add test poses
   poseAndRawAngleListT testPoseList;
-  for (size_t i = 0;
-       i < std::max(size_t(100), testPoseCount) &&
-       testPoseList.size() <= testPoseCount &&
-       JointsAndPosesStream::getNextPoseAndRawAngles(inTestFile, poseAndAngles);
-       ++i) {
-    /// TODO TEMP add support for double foot
-    if (poseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE ||
-        poseAndAngles.pose.supportFoot != supFeet) {
-      continue;
+  {
+    const size_t actualTestPoseCount =
+        mirrorDouble ? std::max(size_t(100), testPoseCount) * 2
+                     : std::max(size_t(100), testPoseCount);
+    poseAndRawAngleT testPoseAndAngles;
+    for (size_t i = 0; i < actualTestPoseCount &&
+                       testPoseList.size() <= actualTestPoseCount &&
+                       JointsAndPosesStream::getNextPoseAndRawAngles(
+                           inTestFile, testPoseAndAngles);
+         ++i) {
+      /// TODO TEMP add support for double foot
+      if (testPoseAndAngles.pose.supportFoot == SUPPORT_FOOT::SF_NONE) {
+        continue;
+      }
+      // as it is
+      if (!mirrorPose && (SUPPORT_FOOT::SF_DOUBLE == supFeet ||
+                          testPoseAndAngles.pose.supportFoot == supFeet)) {
+        testPoseList.push_back(testPoseAndAngles);
+      }
+      //    // Mirror this pose. Nice in testing ;)
+      if (mirrorDouble || mirrorPose) {
+        testPoseAndAngles.mirror();
+        if (SUPPORT_FOOT::SF_DOUBLE == supFeet ||
+            testPoseAndAngles.pose.supportFoot == supFeet) {
+          testPoseList.push_back(testPoseAndAngles);
+        } else {
+          std::cerr << "Skipping" << std::endl;
+        }
+      }
     }
-    // Mirror this pose. Nice in testing ;)
-    if (mirrorPose) {
-      poseAndAngles.mirror();
-    }
-    testPoseList.push_back(poseAndAngles);
   }
-
   //  std::srand(std::time(0));
   //  std::random_shuffle(poseList.begin(), poseList.end());
   for (const auto &elem : poseList) {
@@ -647,7 +677,7 @@ int main(int argc, char *argv[]) {
     // Write result stats
     std::fstream resultOut(outFilePrefix + "_resultOut", std::ios::out);
     resultOut << "status reprojectionErrorMeanTest rmsTest_x rmsTest_y "
-                 "reprojectionErrorMeanCalib rmsCalib_x rmsCalib_y";
+                 "reprojectionErrorMeanCalib rmsCalib_x rmsCalib_y ";
     for (size_t i = 0; i < finalResidualSet.jointResiduals.size(); ++i) {
       resultOut << "res_" << Sensor::JOINT_NAMES[Sensor::ALL_OBS_JOINTS[i]]
                 << " ";

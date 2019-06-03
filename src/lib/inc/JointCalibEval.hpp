@@ -450,12 +450,6 @@ struct JointErrorEval {
     testFrameCaptures =
         getFrameCaptures(naoJointSensorModel, inducedErrorStdVec, true);
 
-    if (testFrameCaptures.size() <= 0) {
-      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
-      std::cerr << "Empty test captures" << std::endl;
-      successStatus = JointCalibration::CalibStatus::FAIL_NO_TEST_CAPTURES;
-      return {result, {}, {}, {}, {}, {}};
-    }
     // If no frames are captured, consider this as a failure
     if (frameCaptures.size() <= 0) {
       successStatus = JointCalibration::CalibStatus::FAIL_NO_CAPTURES;
@@ -466,11 +460,18 @@ struct JointErrorEval {
       std::lock_guard<std::mutex> lg(utils::mtx_cout_);
       std::cout << logStream.str() << std::endl;
 #endif
-      return {result, {}, {}, {}, {}, {}};
+      return {result, jointCalibResidual, {}, {}, {}, {}};
     } else {
 #if DEBUG_SIM_TEST
       logStream << "Framecaptures: " << frameCaptures.size() << std::endl;
 #endif
+    }
+
+    if (testFrameCaptures.size() <= 0) {
+      std::lock_guard<std::mutex> lg(utils::mtx_cout_);
+      std::cerr << "Empty test captures" << std::endl;
+      successStatus = JointCalibration::CalibStatus::FAIL_NO_TEST_CAPTURES;
+      return {result, jointCalibResidual, {}, {}, {}, {}};
     }
     /*
      * Mini eval of cost fcn to get an idea of error
