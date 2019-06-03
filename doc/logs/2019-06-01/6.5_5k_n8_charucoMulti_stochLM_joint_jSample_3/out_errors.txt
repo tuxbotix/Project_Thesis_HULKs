@@ -1,4 +1,0 @@
- ChessBoardPattern 3D not implemented
- ChessBoardPattern 3D not implemented
- ChessBoardPattern 3D not implemented
- ChessBoardPattern 3D not implemented

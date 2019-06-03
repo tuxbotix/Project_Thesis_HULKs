@@ -1,0 +1,94 @@
+Errors to try:	5000
+Poses to try:	8
+MinMax Error val:	-6.5, 6.5
+Mirror Poses:	0
+Stochastic Fix:	0
+enablePixelNoise:	0
+enableJointNoise:	1
+Joint Calib Tol (deg) :	0.2
+[TUHH_INFO	] Initializing NaoProvider
+[TUHH_INFO	] My body is V5.0
+[TUHH_INFO	] My head is V5.0
+[TUHH_DEBUG	][0m mounted /home/IBEO.AS/da/personal/HULKs/Project_Thesis/../nao_master/home/configuration/location/default/body_v_5.json to tuhhSDK.NaoProvider.Body
+[TUHH_DEBUG	][0m mounted /home/IBEO.AS/da/personal/HULKs/Project_Thesis/../nao_master/home/configuration/location/default/head_v_5.json to tuhhSDK.NaoProvider.Head
+initialize TUHH
+1
+[TUHH_DEBUG	][0m mounted /home/IBEO.AS/da/personal/HULKs/Project_Thesis/../nao_master/home/configuration/location/default/head/default/Projection.json to Projection
+[TUHH_DEBUG	][0m mounted /home/IBEO.AS/da/personal/HULKs/Project_Thesis/../nao_master/home/configuration/location/default/head/default/Projection.json to Projection
+640 480 spc: 0.05 maxGridPointsPerSize: 40
+ reading of poses done, SF: 1
+Pose 4552365301186203
+Pose 4552365301222031
+Pose 455236533348870
+Pose 455236534128818
+Pose 4552365321532365
+Pose 4552365311103620
+Pose 4552365311503571
+Pose 455236534382723
+Pose 4552365301197032
+5000error lists to try
+Starting calibrations
+Save chessboard points
+starting thread: 0
+starting thread: 1
+starting thread: 2
+starting thread: 3
+starting thread: 4
+starting thread: 5
+starting thread: 6
+get future0
+got 1559567661473
+joined Data0
+get future1
+got 1559567661473
+joined Data1
+get future2
+got 1559567661474
+joined Data2
+get future3
+got 1559567661474
+joined Data3
+get future4
+got 1559567661475
+joined Data4
+get future5
+got 1559567661476
+joined Data5
+get future6
+got 1559567661476
+joined Data6
+Processing done
+
+Joint HEAD_YAW           	bad:   0.98%	min:    -10	max:    1.1	avg: -0.018
+Joint HEAD_PITCH         	bad:   0.28%	min:   -5.2	max:   0.53	avg: -0.002
+Joint L_HIP_YAW_PITCH    	bad:    3.8%	min:   -1.6	max:     19	avg:  0.024
+Joint L_HIP_ROLL         	bad:    1.8%	min:   -1.5	max:    5.4	avg: 0.0042
+Joint L_HIP_PITCH        	bad:     11%	min:    -25	max:    3.7	avg: -0.012
+Joint L_KNEE_PITCH       	bad:     21%	min:   -8.4	max:     11	avg: -0.028
+Joint L_ANKLE_PITCH      	bad:     10%	min:   -4.5	max:    4.6	avg:  0.028
+Joint L_ANKLE_ROLL       	bad:    2.5%	min:   -1.4	max:    2.4	avg: 0.0013
+Joint R_HIP_YAW_PITCH    	bad:      0%	min:      0	max:      0	avg:      0
+Joint R_HIP_ROLL         	bad:      0%	min:      0	max:      0	avg:      0
+Joint R_HIP_PITCH        	bad:      0%	min:      0	max:      0	avg:      0
+Joint R_KNEE_PITCH       	bad:      0%	min:      0	max:      0	avg:      0
+Joint R_ANKLE_PITCH      	bad:      0%	min:      0	max:      0	avg:      0
+Joint R_ANKLE_ROLL       	bad:      0%	min:      0	max:      0	avg:      0
+
+Total Bad cases: 	45%
+FAIL_LOCAL_MINIMA:    	45%
+FAIL_NO_CONVERGE:     	0.04%
+FAIL_NUMERICAL:       	0%
+FAIL_NO_CAPTURES:     	0%
+FAIL_NO_TEST_CAPTURES:	0%
+SUCCESS:              	55%
+
+RMS stats for status: Fail 0: 
+	Test RMS ->  avg[ 0.38 0.32 ]	min[ 0.075 0.099 ]	max[ 7.3   7 ] 
+	Calib RMS -> avg[ 0.094  0.11 ]	min[  0.0018 0.00089 ]	max[   2 2.6 ]
+RMS stats for status: Fail 1: 
+	Test RMS ->  avg[ 28 30 ]	min[ 9.6 7.1 ]	max[ 46 54 ] 
+	Calib RMS -> avg[ 0.49 0.58 ]	min[ 8.8e-06 3.5e-05 ]	max[ 0.98  1.2 ]
+RMS stats for status: Success: 
+	Test RMS ->  avg[ 0.15 0.17 ]	min[ 0.068 0.093 ]	max[  0.8 0.92 ] 
+	Calib RMS -> avg[ 0.048 0.054 ]	min[ 0.00072 0.00045 ]	max[ 0.15 0.19 ]
+
