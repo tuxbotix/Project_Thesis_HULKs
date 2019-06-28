@@ -37,6 +37,21 @@ class TestRun:
                   "R_KNEE_PITCH",
                   "R_ANKLE_PITCH",
                   "R_ANKLE_ROLL"]
+    jointNamesShort = [
+                  "HEAD_Y",
+                  "HEAD_P",
+                  "L_HIP_YP",
+                  "L_HIP_R",
+                  "L_HIP_P",
+                  "L_KNEE_P",
+                  "L_ANKL_P",
+                  "L_ANKL_R",
+                  "R_HIP_YP",
+                  "R_HIP_R",
+                  "R_HIP_P",
+                  "R_KNEE_P",
+                  "R_ANKL_P",
+                  "R_ANKL_R"]
 
     JointCount = len(jointNames)
 
@@ -144,77 +159,32 @@ def plotResults(logs, log_dir):
                          figureheight='10cm')
     fig.savefig(log_dir + "rms_hist.pdf", bbox_inches='tight')
     plt.close(fig)
-    # plt.show()
-    # exit(0)
 
-    # fig, _axs = plt.subplots(nrows=2, ncols=1, num=None, figsize=(6, 7), dpi=200)
-    # plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0.5, hspace=0.5)
-
-    # axs = _axs.flatten()
-    # axs[0].get_shared_x_axes().join(axs[0], axs[1])
-
-    # maxCalResX = max(calibResX.max(), calibResY.max()) * 1.1
-    # maxCalResY = max(calibResX.max(), calibResY.max()) * 1.1
-    # maxOrigResY = max(origResX.max(), origResY.max()) * 1.1
-    # maxOrigResX = max(origResX.max(), origResY.max()) * 1.1
-
-    # maxAllUncalibY = max(maxOrigResY, 0)
-
-    # ax = axs[0]
-
-    # mybins = np.linspace(-100, 100, 100)
-    # ax.set_title('Reproj. error (x ax.) distribution before calibration.')
-    # n, bins, patches = ax.hist(origResX, bins=mybins, range=(-100, 100),
-    #                            density=True, alpha=0.5)
-    # ax.hist(origResY, bins=bins, range=(-100, 100), density=True, alpha=0.5)
-
-    # # ax.boxplot(angleDump,  showmeans = True, positions = list(range(1, angleDump.shape[1]+1)))
-
-    # ax.axis([-75, 75, -0.02, 0.5])
-    # # ax.axis([-maxOrigResX, maxOrigResX, -0.02, maxAllUncalibY])
-
-    # ax = axs[1]
-    # # ax.boxplot(origResX[:, 1])
-    # ax.set_title('Reproj. error (x ax.) distribution after calibration.')
-    # # ax.plot(calibResX, calibResX[:, 1], 1, label='Raw')
-    # # ax.plot(calibResY[:, 0], calibResY[:, 1], 1, label='Raw')
-    # ax.axis([-75, 75, -0.02, 0.5])
-    # n, bins, patches = ax.hist(calibResX, bins=mybins,
-    #                            range=(-100, 100), density=True, alpha=0.5)
-    # ax.hist(calibResY, bins=bins, range=(-100, 100), density=True, alpha=0.5)
-    # # ax.hist(calibResY)
-    # # ax.axis([-maxCalResX, maxCalResX, -0.02, maxCalResY])
-
-    # fig.savefig(log_dir + "main_reproj_err.pdf")
-    # matplotlib2tikz.save(log_dir + "main_reproj_err.tex",  figurewidth='15cm',
-    #                      figureheight='9cm')
-    # plt.close(fig)
 ##########################################################
 
     # plt.figure(num=None, figsize=(6, 3), dpi=200)
-    fig, _axs = plt.subplots(nrows=2, ncols=1, num=None,
-                             figsize=(6, 12), dpi=200)
-    plt.subplots_adjust(top=0.95, bottom=0.05)
+    fig, _axs = plt.subplots(nrows=1, ncols=1, num=None,
+                             figsize=(6, 4), dpi=200)
+    # plt.subplots_adjust(top=0.95, bottom=0.05)
     # plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
 
-    axs = _axs.flatten()
-    axs[0].get_shared_x_axes().join(axs[0], axs[1])
-
+    # axs = _axs[0]
+    # axs[0].get_shared_x_axes().join(axs[0], axs[1])
+    ax = plt.gca()
     flierprops = dict(marker='o', markersize=3,
                       alpha=0.4, markeredgecolor='purple')
     capprops = dict(linestyle='--', linewidth=1.5, color='black')
 
     # print("box1")
-    # ax = plt.gca()
-    ax = axs[0]
+    
 
     # ax.set_xlabel('Error in Degrees')
-    ax.set_ylabel('Joint number (excluding arms)')
+    ax.set_xlabel('Error distribution ($\degree$)')
+    ax.set_ylabel('Joint')
 
-    # ax.set_title('Joint error distribution before calibration')
+    ax.set_title('Joint error distribution before calibration')
     # ax.violinplot(unCalibJointRes, vert=False)
-    ax.boxplot(unCalibJointRes, vert=False,
-               whis=[5, 95], showfliers=True,
+    ax.boxplot(unCalibJointRes, vert=False, showfliers=True,
                flierprops=flierprops, capprops=capprops)
 
     ax.set_yticks(list(range(1, len(TestRun.jointNames) + 1)), minor=False)
@@ -223,30 +193,31 @@ def plotResults(logs, log_dir):
     ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.2))
     ax.set_xlim([-8, 8])
 
-    # ax.set_yticklabels(TestRun.jointNames, minor=False)
+    ax.set_yticklabels(TestRun.jointNamesShort, minor=False)
 
     # ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.005))
     ax.xaxis.grid()
     fig.tight_layout()
-    # fig.savefig(log_dir + "main_hist.pdf")
+    fig.savefig(log_dir + "before_hist.pdf")
     matplotlib2tikz.save(log_dir + "before_hist.tex",  figurewidth='15cm',
                          figureheight='8cm')
     plt.close(fig)
 
 # after
+    fig, _axs = plt.subplots(nrows=1, ncols=1, num=None,
+                             figsize=(6, 4), dpi=200)
     # plt.figure(num=None, figsize=(6, 3), dpi=200)
     # violinMargins = ax.margins()
-    ax = axs[1]
-    # ax = plt.gca()
+    # ax = axs[0]
+    ax = plt.gca()
 
-    # ax.set_title('Joint error distribution after calibration')
-    ax.set_xlabel('Error in Degrees')
-    ax.set_ylabel('Joint number (excluding arms)')
+    ax.set_title('Joint error distribution after calibration')
+    ax.set_xlabel('Error distribution ($\degree$)')
+    ax.set_ylabel('Joint')
 
     totalData = np.append(badCalibJointRes, goodCalibJointRes, axis=0)
     # ax.violinplot(totalData, vert=False)
-    ax.boxplot(totalData, vert=False,
-               whis=[5, 95], showfliers=True,
+    ax.boxplot(totalData, vert=False, showfliers=True,
                flierprops=flierprops, capprops=capprops)
 
     ax.set_yticks(list(range(1, len(TestRun.jointNames) + 1)), minor=False)
@@ -255,7 +226,7 @@ def plotResults(logs, log_dir):
     ax.set_xlim([-8, 8])
     ax.xaxis.grid()
 
-    # ax.set_yticklabels(TestRun.jointNames, minor=False)
+    ax.set_yticklabels(TestRun.jointNamesShort, minor=False)
 
     # locs, labels = ax.xticks()
     # if len(labels) != TestRun.jointNames:
@@ -267,7 +238,7 @@ def plotResults(logs, log_dir):
     # plt.tight_layout()
     fig.tight_layout()
 
-    fig.savefig(log_dir + "main_hist.pdf")
+    fig.savefig(log_dir + "after_hist.pdf")
     matplotlib2tikz.save(log_dir + "after_hist.tex",  figurewidth='15cm',
                          figureheight='8cm')
     # plt.show()

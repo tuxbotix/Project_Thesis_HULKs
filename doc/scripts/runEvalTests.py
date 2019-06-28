@@ -38,7 +38,8 @@ def main():
 
     # Errors and other data
     errors1k6_5deg = os.path.join(dataDir, "l_1000_jointErrors.txt")
-    errors10k6_5deg = os.path.join(dataDir, "l_10k_jointErrors.txt")
+    errorsLeft10k6_5deg = os.path.join(dataDir, "l_10k_jointErrors.txt")
+    errors10k6_5deg = os.path.join(dataDir, "d_10k_6_5degjointErrors.txt")
     errors10k3_5deg = os.path.join(dataDir, "l_10k_3_5degjointErrors.txt")
     calibGround = os.path.join(dataDir, "calibFeatureGround.txt")
     calibCharucoMulti = os.path.join(dataDir, "calibFeatureCharucoMulti.txt")
@@ -57,34 +58,36 @@ def main():
         # Error types.
         # "errors": [("3.5_2k", errors10k3_5deg, 3.5, 500)],
         # ("3.5_5k", errors10k3_5deg, 3.5, 2000),
-        "errors": [("6.5_5k", errors10k6_5deg, 6.5, 5000)],
+        "errors": [("6.5_5k", errorsLeft10k6_5deg, 6.5, 5000)],
         # errors = [("6.5_1k", errors1k6_5deg, 6.5, 1000)]
-        "features": [("charucoMulti", calibCharucoMulti)
-                     # , ("gnd", calibGround)
-                     ],
+        "features": [
+            ("charucoMulti", calibCharucoMulti),
+            # ("gnd", calibGround)
+        ],
         # pose Number
         "poseNum": [
-            # 3,
+            3,
             # 5,
-            8
+            # 8
         ],
         # "poseNum": [5],
         "noiseTypes": [
-            # testCUtils.noiseConfigs.noNoise,
-            # testCUtils.noiseConfigs.pixelOnly,
+            testCUtils.noiseConfigs.noNoise,
+            testCUtils.noiseConfigs.pixelOnly,
             testCUtils.noiseConfigs.jointOnly,
             testCUtils.noiseConfigs.both
         ],
         "jointSampleCount": [
-            # 1,
+            1,
             3
         ],
         "solvers": [
+            # testCUtils.SolverTypes.stdLM,
             testCUtils.SolverTypes.stochasticLM
         ]
     }
 
-    outputDir = os.path.join(logDir, "2019-06-01")
+    outputDir = os.path.join(logDir, "2019-06-02")
 
     if not os.path.isdir(os.path.abspath(os.path.join(outputDir, os.pardir))):
         print("Output dir not existing..")
@@ -94,28 +97,29 @@ def main():
 
     configCount = len(configs)
 
-    # print(simStd)
-    with open(os.path.join(outputDir, "configPrefixInfos.json"), "w") as f:
-        completed = 0
-        infoArr = []
-        for config in configs:
+    configPrefixInfosPath = os.path.join(outputDir, "configPrefixInfos.json")
 
-            # args = " ".join(simStd) + " ".join(config[0])
-            print("Start config: ", config)
-            returnCode = runCalibSimProcess(simStd, config[0], config[2])
-            completed += 1
-            print("Finished, ", int(completed * 100 /
-                                    configCount), "% completed.\n")
+    completed = 0
+    infoArr = []
+    for config in configs:
+        # args = " ".join(simStd) + " ".join(config[0])
+        print("Start config: ", config)
+        returnCode = runCalibSimProcess(simStd, config[0], config[2])
+        completed += 1
+        print("Finished, ", int(completed * 100 /
+                                configCount), "% completed.\n")
 
-            if returnCode == 0:
-                infoArr.append(config[1])
-            else:
-                print("failed running...", returnCode)
+        if returnCode == 0:
+            infoArr.append(config[1])
+        else:
+            print("failed running...", returnCode)
+    configsWithInfo = {
+        "configurations": configurations, "runInfo": infoArr}
 
-        configsWithInfo = {
-            "configurations": configurations, "runInfo": infoArr}
+    with open(configPrefixInfosPath, "w") as f:
         json.dump(configsWithInfo, f, indent=2)
-        print("All done, check: ", os.path.realpath(outputDir))
+
+    print("All done, check: ", os.path.realpath(outputDir))
 
 
 if __name__ == "__main__":

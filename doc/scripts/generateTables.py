@@ -31,10 +31,10 @@ class calibStatTable:
             self.rowCols[noiseSource] = {
                 poseNum: {"s": 0, "l": 0, "o": 0} for poseNum in self.poseSet}
 
-        colConfig = "|c|" + \
-            "|".join(
+        colConfig = "@{}c" + \
+            "".join(
                 [("".ljust(3, "c"))] * len(self.poseSet)
-            ) + "|"
+            ) + "@{}"
         self.tableBegin = "\\begin{table}[]\n" +\
             "\\resizebox{\\textwidth}{!}{%\n" +\
             "\\def\\arraystretch{1.5}%  1 is the default, change whatever you need\n" +\
@@ -45,10 +45,12 @@ class calibStatTable:
                         "}\n" +\
                         "\\end{table}"
         self.tableHeader = ""
-        for poseNum in self.poseSet:
-            self.tableHeader += "& \\multicolumn{3}{c|}{" + \
+        p = ""
+        for i, poseNum in enumerate(self.poseSet):
+            self.tableHeader += "& \\multicolumn{3}{c}{" + \
                 str(poseNum)+" Poses}"
-        self.tableHeader += "\\\\ \\hline \n"
+            p += "\\cmidrule(r{4pt}){"+ str(2 + i*3)+"-"+str(4 + i * 3)+"} "
+        self.tableHeader += "\\\\ \n" + p + "\\\\ \n"
 
     def updateCell(self, noiseSource, poseNum, successRate,
                    localMinimaRate, others):
@@ -67,8 +69,13 @@ class calibStatTable:
         t = "Noise Src. & "
         for poseNum in self.poseSet:
             t += " Succ.\\% & LocMin.\\% & Other\\% &"
+        
+        output += t[:-1] + "\\\\ \n"
 
-        output += t[:-1] + "\\\\ \\hline \n"
+        t = "\\cmidrule(r{4pt}){1-1} "
+        for i, poseNum in enumerate(self.poseSet):
+            t += "\\cmidrule(r{4pt}){"+ str(2 + i*3)+"-"+str(4 + i * 3)+"} "
+        t += "\n"
 
         noiseSourceCount = len(self.noiseSources)
 

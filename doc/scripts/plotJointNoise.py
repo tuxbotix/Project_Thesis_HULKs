@@ -65,6 +65,9 @@ ax.xaxis.set_major_locator(ticker.MultipleLocator(0.02))
 ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.005))
 ax.xaxis.grid()
 
+ax.set_title('Joint encoder noise distribution')
+ax.set_xlabel('Noise distribution ($\degree$)')
+ax.set_ylabel('Joint Number')
 # plt.xticks(rotation=90)
 
 boxMargins = ax.margins()
@@ -73,11 +76,16 @@ plt.setp(ax.get_yticklabels(), visible=True)
 ticks = ax.get_yticklabels()
 
 matplotlib2tikz.save("../tuvisionthesis/figures/joint_noise.tex",  figurewidth='15cm')
+fig.savefig("../tuvisionthesis/figures/joint_noise.pdf")
 
 plt.show()
-# ax = axs[1]
 
-plt.figure(num=1, figsize=(6, 6), dpi=200)
+plt.close(fig)
+
+
+fig, _axs = plt.subplots(nrows=1, ncols=1, num=None, figsize=(6, 4), dpi=200)
+ax = plt.gca()
+# plt.figure(num=1, figsize=(6, 6), dpi=200)
 
 data = angleDump.ravel()
 dataMin=np.min(data)
@@ -94,7 +102,13 @@ p = np.arange(-1.0, 1.0, 0.01)
 y =  stats.norm.pdf(bins, mu, sigma)
 print(np.sum(y), np.max(bins))
 
-plt.plot(bins, y, '--')
+ax.plot(bins, y, '--')
+
+
+ax.set_title('Fitting of Gaussian into joint encoder noise')
+ax.set_xlabel('Joint encoder noise distribution ($\degree$)')
+ax.set_ylabel('Frequency')
 
 matplotlib2tikz.save("../tuvisionthesis/figures/joint_noise_gaussian.tex", figurewidth='15cm')
+fig.savefig("../tuvisionthesis/figures/joint_noise_gaussian.pdf")
 plt.show()
